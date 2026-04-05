@@ -61,6 +61,89 @@ export default function ProfileSettingsPage({
 }) {
   const [showDeleteConfirm, setShowDeleteConfirm] = React.useState(false);
 
+  const [sendMode, setSendMode] = React.useState("sms");
+  const [selectedSendContactId, setSelectedSendContactId] = React.useState(
+    emergencyContacts?.[0]?.id || ""
+  );
+
+  function getContactUsage(contact) {
+    return contact?.usage || "contact";
+  }
+
+  const sendableContacts = (emergencyContacts || []).filter(
+    (contact) =>
+      (contact.name || contact.phone) && getContactUsage(contact) !== "urgence"
+  );
+
+  function handleSendMessage() {
+    const selectedContact =
+      sendableContacts.find((contact) => contact.id === selectedSendContactId) ||
+      sendableContacts[0];
+
+  React.useEffect(() => {
+    if (!sendableContacts.length) {
+      setSelectedSendContactId("");
+      return;
+    }
+
+    const stillExists = sendableContacts.some(
+      (contact) => contact.id === selectedSendContactId
+    );
+
+    if (!stillExists) {
+      setSelectedSendContactId(sendableContacts[0].id);
+    }
+  }, [sendableContacts, selectedSendContactId]);
+
+  function formatPhoneForStorage(value) {
+    const cleaned = value.replace(/[^\d+]/g, "");
+
+    if (!cleaned) return "";
+    if (cleaned.startsWith("+33")) return cleaned;
+    if (cleaned.startsWith("33")) return `+${cleaned}`;
+    if (cleaned.startsWith("0")) return `+33${cleaned.slice(1)}`;
+    if (cleaned.startsWith("+")) return cleaned;
+    return `+${cleaned}`;
+  }
+
+  function normalizeWhatsAppPhone(rawPhone) {
+    const cleaned = rawPhone.replace(/\s+/g, "").replace(/[^\d+]/g, "");
+
+    if (cleaned.startsWith("+33")) return cleaned.slice(1);
+    if (cleaned.startsWith("33")) return cleaned;
+    if (cleaned.startsWith("0")) return `33${cleaned.slice(1)}`;
+    return cleaned.replace(/^\+/, "");
+  }
+
+    if (!selectedContact?.phone) {
+      window.alert("Ajoute d'abord un numéro de contact dans Profil.");
+      return;
+    }
+
+    const message = (aiGeneratedText || text || "").trim();
+
+    if (!message) {
+      window.alert("Aucun message à envoyer.");
+      return;
+    }
+
+    if (sendMode === "whatsapp") {
+      const phone = normalizeWhatsAppPhone(selectedContact.phone);
+      const appUrl = `whatsapp://send?phone=${phone}&text=${encodeURIComponent(message)}`;
+      const webUrl = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+
+      window.location.href = appUrl;
+      window.setTimeout(() => {
+        window.open(webUrl, "_blank", "noopener,noreferrer");
+      }, 1200);
+      return;
+    }
+
+    const smsUrl = `sms:${selectedContact.phone}?body=${encodeURIComponent(message)}`;
+    window.location.href = smsUrl;
+  }
+
+
   function handleConfirmDeleteProfile() {
     deleteCurrentProfile();
     setShowDeleteConfirm(false);
@@ -86,14 +169,16 @@ export default function ProfileSettingsPage({
       marginBottom: 20,
       breakInside: "avoid",
       WebkitColumnBreakInside: "avoid",
+      pageBreakInside: "avoid",
       boxSizing: "border-box",
+      verticalAlign: "top",
     };
 
     return (
       <>
         <div
           style={{
-            columnCount: window.innerWidth > 1100 ? 2 : 1,
+            columnCount: window.innerWidth > 1240 ? 3 : window.innerWidth > 820 ? 2 : 1,
             columnGap: 20,
           }}
         >
@@ -624,7 +709,7 @@ export default function ProfileSettingsPage({
         </div>
 
         <div style={compactCard}>
-          <h2 style={styles.sectionTitle}>Contacts d'urgence</h2>
+          <h2 style={styles.sectionTitle}>Contacts</h2>
 
           <div style={styles.customCategoryList}>
             {emergencyContacts.map((contact, index) => (
@@ -649,16 +734,25 @@ export default function ProfileSettingsPage({
                       updateEmergencyContact(
                         contact.id,
                         "phone",
-                        e.target.value
+                        formatPhoneForStorage(e.target.value)
                       )
                     }
                     style={styles.input}
-                    placeholder="06 00 00 00 00"
+                    placeholder="+33600000000"
                   />
+                  <div
+                    style={{
+                      marginTop: 6,
+                      fontSize: 14,
+                      color: "rgba(255,255,255,0.62)",
+                    }}
+                  >
+                    Format forcé : +33 pour les numéros français.
+                  </div>
                 </div>
 
                 <div style={styles.formGroup}>
-                  <label style={styles.label}>Lien / rôle</label>
+                  <label style={styles.label}>Privilège / rôle</label>
                   <input
                     value={contact.relation}
                     onChange={(e) =>
@@ -673,12 +767,38 @@ export default function ProfileSettingsPage({
                   />
                 </div>
 
-                <button
-                  style={styles.deleteButton}
-                  onClick={() => deleteEmergencyContact(contact.id)}
+                <div
+                  style={{
+                    display: "flex",
+                    gap: 12,
+                    alignItems: "center",
+                    flexWrap: "wrap",
+                    marginTop: 8,
+                  }}
                 >
-                  Supprimer ce contact
-                </button>
+                  <button
+                    style={styles.deleteButton}
+                    onClick={() => deleteEmergencyContact(contact.id)}
+                  >
+                    Supprimer ce contact
+                  </button>
+
+                  <select
+                    value={getContactUsage(contact)}
+                    onChange={(e) =>
+                      updateEmergencyContact(contact.id, "usage", e.target.value)
+                    }
+                    style={{
+                      ...styles.input,
+                      minWidth: 180,
+                      maxWidth: 220,
+                    }}
+                  >
+                    <option value="contact">Contact</option>
+                    <option value="urgence">Urgence</option>
+                    <option value="both">Les deux</option>
+                  </select>
+                </div>
               </div>
             ))}
           </div>
@@ -865,6 +985,71 @@ export default function ProfileSettingsPage({
                 flexWrap: "wrap",
               }}
             >
+              <div style={{ flex: "1 1 100%" }}>
+                <label style={styles.label}>Envoyer à</label>
+                <div
+                  style={{
+                    display: "flex",
+                    gap: 10,
+                    alignItems: "center",
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: 10,
+                      overflowX: "auto",
+                      paddingBottom: 4,
+                      flex: "1 1 320px",
+                    }}
+                  >
+                    {sendableContacts.map((contact, index) => {
+                        const isActive =
+                          (selectedSendContactId || sendableContacts[0]?.id) ===
+                          contact.id;
+
+                        return (
+                          <button
+                            key={contact.id}
+                            type="button"
+                            onClick={() => setSelectedSendContactId(contact.id)}
+                            style={
+                              isActive
+                                ? styles.primaryButton
+                                : styles.secondaryButton
+                            }
+                          >
+                            {contact.name || `Contact ${index + 1}`}
+                          </button>
+                        );
+                      })}
+                  </div>
+
+                  <select
+                    value={sendMode}
+                    onChange={(e) => setSendMode(e.target.value)}
+                    style={{ ...styles.input, minWidth: 150, maxWidth: 170 }}
+                  >
+                    <option value="sms">SMS</option>
+                    <option value="whatsapp">WhatsApp</option>
+                  </select>
+
+                  <button
+                    type="button"
+                    style={styles.secondaryButton}
+                    onClick={handleSendMessage}
+                    disabled={!sendableContacts.length}
+                  >
+                    📩 Envoyer à {
+                      sendableContacts.find(
+                        (contact) => contact.id === selectedSendContactId
+                      )?.name || sendableContacts[0]?.name || "..."
+                    }
+                  </button>
+                </div>
+              </div>
+
               <div style={{ flex: "1 1 320px" }}>
                 <button
                   type="button"

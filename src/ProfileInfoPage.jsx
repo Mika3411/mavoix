@@ -62,6 +62,9 @@ export default function ProfileInfoPage(props) {
   const medicalInfo = profile.medicalInfo || {};
   const treatments = medicalInfo.treatments || [];
   const emergencyContacts = profile.emergencyContacts || [];
+  const emergencySpeakContacts = emergencyContacts.filter(
+    (c) => c && (c.usage === "urgence" || c.usage === "both")
+  );
   const doctorInfo = profile.doctorInfo || {};
 
   return (
@@ -134,8 +137,8 @@ export default function ProfileInfoPage(props) {
             style={quickButtonStyle}
             onClick={() =>
               onSpeak?.(
-                emergencyContacts.length > 0
-                  ? `Mes contacts d'urgence sont : ${emergencyContacts
+                emergencySpeakContacts.length > 0
+                  ? `Mes contacts d'urgence sont : ${emergencySpeakContacts
                       .map((c) =>
                         [c.name, c.relation, c.phone].filter(Boolean).join(", ")
                       )

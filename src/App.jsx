@@ -39,6 +39,7 @@ export default function App() {
 
   const [tone, setTone] = useState("naturel");
   const [audience, setAudience] = useState("aidant");
+  const [selectedSmsContactId, setSelectedSmsContactId] = useState("");
 
   const [voices, setVoices] = useState([]);
   const [voiceStatus, setVoiceStatus] = useState({});
@@ -109,6 +110,10 @@ export default function App() {
           },
         ];
 
+  const availableSmsContacts = emergencyContacts.filter(
+    (contact) => contact.name?.trim() && contact.phone?.trim()
+  );
+
   const activeTheme = getActiveTheme(currentProfile);
   const styles = createStyles(activeTheme);
   const API_BASE = "https://mavoix.onrender.com";
@@ -161,6 +166,21 @@ export default function App() {
     refreshAiUsage();
   }, [currentProfileId]);
 
+
+  useEffect(() => {
+    if (availableSmsContacts.length === 0) {
+      setSelectedSmsContactId("");
+      return;
+    }
+
+    const selectedExists = availableSmsContacts.some(
+      (contact) => contact.id === selectedSmsContactId
+    );
+
+    if (!selectedExists) {
+      setSelectedSmsContactId(availableSmsContacts[0].id);
+    }
+  }, [availableSmsContacts, selectedSmsContactId]);
 
   useEffect(() => {
     const loadVoices = () => {
@@ -708,6 +728,39 @@ export default function App() {
     setTimeout(() => {
       setToastMessage("");
     }, 3000);
+  }
+
+  function getSmsTextToSend() {
+    const preferredText = aiGeneratedText.trim() || text.trim();
+    return preferredText;
+  }
+
+  function normalizePhoneForSms(phone) {
+    return phone.replace(/[^\d+]/g, "");
+  }
+
+  function sendTextMessage() {
+    const selectedContact = emergencyContacts.find(
+      (contact) => contact.id === selectedSmsContactId
+    );
+
+    if (!selectedContact?.phone?.trim()) {
+      setToastMessage("Ajoute d'abord un contact avec un numéro.");
+      setTimeout(() => setToastMessage(""), 3000);
+      return;
+    }
+
+    const message = getSmsTextToSend();
+    if (!message) {
+      setToastMessage("Écris un message avant l'envoi.");
+      setTimeout(() => setToastMessage(""), 3000);
+      return;
+    }
+
+    const phone = normalizePhoneForSms(selectedContact.phone);
+    const encodedMessage = encodeURIComponent(message);
+    const smsUrl = `sms:${phone}?body=${encodedMessage}`;
+    window.location.href = smsUrl;
   }
 
   function updatePhrase(id, field, value) {
@@ -1441,6 +1494,9 @@ export default function App() {
             addEmergencyContact={addEmergencyContact}
             updateEmergencyContact={updateEmergencyContact}
             deleteEmergencyContact={deleteEmergencyContact}
+            selectedSmsContactId={selectedSmsContactId}
+            setSelectedSmsContactId={setSelectedSmsContactId}
+            onSendSms={sendTextMessage}
             aiGeneratedText={aiGeneratedText}
             aiLoading={aiLoading}
             aiError={aiError}
