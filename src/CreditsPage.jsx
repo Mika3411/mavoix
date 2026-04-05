@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 
-const API_BASE = "http://localhost:3001";
+const API_BASE = "https://mavoix.onrender.com";
 
 export default function CreditsPage({
   styles,
