@@ -9,6 +9,7 @@
   ],
   "main": "src/index.tsx",
   "dependencies": {
+    "@supabase/supabase-js": "^2.101.1",
     "core-js-compat": "^3.49.0",
     "cors": "^2.8.6",
     "dotenv": "^17.4.0",
