@@ -111,7 +111,7 @@ export default function App() {
 
   const activeTheme = getActiveTheme(currentProfile);
   const styles = createStyles(activeTheme);
-  const API_BASE = "http://localhost:3001";
+  const API_BASE = "https://mavoix.onrender.com";
 
   async function refreshAiUsage(profileId = currentProfileId) {
     if (!profileId) return;

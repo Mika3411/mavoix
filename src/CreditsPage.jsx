@@ -1,4 +1,6 @@
-import React from "react";
+import React, { useMemo, useState } from "react";
+
+const API_BASE = "http://localhost:3001";
 
 export default function CreditsPage({
   styles,
@@ -7,8 +9,94 @@ export default function CreditsPage({
   onBackToEditor,
 }) {
   const donorWall = aiUsage?.donorWall || [];
-  const creditsRemaining =
-    aiUsage?.globalCreditsRemaining ?? aiUsage?.creditsRemaining ?? 0;
+
+  const isAdminRoute =
+    typeof window !== "undefined" &&
+    (window.location.hash === "#admin" || window.location.pathname === "/admin");
+
+  const [showAdmin, setShowAdmin] = useState(isAdminRoute);
+  const [adminToken, setAdminToken] = useState("");
+  const [donorName, setDonorName] = useState("");
+  const [amountEuro, setAmountEuro] = useState("");
+  const [note, setNote] = useState("");
+  const [manualCredits, setManualCredits] = useState("");
+  const [manualLabel, setManualLabel] = useState("");
+  const [adminMessage, setAdminMessage] = useState("");
+  const [adminLoading, setAdminLoading] = useState(false);
+
+  const estimatedAddedCredits = useMemo(() => {
+    const amount = Number(amountEuro);
+    if (!Number.isFinite(amount) || amount <= 0) return 0;
+    return Math.round(amount * 1000);
+  }, [amountEuro]);
+
+  async function addDonation() {
+    try {
+      setAdminLoading(true);
+      setAdminMessage("");
+
+      const response = await fetch(`${API_BASE}/api/admin/add-donation`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-admin-token": adminToken,
+        },
+        body: JSON.stringify({
+          donorName,
+          amountEuro,
+          note,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Impossible d'ajouter le don.");
+      }
+
+      setAdminMessage("Don ajouté. Recharge la page pour voir le compteur mis à jour.");
+      setDonorName("");
+      setAmountEuro("");
+      setNote("");
+    } catch (error) {
+      setAdminMessage(error.message || "Impossible d'ajouter le don.");
+    } finally {
+      setAdminLoading(false);
+    }
+  }
+
+  async function addManualCredits() {
+    try {
+      setAdminLoading(true);
+      setAdminMessage("");
+
+      const response = await fetch(`${API_BASE}/api/admin/add-credits`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-admin-token": adminToken,
+        },
+        body: JSON.stringify({
+          creditsToAdd: manualCredits,
+          label: manualLabel,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Impossible d'ajouter les crédits.");
+      }
+
+      setAdminMessage("Crédits ajoutés. Recharge la page pour voir le compteur mis à jour.");
+      setManualCredits("");
+      setManualLabel("");
+    } catch (error) {
+      setAdminMessage(error.message || "Impossible d'ajouter les crédits.");
+    } finally {
+      setAdminLoading(false);
+    }
+  }
 
   return (
     <div style={styles.gridSingle}>
@@ -93,7 +181,11 @@ export default function CreditsPage({
               Crédits encore disponibles
             </div>
             <div style={{ fontSize: 34, fontWeight: 800 }}>
-              {aiStatusLoading ? "..." : Number(creditsRemaining).toLocaleString("fr-FR")}
+              {aiStatusLoading
+                ? "..."
+                : Number(
+                    aiUsage?.globalCreditsRemaining ?? aiUsage?.creditsRemaining ?? 0
+                  ).toLocaleString("fr-FR")}
             </div>
           </div>
 
@@ -148,7 +240,12 @@ export default function CreditsPage({
             Merci pour vos dons
           </div>
 
-          <div style={{ display: "grid", gap: 10 }}>
+          <div
+            style={{
+              display: "grid",
+              gap: 10,
+            }}
+          >
             {donorWall.length > 0 ? (
               donorWall.map((donor) => (
                 <div
@@ -186,6 +283,7 @@ export default function CreditsPage({
             borderRadius: 22,
             background: "rgba(34,197,94,0.10)",
             border: "1px solid rgba(34,197,94,0.22)",
+            marginBottom: showAdmin ? 18 : 0,
           }}
         >
           <div style={{ fontSize: 20, fontWeight: 800, marginBottom: 8 }}>
@@ -219,6 +317,188 @@ export default function CreditsPage({
             ❤️ Soutenez-nous
           </button>
         </div>
+
+        {showAdmin ? (
+          <div
+            style={{
+              padding: 18,
+              borderRadius: 22,
+              background: "rgba(255,255,255,0.04)",
+              border: "1px solid rgba(255,255,255,0.08)",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                gap: 12,
+                alignItems: "center",
+                flexWrap: "wrap",
+                marginBottom: 12,
+              }}
+            >
+              <div style={{ fontSize: 20, fontWeight: 800 }}>
+                Zone admin privée
+              </div>
+
+              <button
+                type="button"
+                style={styles.secondaryButton}
+                onClick={() => setShowAdmin(false)}
+              >
+                Fermer
+              </button>
+            </div>
+
+            <div style={styles.formGroup}>
+              <label style={styles.label}>Code admin</label>
+              <input
+                type="password"
+                value={adminToken}
+                onChange={(e) => setAdminToken(e.target.value)}
+                style={styles.input}
+                placeholder="Entre ton code secret"
+              />
+            </div>
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+                gap: 16,
+                marginTop: 6,
+              }}
+            >
+              <div
+                style={{
+                  padding: 16,
+                  borderRadius: 18,
+                  background: "rgba(59,130,246,0.08)",
+                  border: "1px solid rgba(59,130,246,0.16)",
+                }}
+              >
+                <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 10 }}>
+                  Ajouter un don
+                </div>
+
+                <div style={styles.formGroup}>
+                  <label style={styles.label}>Nom du donateur</label>
+                  <input
+                    value={donorName}
+                    onChange={(e) => setDonorName(e.target.value)}
+                    style={styles.input}
+                    placeholder="Ex : Sophie"
+                  />
+                </div>
+
+                <div style={styles.formGroup}>
+                  <label style={styles.label}>Montant en €</label>
+                  <input
+                    value={amountEuro}
+                    onChange={(e) => setAmountEuro(e.target.value)}
+                    style={styles.input}
+                    placeholder="Ex : 5"
+                  />
+                </div>
+
+                <div style={styles.formGroup}>
+                  <label style={styles.label}>Message affiché</label>
+                  <textarea
+                    value={note}
+                    onChange={(e) => setNote(e.target.value)}
+                    style={styles.smallTextarea}
+                    placeholder="Ex : Merci à Sophie pour son don de 5€"
+                  />
+                </div>
+
+                <div
+                  style={{
+                    marginBottom: 12,
+                    fontSize: 15,
+                    opacity: 0.82,
+                  }}
+                >
+                  Cela ajoutera environ <strong>{estimatedAddedCredits.toLocaleString("fr-FR")} crédits</strong>.
+                </div>
+
+                <button
+                  type="button"
+                  style={styles.primaryButton}
+                  onClick={addDonation}
+                  disabled={adminLoading}
+                >
+                  {adminLoading ? "Ajout..." : "Ajouter le don"}
+                </button>
+              </div>
+
+              <div
+                style={{
+                  padding: 16,
+                  borderRadius: 18,
+                  background: "rgba(34,197,94,0.08)",
+                  border: "1px solid rgba(34,197,94,0.16)",
+                }}
+              >
+                <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 10 }}>
+                  Ajouter des crédits manuellement
+                </div>
+
+                <div style={styles.formGroup}>
+                  <label style={styles.label}>Crédits à ajouter</label>
+                  <input
+                    value={manualCredits}
+                    onChange={(e) => setManualCredits(e.target.value)}
+                    style={styles.input}
+                    placeholder="Ex : 5000"
+                  />
+                </div>
+
+                <div style={styles.formGroup}>
+                  <label style={styles.label}>Message optionnel</label>
+                  <textarea
+                    value={manualLabel}
+                    onChange={(e) => setManualLabel(e.target.value)}
+                    style={styles.smallTextarea}
+                    placeholder="Ex : Recharge manuelle du compteur"
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  style={styles.primaryButton}
+                  onClick={addManualCredits}
+                  disabled={adminLoading}
+                >
+                  {adminLoading ? "Ajout..." : "Ajouter les crédits"}
+                </button>
+              </div>
+            </div>
+
+            {adminMessage ? (
+              <div
+                style={{
+                  marginTop: 14,
+                  padding: 14,
+                  borderRadius: 16,
+                  background:
+                    adminMessage.toLowerCase().includes("impossible") ||
+                    adminMessage.toLowerCase().includes("refusé") ||
+                    adminMessage.toLowerCase().includes("désactivé")
+                      ? "rgba(239,68,68,0.16)"
+                      : "rgba(34,197,94,0.16)",
+                  border:
+                    adminMessage.toLowerCase().includes("impossible") ||
+                    adminMessage.toLowerCase().includes("refusé") ||
+                    adminMessage.toLowerCase().includes("désactivé")
+                      ? "1px solid rgba(239,68,68,0.35)"
+                      : "1px solid rgba(34,197,94,0.28)",
+                }}
+              >
+                {adminMessage}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
       </div>
     </div>
   );
