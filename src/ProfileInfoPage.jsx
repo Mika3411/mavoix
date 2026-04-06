@@ -63,7 +63,9 @@ export default function ProfileInfoPage(props) {
     "";
   const medicalInfo = profile.medicalInfo || {};
   const treatments = medicalInfo.treatments || [];
-  const emergencyContacts = profile.emergencyContacts || [];
+  const emergencyContacts = (profile.emergencyContacts || []).filter(
+    (c) => c && (c.usage === "urgence" || c.usage === "both")
+  );
   const emergencySpeakContacts = emergencyContacts.filter(
     (c) => c && (c.usage === "urgence" || c.usage === "both")
   );
@@ -373,13 +375,6 @@ export default function ProfileInfoPage(props) {
                   <label style={styles.label}>Lien / rôle</label>
                   <div style={styles.readOnlyBox}>
                     {contact.relation || "Non renseigné"}
-                  </div>
-                </div>
-
-                <div style={styles.formGroup}>
-                  <label style={styles.label}>Type</label>
-                  <div style={styles.readOnlyBox}>
-                    {getUsageLabel(contact)}
                   </div>
                 </div>
 

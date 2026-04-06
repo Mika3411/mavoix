@@ -1,5 +1,68 @@
 import React from "react";
 
+const PREFIX_WORD_SUGGESTIONS = [
+  "bonjour",
+  "bonsoir",
+  "bonne",
+  "merci",
+  "oui",
+  "non",
+  "je",
+  "j'ai",
+  "besoin",
+  "aide",
+  "s'il",
+  "te",
+  "plaît",
+  "fatigué",
+  "soif",
+  "faim",
+  "mal",
+  "douleur",
+  "voudrais",
+  "boire",
+  "manger",
+  "toilette",
+  "repos",
+  "médicament",
+  "infirmier",
+  "médecin",
+  "monsieur",
+  "madame",
+  "comment",
+  "les",
+  "beaucoup",
+  "vite",
+  "maintenant",
+  "eau",
+  "aider",
+  "venir",
+  "parler",
+  "aller",
+  "encore",
+  "stop",
+  "famille",
+  "maman",
+  "papa",
+];
+
+const NEXT_WORD_SUGGESTIONS = {
+  bonjour: ["les", "monsieur", "madame", "comment"],
+  bonsoir: ["les", "monsieur", "madame"],
+  merci: ["beaucoup", "pour"],
+  je: ["suis", "voudrais", "veux", "n'ai"],
+  "j'ai": ["besoin", "mal", "faim", "soif"],
+  besoin: ["d'aide", "de", "de vous"],
+  "besoin d'aide": ["vite", "maintenant"],
+  suis: ["fatigué", "prêt", "là", "désolé"],
+  voudrais: ["boire", "manger", "parler", "aller"],
+  comment: ["allez-vous", "ça va"],
+  les: ["amis", "enfants"],
+  monsieur: ["docteur"],
+  madame: ["docteur"],
+  aide: ["vite", "maintenant"],
+};
+
 export default function ProfileSettingsPage({
   styles,
   page,
@@ -75,10 +138,166 @@ export default function ProfileSettingsPage({
       (contact.name || contact.phone) && getContactUsage(contact) !== "urgence"
   );
 
-  function handleSendMessage() {
-    const selectedContact =
-      sendableContacts.find((contact) => contact.id === selectedSendContactId) ||
-      sendableContacts[0];
+  const profileHistoryStorageKey = React.useMemo(() => {
+    const profileKey =
+      currentProfileId ||
+      currentProfile?.id ||
+      currentProfile?.name ||
+      "default";
+    return `phraseSuggestionHistory:${profileKey}`;
+  }, [currentProfileId, currentProfile?.id, currentProfile?.name]);
+
+  const [suggestionHistory, setSuggestionHistory] = React.useState({});
+
+  React.useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem(profileHistoryStorageKey);
+      setSuggestionHistory(saved ? JSON.parse(saved) : {});
+    } catch (error) {
+      console.error("Impossible de lire l'historique des suggestions :", error);
+      setSuggestionHistory({});
+    }
+  }, [profileHistoryStorageKey]);
+
+  const profileContextWords = React.useMemo(() => {
+    const values = [
+      currentProfile?.mainNeeds,
+      currentProfile?.language,
+      currentProfile?.medicalInfo?.condition,
+      currentProfile?.medicalInfo?.allergies,
+      currentProfile?.medicalInfo?.medicalHistory,
+      currentProfile?.doctorInfo?.name,
+      ...(emergencyContacts || []).flatMap((contact) => [
+        contact?.name,
+        contact?.relation,
+      ]),
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+
+    const extracted = values.match(/[a-zàâçéèêëîïôûùüÿñæœ'-]{2,}/gi) || [];
+    return Array.from(new Set(extracted)).slice(0, 120);
+  }, [currentProfile, emergencyContacts]);
+
+  const historyWords = React.useMemo(() => {
+    return Object.entries(suggestionHistory || {})
+      .sort((a, b) => Number(b[1] || 0) - Number(a[1] || 0))
+      .map(([word]) => word)
+      .filter(Boolean);
+  }, [suggestionHistory]);
+
+  function saveSuggestionToHistory(suggestion) {
+    const normalized = String(suggestion || "").trim().toLowerCase();
+    if (!normalized) return;
+
+    setSuggestionHistory((prev) => {
+      const nextHistory = {
+        ...(prev || {}),
+        [normalized]: Number(prev?.[normalized] || 0) + 1,
+      };
+
+      try {
+        window.localStorage.setItem(
+          profileHistoryStorageKey,
+          JSON.stringify(nextHistory)
+        );
+      } catch (error) {
+        console.error("Impossible d'enregistrer l'historique :", error);
+      }
+
+      return nextHistory;
+    });
+  }
+
+  function uniqueSuggestions(words) {
+    return Array.from(
+      new Set(
+        (words || [])
+          .map((word) => String(word || "").trim())
+          .filter(Boolean)
+      )
+    );
+  }
+
+  const liveSuggestions = React.useMemo(() => {
+    const rawText = String(text || "");
+    if (!rawText.trim()) return [];
+
+    const trimmed = rawText.trim().toLowerCase();
+    const endsWithSpace = /\s$/.test(rawText);
+    const words = trimmed.split(/\s+/).filter(Boolean);
+
+    if (words.length === 0) return [];
+
+    const fallbackSuggestions = uniqueSuggestions([
+      ...historyWords,
+      ...profileContextWords,
+      ...PREFIX_WORD_SUGGESTIONS,
+    ]);
+
+    if (!endsWithSpace) {
+      const fragment = words[words.length - 1];
+
+      return uniqueSuggestions([
+        ...historyWords.filter(
+          (word) =>
+            word.toLowerCase().startsWith(fragment) &&
+            word.toLowerCase() !== fragment
+        ),
+        ...profileContextWords.filter(
+          (word) =>
+            word.toLowerCase().startsWith(fragment) &&
+            word.toLowerCase() !== fragment
+        ),
+        ...PREFIX_WORD_SUGGESTIONS.filter(
+          (word) =>
+            word.toLowerCase().startsWith(fragment) &&
+            word.toLowerCase() !== fragment
+        ),
+      ]).slice(0, 6);
+    }
+
+    const lastWord = words[words.length - 1];
+    const lastTwoWords =
+      words.length >= 2
+        ? `${words[words.length - 2]} ${words[words.length - 1]}`
+        : "";
+
+    return uniqueSuggestions([
+      ...(NEXT_WORD_SUGGESTIONS[lastTwoWords] || []),
+      ...(NEXT_WORD_SUGGESTIONS[lastWord] || []),
+      ...historyWords,
+      ...profileContextWords,
+      ...fallbackSuggestions,
+    ]).slice(0, 6);
+  }, [text, historyWords, profileContextWords]);
+
+  function applySuggestion(suggestion) {
+    const currentText = String(text || "");
+    saveSuggestionToHistory(suggestion);
+
+    if (!currentText.trim()) {
+      setText(`${suggestion} `);
+      setAiGeneratedText("");
+      return;
+    }
+
+    const endsWithSpace = /\s$/.test(currentText);
+
+    if (endsWithSpace) {
+      setText(`${currentText}${suggestion} `);
+      setAiGeneratedText("");
+      return;
+    }
+
+    const parts = currentText.split(/\s+/).filter(Boolean);
+    parts[parts.length - 1] = suggestion;
+    setText(`${parts.join(" ")} `);
+    setAiGeneratedText("");
+  }
+
+  const visibleSuggestionChips = liveSuggestions;
 
   React.useEffect(() => {
     if (!sendableContacts.length) {
@@ -95,8 +314,23 @@ export default function ProfileSettingsPage({
     }
   }, [sendableContacts, selectedSendContactId]);
 
+  function sanitizePhoneInput(value) {
+    const raw = String(value || "");
+    let cleaned = raw.replace(/[^\d+]/g, "");
+
+    if (!cleaned) return "";
+
+    if (cleaned.startsWith("+")) {
+      cleaned = `+${cleaned.slice(1).replace(/\+/g, "")}`;
+    } else {
+      cleaned = cleaned.replace(/\+/g, "");
+    }
+
+    return cleaned;
+  }
+
   function formatPhoneForStorage(value) {
-    const cleaned = value.replace(/[^\d+]/g, "");
+    const cleaned = sanitizePhoneInput(value);
 
     if (!cleaned) return "";
     if (cleaned.startsWith("+33")) return cleaned;
@@ -107,13 +341,20 @@ export default function ProfileSettingsPage({
   }
 
   function normalizeWhatsAppPhone(rawPhone) {
-    const cleaned = rawPhone.replace(/\s+/g, "").replace(/[^\d+]/g, "");
+    const cleaned = String(rawPhone || "")
+      .replace(/\s+/g, "")
+      .replace(/[^\d+]/g, "");
 
     if (cleaned.startsWith("+33")) return cleaned.slice(1);
     if (cleaned.startsWith("33")) return cleaned;
     if (cleaned.startsWith("0")) return `33${cleaned.slice(1)}`;
     return cleaned.replace(/^\+/, "");
   }
+
+  function handleSendMessage() {
+    const selectedContact =
+      sendableContacts.find((contact) => contact.id === selectedSendContactId) ||
+      sendableContacts[0];
 
     if (!selectedContact?.phone) {
       window.alert("Ajoute d'abord un numéro de contact dans Profil.");
@@ -142,7 +383,6 @@ export default function ProfileSettingsPage({
     const smsUrl = `sms:${selectedContact.phone}?body=${encodeURIComponent(message)}`;
     window.location.href = smsUrl;
   }
-
 
   function handleConfirmDeleteProfile() {
     deleteCurrentProfile();
@@ -734,6 +974,13 @@ export default function ProfileSettingsPage({
                       updateEmergencyContact(
                         contact.id,
                         "phone",
+                        sanitizePhoneInput(e.target.value)
+                      )
+                    }
+                    onBlur={(e) =>
+                      updateEmergencyContact(
+                        contact.id,
+                        "phone",
                         formatPhoneForStorage(e.target.value)
                       )
                     }
@@ -961,17 +1208,76 @@ export default function ProfileSettingsPage({
     );
   }
 
-  if (page === "reglages") {
+  
+if (page === "reglages") {
     return (
       <div style={styles.gridSingle}>
         <div style={styles.card}>
-          <h2 style={styles.sectionTitle}>Ajouter une phrase</h2>
-
           <div style={styles.formGroup}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 12,
+                flexWrap: "wrap",
+                marginBottom: 12,
+              }}
+            >
+              <h2 style={{ ...styles.sectionTitle, marginBottom: 0 }}>
+                Ajouter une phrase
+              </h2>
+
+              {liveSuggestions.length > 0 ? (
+                <div
+                  style={{
+                    display: "flex",
+                    gap: 8,
+                    flexWrap: "wrap",
+                    alignItems: "center",
+                  }}
+                >
+                  {liveSuggestions.map((phrase) => (
+                    <button
+                      key={phrase}
+                      type="button"
+                      onClick={() => applySuggestion(phrase)}
+                      style={{
+                        background: "#123b6b",
+                        color: "#ffffff",
+                        border: "1px solid #3b82f6",
+                        borderRadius: 999,
+                        padding: "8px 14px",
+                        fontSize: 14,
+                        fontWeight: 700,
+                        cursor: "pointer",
+                      }}
+                    >
+                      {phrase}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+
             <label style={styles.label}>Texte à dire</label>
             <textarea
               value={text}
-              onChange={(e) => setText(e.target.value)}
+              onChange={(e) => {
+                const nextValue = e.target.value;
+                setText(nextValue);
+
+                if (/\s$/.test(nextValue)) {
+                  const typedWords = nextValue
+                    .trim()
+                    .toLowerCase()
+                    .split(/\s+/)
+                    .filter(Boolean);
+                  const lastTypedWord = typedWords[typedWords.length - 1];
+                  if (lastTypedWord) {
+                    saveSuggestionToHistory(lastTypedWord);
+                  }
+                }
+              }}
               style={styles.textarea}
               placeholder="Écrire ici..."
             />
@@ -996,19 +1302,19 @@ export default function ProfileSettingsPage({
                   }}
                 >
                   <select
-                    value={selectedSendContactId || sendableContacts[0]?.id || ""}
+                    value={selectedSendContactId || ""}
                     onChange={(e) => setSelectedSendContactId(e.target.value)}
                     style={{ ...styles.input, flex: "1 1 320px", minWidth: 220 }}
                     disabled={!sendableContacts.length}
                   >
-                    {sendableContacts.length ? (
+                    {sendableContacts.length === 0 ? (
+                      <option value="">Aucun contact disponible</option>
+                    ) : (
                       sendableContacts.map((contact, index) => (
                         <option key={contact.id} value={contact.id}>
                           {contact.name || `Contact ${index + 1}`}
                         </option>
                       ))
-                    ) : (
-                      <option value="">Aucun contact disponible</option>
                     )}
                   </select>
 
@@ -1027,11 +1333,10 @@ export default function ProfileSettingsPage({
                     onClick={handleSendMessage}
                     disabled={!sendableContacts.length}
                   >
-                    📩 Envoyer à {
-                      sendableContacts.find(
-                        (contact) => contact.id === selectedSendContactId
-                      )?.name || sendableContacts[0]?.name || "..."
-                    }
+                    📩 Envoyer à{" "}
+                    {sendableContacts.find(
+                      (contact) => contact.id === selectedSendContactId
+                    )?.name || sendableContacts[0]?.name || "..."}
                   </button>
                 </div>
               </div>
@@ -1189,9 +1494,7 @@ export default function ProfileSettingsPage({
 
           <div style={styles.buttonGrid}>
             <button
-              style={
-                isListening ? styles.recordingButton : styles.primaryButton
-              }
+              style={isListening ? styles.recordingButton : styles.primaryButton}
               onClick={isListening ? stopDictation : startDictation}
             >
               {isListening ? "Arrêter la dictée" : "🎤 Dicter"}
