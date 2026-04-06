@@ -26,7 +26,9 @@ export default function ProfileInfoPage(props) {
     borderRadius: 18,
     breakInside: "avoid",
     WebkitColumnBreakInside: "avoid",
+    pageBreakInside: "avoid",
     boxSizing: "border-box",
+    verticalAlign: "top",
   };
 
   const quickButtonStyle = {
@@ -66,6 +68,12 @@ export default function ProfileInfoPage(props) {
     (c) => c && (c.usage === "urgence" || c.usage === "both")
   );
   const doctorInfo = profile.doctorInfo || {};
+
+  function getUsageLabel(contact) {
+    if (contact?.usage === "urgence") return "Urgence";
+    if (contact?.usage === "both") return "Les deux";
+    return "Contact";
+  }
 
   return (
     <div
@@ -365,6 +373,13 @@ export default function ProfileInfoPage(props) {
                   <label style={styles.label}>Lien / rôle</label>
                   <div style={styles.readOnlyBox}>
                     {contact.relation || "Non renseigné"}
+                  </div>
+                </div>
+
+                <div style={styles.formGroup}>
+                  <label style={styles.label}>Type</label>
+                  <div style={styles.readOnlyBox}>
+                    {getUsageLabel(contact)}
                   </div>
                 </div>
 

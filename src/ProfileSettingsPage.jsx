@@ -995,36 +995,22 @@ export default function ProfileSettingsPage({
                     flexWrap: "wrap",
                   }}
                 >
-                  <div
-                    style={{
-                      display: "flex",
-                      gap: 10,
-                      overflowX: "auto",
-                      paddingBottom: 4,
-                      flex: "1 1 320px",
-                    }}
+                  <select
+                    value={selectedSendContactId || sendableContacts[0]?.id || ""}
+                    onChange={(e) => setSelectedSendContactId(e.target.value)}
+                    style={{ ...styles.input, flex: "1 1 320px", minWidth: 220 }}
+                    disabled={!sendableContacts.length}
                   >
-                    {sendableContacts.map((contact, index) => {
-                        const isActive =
-                          (selectedSendContactId || sendableContacts[0]?.id) ===
-                          contact.id;
-
-                        return (
-                          <button
-                            key={contact.id}
-                            type="button"
-                            onClick={() => setSelectedSendContactId(contact.id)}
-                            style={
-                              isActive
-                                ? styles.primaryButton
-                                : styles.secondaryButton
-                            }
-                          >
-                            {contact.name || `Contact ${index + 1}`}
-                          </button>
-                        );
-                      })}
-                  </div>
+                    {sendableContacts.length ? (
+                      sendableContacts.map((contact, index) => (
+                        <option key={contact.id} value={contact.id}>
+                          {contact.name || `Contact ${index + 1}`}
+                        </option>
+                      ))
+                    ) : (
+                      <option value="">Aucun contact disponible</option>
+                    )}
+                  </select>
 
                   <select
                     value={sendMode}
