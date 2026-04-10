@@ -11,7 +11,17 @@ const DEFAULT_AI_USAGE: AIUsage = {
   availableSource: "shared",
 };
 
-export default function useAI({ currentProfileId, text, mode = "realtime_correction_and_prediction", onBlocked }: { currentProfileId: string; text: string; mode?: string; onBlocked?: () => void; }) {
+export default function useAI({
+  currentProfileId,
+  text,
+  mode = "realtime_correction_and_prediction",
+  onBlocked,
+}: {
+  currentProfileId: string;
+  text: string;
+  mode?: string;
+  onBlocked?: () => void;
+}) {
   const [aiGeneratedText, setAiGeneratedText] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState("");
@@ -20,28 +30,59 @@ export default function useAI({ currentProfileId, text, mode = "realtime_correct
   const [creditsPurchaseLoading, setCreditsPurchaseLoading] = useState("");
   const [creditsMessage, setCreditsMessage] = useState("");
 
-  const refreshAiUsage = useCallback(async (profileId = currentProfileId) => {
-    if (!profileId) return;
+  const refreshAiUsage = useCallback(
+    async (profileId = currentProfileId) => {
+      if (!profileId) return;
 
-    try {
-      setAiStatusLoading(true);
-      const response = await fetch(
-        `${API_BASE}/api/ai/status?profileId=${encodeURIComponent(profileId)}`
-      );
-      const data = await response.json();
+      let timeoutId: number | undefined;
 
-      if (!response.ok) {
-        throw new Error(data.error || "Impossible de récupérer le compteur IA.");
+      try {
+        setAiStatusLoading(true);
+
+        const controller = new AbortController();
+        timeoutId = window.setTimeout(() => controller.abort(), 5000);
+
+        const response = await fetch(
+          `${API_BASE}/api/ai/status?profileId=${encodeURIComponent(profileId)}`,
+          { signal: controller.signal }
+        );
+
+        let data: any = null;
+        try {
+          data = await response.json();
+        } catch {
+          data = null;
+        }
+
+        if (!response.ok) {
+          throw new Error(
+            data?.error || "Impossible de récupérer le compteur IA."
+          );
+        }
+
+        setAiUsage(data);
+      } catch (error) {
+        console.warn("API IA indisponible, fallback local activé.", error);
+
+        setAiUsage({
+          creditsRemaining: 999999,
+          globalCreditsRemaining: 999999,
+          blocked: false,
+          donorWall: [],
+          euroToCreditsRate: 1000,
+          availableSource: "offline",
+        });
+
+        setAiError("");
+      } finally {
+        if (typeof timeoutId === "number") {
+          window.clearTimeout(timeoutId);
+        }
+        setAiStatusLoading(false);
       }
-
-      setAiUsage(data);
-    } catch (error) {
-      console.error(error);
-      setAiError((prev) => prev || "Impossible de récupérer le compteur IA.");
-    } finally {
-      setAiStatusLoading(false);
-    }
-  }, [currentProfileId]);
+    },
+    [currentProfileId]
+  );
 
   useEffect(() => {
     refreshAiUsage();
@@ -50,7 +91,7 @@ export default function useAI({ currentProfileId, text, mode = "realtime_correct
   const generateTextWithAI = useCallback(async () => {
     try {
       if (!text.trim()) {
-        setAiError("Écris quelques mots d\'abord.");
+        setAiError("Écris quelques mots d'abord.");
         setAiGeneratedText("");
         return "";
       }
@@ -81,7 +122,7 @@ export default function useAI({ currentProfileId, text, mode = "realtime_correct
           realtime: true,
           task: "correct_and_predict",
           instruction:
-            "Corrige les mots déjà écrits, garde le sens voulu, puis propose naturellement la suite la plus probable de la phrase en temps réel.",
+            "Corrige les mots déjà écrits, garde le sens voulu, sans deviner la suite. Retourne uniquement le texte corrigé.",
         }),
       });
 
@@ -105,8 +146,8 @@ export default function useAI({ currentProfileId, text, mode = "realtime_correct
         setAiError("Aucune phrase générée.");
         return "";
       }
-    } catch (error) {
-      setAiError(error.message || "Erreur pendant la génération.");
+    } catch (error: any) {
+      setAiError(error?.message || "Erreur pendant la génération.");
       setAiGeneratedText("");
       return "";
     } finally {
@@ -126,38 +167,43 @@ export default function useAI({ currentProfileId, text, mode = "realtime_correct
     return generateTextWithAI();
   }, [aiUsage.blocked, generateTextWithAI, onBlocked]);
 
-  const purchaseCredits = useCallback(async (packId: string) => {
-    try {
-      setCreditsPurchaseLoading(packId);
-      setCreditsMessage("");
+  const purchaseCredits = useCallback(
+    async (packId: string) => {
+      try {
+        setCreditsPurchaseLoading(packId);
+        setCreditsMessage("");
 
-      const response = await fetch(`${API_BASE}/api/ai/purchase`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          profileId: currentProfileId,
-          packId,
-        }),
-      });
+        const response = await fetch(`${API_BASE}/api/ai/purchase`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            profileId: currentProfileId,
+            packId,
+          }),
+        });
 
-      const data = await response.json();
+        const data = await response.json();
 
-      if (!response.ok) {
-        throw new Error(data.error || "Impossible d'ajouter les crédits.");
+        if (!response.ok) {
+          throw new Error(data.error || "Impossible d'ajouter les crédits.");
+        }
+
+        setAiUsage(data.usage);
+        setCreditsMessage(
+          `Pack ${data.purchasedPack.credits} crédits ajouté au profil.`
+        );
+      } catch (error: any) {
+        setCreditsMessage(
+          error?.message || "Impossible d'ajouter les crédits."
+        );
+      } finally {
+        setCreditsPurchaseLoading("");
       }
-
-      setAiUsage(data.usage);
-      setCreditsMessage(
-        `Pack ${data.purchasedPack.credits} crédits ajouté au profil.`
-      );
-    } catch (error) {
-      setCreditsMessage(error.message || "Impossible d'ajouter les crédits.");
-    } finally {
-      setCreditsPurchaseLoading("");
-    }
-  }, [currentProfileId]);
+    },
+    [currentProfileId]
+  );
 
   return {
     aiGeneratedText,
