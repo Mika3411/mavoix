@@ -77,6 +77,31 @@ const ACCENT_OPTIONS = {
     });
   }
 
+  function getFormattedCursorPosition(rawValue, formattedValue, rawCursorPosition) {
+    if (rawCursorPosition <= 0) return 0;
+    if (rawValue === formattedValue) return rawCursorPosition;
+
+    let rawIndex = 0;
+    let formattedIndex = 0;
+
+    while (rawIndex < rawCursorPosition && formattedIndex < formattedValue.length) {
+      if (rawValue[rawIndex] === formattedValue[formattedIndex]) {
+        rawIndex += 1;
+        formattedIndex += 1;
+        continue;
+      }
+
+      formattedIndex += 1;
+    }
+
+    while (rawIndex < rawCursorPosition && formattedIndex < formattedValue.length) {
+      rawIndex += 1;
+      formattedIndex += 1;
+    }
+
+    return formattedIndex;
+  }
+
   function insertAtCursor(insertedText) {
     const currentValue = String(text || "");
     const textarea = textAreaRef.current;
@@ -89,14 +114,20 @@ const ACCENT_OPTIONS = {
         ? textarea.selectionEnd
         : currentValue.length;
 
-    const nextValue =
+    const rawNextValue =
       currentValue.slice(0, selectionStart) +
       insertedText +
       currentValue.slice(selectionEnd);
 
-    const nextCursor = selectionStart + insertedText.length;
+    const rawCursor = selectionStart + insertedText.length;
+    const formattedValue = formatTextSmart(rawNextValue);
+    const nextCursor = getFormattedCursorPosition(
+      rawNextValue,
+      formattedValue,
+      rawCursor
+    );
 
-    setText(formatTextSmart(nextValue));
+    setText(formattedValue);
     focusTextArea(nextCursor, nextCursor);
 
     if (keyboardMode === "letters" && isShiftActive && /[a-zà-ÿA-ZÀ-Ÿ]/.test(insertedText)) {

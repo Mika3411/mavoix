@@ -7,6 +7,7 @@ import ProfileSettingsPage from "./ProfileSettingsPage";
 import ProfileInfoPage from "./ProfileInfoPage";
 import CreditsPage from "./CreditsPage";
 import InstallButton from "./InstallButton";
+import NoticePage from "./NoticePage";
 import { AVAILABLE_ICONS, generateId, getCategoryBackground } from "./data";
 import { createStyles, getActiveTheme } from "./themes";
 import useProfiles from "./hooks/useProfiles";
@@ -44,6 +45,7 @@ export default function App() {
 
   const [toastMessage, setToastMessage] = useState("");
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isNavHidden, setIsNavHidden] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -458,7 +460,7 @@ export default function App() {
       style={{
         ...styles.page,
         minHeight: "100vh",
-        height: "100vh",
+        height: "100dvh",
         overflow: "hidden",
       }}
     >
@@ -471,9 +473,18 @@ export default function App() {
           display: "flex",
           flexDirection: "column",
           overflow: "hidden",
+          minHeight: 0,
         }}
       >
-        <div style={styles.header}>
+        <div
+          style={{
+            ...styles.header,
+            transform: isNavHidden ? "translateY(calc(-100% + 18px))" : "translateY(0)",
+            transition: "transform 0.3s ease",
+            position: "relative",
+            zIndex: 20,
+          }}
+        >
           <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
             <img
               src="/picturetitle.png"
@@ -558,6 +569,16 @@ export default function App() {
             </button>
 
             <button
+              style={
+                page === "notice" ? styles.primaryButton : styles.secondaryButton
+              }
+              onClick={() => setPage("notice")}
+            >
+              Notice
+            </button>
+
+
+            <button
               onClick={() =>
                 window.open(
                   "https://paypal.me/anime1120",
@@ -581,16 +602,56 @@ export default function App() {
           </div>
         </div>
 
-        <InstallButton styles={styles} />
+        <button
+          onClick={() => setIsNavHidden((prev) => !prev)}
+          aria-label={isNavHidden ? "Afficher la barre de navigation" : "Masquer la barre de navigation"}
+          title={isNavHidden ? "Afficher la navigation" : "Masquer la navigation"}
+          style={{
+            position: "absolute",
+            top: isNavHidden ? 18 : 108,
+            left: "50%",
+            transform: "translateX(-50%)",
+            zIndex: 30,
+            width: 56,
+            height: 28,
+            borderRadius: "0 0 16px 16px",
+            border: "none",
+            background: activeTheme?.cardBackground || "#1e293b",
+            color: activeTheme?.text || "#ffffff",
+            fontSize: 18,
+            fontWeight: 700,
+            cursor: "pointer",
+            boxShadow: "0 8px 20px rgba(0,0,0,0.18)",
+            transition: "top 0.3s ease, transform 0.2s ease",
+          }}
+        >
+          {isNavHidden ? "↓" : "↑"}
+        </button>
 
         <div
           style={{
             flex: 1,
-            overflowY: "auto",
-            overflowX: "hidden",
-            paddingBottom: 110,
+            display: "flex",
+            flexDirection: "column",
+            marginTop: isNavHidden ? "-90px" : "0px",
+            transition: "margin-top 0.3s ease",
+            minHeight: 0,
+            overflow: "hidden",
           }}
         >
+          <InstallButton styles={styles} />
+
+          <div
+            style={{
+              flex: 1,
+              overflowY: "auto",
+              overflowX: "hidden",
+              minHeight: 0,
+              WebkitOverflowScrolling: "touch",
+              overscrollBehavior: "contain",
+              paddingBottom: 140,
+            }}
+          >
         {page === "communication" ? (
           <CommunicationPage
             styles={styles}
@@ -645,6 +706,8 @@ export default function App() {
             onPurchase={purchaseCredits}
             onBackToEditor={() => setPage("reglages")}
           />
+        ) : page === "notice" ? (
+          <NoticePage styles={styles} />
         ) : (
           <ProfileSettingsPage
             styles={styles}
@@ -705,6 +768,7 @@ export default function App() {
             goToCreditsPage={() => setPage("credits")}
           />
         )}
+          </div>
         </div>
       </div>
 
