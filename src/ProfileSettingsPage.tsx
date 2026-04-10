@@ -77,12 +77,6 @@ const ACCENT_OPTIONS = {
     });
   }
 
-  function getFormattedCursorPosition(rawValue, rawCursorPosition) {
-    const safeCursor = Math.max(0, Math.min(rawCursorPosition, rawValue.length));
-    const formattedPrefix = formatTextSmart(rawValue.slice(0, safeCursor));
-    return formattedPrefix.length;
-  }
-
   function insertAtCursor(insertedText) {
     const currentValue = String(text || "");
     const textarea = textAreaRef.current;
@@ -95,18 +89,14 @@ const ACCENT_OPTIONS = {
         ? textarea.selectionEnd
         : currentValue.length;
 
-    const nextRawValue =
+    const nextValue =
       currentValue.slice(0, selectionStart) +
       insertedText +
       currentValue.slice(selectionEnd);
 
-    const formattedValue = formatTextSmart(nextRawValue);
-    const nextCursor = getFormattedCursorPosition(
-      nextRawValue,
-      selectionStart + insertedText.length
-    );
+    const nextCursor = selectionStart + insertedText.length;
 
-    setText(formattedValue);
+    setText(formatTextSmart(nextValue));
     focusTextArea(nextCursor, nextCursor);
 
     if (keyboardMode === "letters" && isShiftActive && /[a-zà-ÿA-ZÀ-Ÿ]/.test(insertedText)) {
@@ -157,43 +147,19 @@ const ACCENT_OPTIONS = {
         ? textarea.selectionEnd
         : currentValue.length;
 
-    const nextRawValue =
+    const nextValue =
       currentValue.slice(0, selectionStart) +
       " " +
       currentValue.slice(selectionEnd);
 
-    const typedWords = nextRawValue.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    const typedWords = nextValue.trim().toLowerCase().split(/\s+/).filter(Boolean);
     const lastTypedWord = typedWords[typedWords.length - 1];
     if (lastTypedWord) {
       saveWordToHistory(lastTypedWord);
     }
 
-    const formattedValue = formatTextSmart(nextRawValue);
-    const nextCursor = getFormattedCursorPosition(nextRawValue, selectionStart + 1);
-    setText(formattedValue);
-    focusTextArea(nextCursor, nextCursor);
-  }
-
-  function addNewLine() {
-    const currentValue = String(text || "");
-    const textarea = textAreaRef.current;
-    const selectionStart =
-      textarea && typeof textarea.selectionStart === "number"
-        ? textarea.selectionStart
-        : currentValue.length;
-    const selectionEnd =
-      textarea && typeof textarea.selectionEnd === "number"
-        ? textarea.selectionEnd
-        : currentValue.length;
-
-    const nextRawValue =
-      currentValue.slice(0, selectionStart) +
-      "\n" +
-      currentValue.slice(selectionEnd);
-
-    const formattedValue = formatTextSmart(nextRawValue);
-    const nextCursor = getFormattedCursorPosition(nextRawValue, selectionStart + 1);
-    setText(formattedValue);
+    const nextCursor = selectionStart + 1;
+    setText(formatTextSmart(nextValue));
     focusTextArea(nextCursor, nextCursor);
   }
 
@@ -202,39 +168,12 @@ const ACCENT_OPTIONS = {
     focusTextArea(0, 0);
   }
 
-  function getPreviousCharacterStart(value, cursorIndex) {
-    if (!cursorIndex || cursorIndex <= 0) return 0;
-
-    const IntlWithSegmenter = typeof Intl !== "undefined" ? (Intl as any) : null;
-
-    if (IntlWithSegmenter && typeof IntlWithSegmenter.Segmenter === "function") {
-      const segmenter = new IntlWithSegmenter.Segmenter("fr", {
-        granularity: "grapheme",
-      });
-      let previousStart = 0;
-
-      for (const segment of segmenter.segment(value)) {
-        if (segment.index >= cursorIndex) {
-          return previousStart;
-        }
-        previousStart = segment.index;
-      }
-
-      return previousStart;
-    }
-
-    const beforeCursor = Array.from(value.slice(0, cursorIndex));
-    beforeCursor.pop();
-    return beforeCursor.join("").length;
-  }
-
   function removeLastCharacter() {
     const textarea = textAreaRef.current;
     const currentValue = textarea ? String(textarea.value || "") : String(text || "");
 
     if (!textarea) {
-      const previousStart = getPreviousCharacterStart(currentValue, currentValue.length);
-      setText(formatTextSmart(currentValue.slice(0, previousStart)));
+      setText((prev) => formatTextSmart(String(prev || "").slice(0, -1)));
       return;
     }
 
@@ -251,12 +190,12 @@ const ACCENT_OPTIONS = {
 
     if (selectionStart == null || selectionStart === 0) return;
 
-    const previousStart = getPreviousCharacterStart(currentValue, selectionStart);
     const nextValue =
-      currentValue.slice(0, previousStart) + currentValue.slice(selectionEnd);
+      currentValue.slice(0, selectionStart - 1) + currentValue.slice(selectionEnd);
 
+    const nextCursor = selectionStart - 1;
     setText(formatTextSmart(nextValue));
-    focusTextArea(previousStart, previousStart);
+    focusTextArea(nextCursor, nextCursor);
   }
 
   function toggleKeyboardMode() {
@@ -879,7 +818,7 @@ function toggleEmojiMenu(event) {
 <div
   style={{
     display: "grid",
-    gridTemplateColumns: "auto minmax(0, 1fr) auto auto auto",
+    gridTemplateColumns: "auto 1fr auto auto",
     gap: gapSize,
   }}
 >
@@ -937,35 +876,6 @@ function toggleEmojiMenu(event) {
     )}
   >
     Espace
-  </button>
-
-  <button
-    type="button"
-    onMouseEnter={() => setHoveredKey("enter")}
-    onMouseLeave={() => {
-      setHoveredKey((prev) => (prev === "enter" ? null : prev));
-      setPressedKey((prev) => (prev === "enter" ? null : prev));
-    }}
-    onMouseDown={(event) => {
-      event.preventDefault();
-      setPressedKey("enter");
-    }}
-    onMouseUp={() => {
-      setPressedKey((prev) => (prev === "enter" ? null : prev));
-    }}
-    onClick={addNewLine}
-    style={getInteractiveKeyStyle(
-      {
-        ...styles.secondaryButton,
-        minHeight: actionMinHeight,
-        padding: "8px 16px",
-        fontSize: 18,
-        fontWeight: 800,
-      },
-      "enter"
-    )}
-  >
-    Entrer
   </button>
 
   <button
@@ -1448,45 +1358,6 @@ export default function ProfileSettingsPage(props: any) {
       setSelectedSendContactId(sendableContacts[0].id);
     }
   }, [sendableContacts, selectedSendContactId]);
-
-
-  React.useEffect(() => {
-    if (typeof document === "undefined") return;
-
-    const styleId = "profile-settings-button-interactions";
-    let styleTag = document.getElementById(styleId) as HTMLStyleElement | null;
-
-    if (!styleTag) {
-      styleTag = document.createElement("style");
-      styleTag.id = styleId;
-      document.head.appendChild(styleTag);
-    }
-
-    styleTag.textContent = `
-      button {
-        transition: background 0.12s ease, border-color 0.12s ease, transform 0.06s ease, box-shadow 0.12s ease, filter 0.12s ease !important;
-      }
-
-      button:hover:not(:disabled) {
-        filter: brightness(1.08) saturate(1.12);
-      }
-
-      button:active:not(:disabled) {
-        filter: brightness(0.9) saturate(1.18);
-        transform: scale(0.985);
-      }
-
-      button:disabled {
-        cursor: not-allowed;
-      }
-    `;
-
-    return () => {
-      if (styleTag && styleTag.parentNode) {
-        styleTag.parentNode.removeChild(styleTag);
-      }
-    };
-  }, []);
 
   function sanitizePhoneInput(value) {
     const raw = String(value || "");
@@ -2818,8 +2689,7 @@ if (page === "reglages") {
           <div
             style={{
               display: "grid",
-              gridTemplateColumns:
-                window.innerWidth > 1180 ? "minmax(0, 1fr) minmax(0, 1fr)" : "1fr",
+              gridTemplateColumns: "1fr",
               gap: 14,
               marginTop: 12,
             }}
@@ -2829,7 +2699,14 @@ if (page === "reglages") {
                 ...styles.card,
                 padding: 14,
                 display: "grid",
-                gap: 12,
+                gridTemplateColumns:
+                  window.innerWidth > 1024
+                    ? "minmax(260px, 1.35fr) minmax(180px, 0.8fr) minmax(180px, 0.8fr)"
+                    : "1fr",
+                gap: 14,
+                alignItems: "end",
+                boxSizing: "border-box",
+                overflow: "hidden",
               }}
             >
               <button
@@ -2837,6 +2714,8 @@ if (page === "reglages") {
                 style={{
                   ...styles.primaryButton,
                   width: "100%",
+                  minWidth: 0,
+                  boxSizing: "border-box",
                 }}
                 onClick={generateTextWithAI}
                 disabled={aiLoading || !text.trim()}
@@ -2848,12 +2727,17 @@ if (page === "reglages") {
                   : "✨ Générer par IA"}
               </button>
 
-              <div style={styles.formGroup}>
+              <div style={{ ...styles.formGroup, minWidth: 0 }}>
                 <label style={styles.label}>Ton</label>
                 <select
                   value={tone}
                   onChange={(e) => setTone(e.target.value)}
-                  style={styles.input}
+                  style={{
+                    ...styles.input,
+                    width: "100%",
+                    minWidth: 0,
+                    boxSizing: "border-box",
+                  }}
                 >
                   <option value="naturel">Naturel</option>
                   <option value="professionnel">Professionnel</option>
@@ -2862,12 +2746,17 @@ if (page === "reglages") {
                 </select>
               </div>
 
-              <div style={styles.formGroup}>
+              <div style={{ ...styles.formGroup, minWidth: 0 }}>
                 <label style={styles.label}>À qui je parle</label>
                 <select
                   value={audience}
                   onChange={(e) => setAudience(e.target.value)}
-                  style={styles.input}
+                  style={{
+                    ...styles.input,
+                    width: "100%",
+                    minWidth: 0,
+                    boxSizing: "border-box",
+                  }}
                 >
                   <option value="général">Général</option>
                   <option value="ami">Ami</option>
@@ -2883,25 +2772,42 @@ if (page === "reglages") {
                 ...styles.card,
                 padding: 14,
                 display: "grid",
-                gap: 12,
+                gridTemplateColumns:
+                  window.innerWidth > 1024
+                    ? "minmax(260px, 1.2fr) minmax(180px, 0.8fr) minmax(220px, 0.9fr)"
+                    : "1fr",
+                gap: 14,
+                alignItems: "end",
+                boxSizing: "border-box",
+                overflow: "hidden",
               }}
             >
-              <div style={styles.formGroup}>
+              <div style={{ ...styles.formGroup, minWidth: 0 }}>
                 <label style={styles.label}>Libellé du bouton</label>
                 <input
                   value={label}
                   onChange={(e) => setLabel(e.target.value)}
-                  style={styles.input}
+                  style={{
+                    ...styles.input,
+                    width: "100%",
+                    minWidth: 0,
+                    boxSizing: "border-box",
+                  }}
                   placeholder="Ex : Besoin d'eau"
                 />
               </div>
 
-              <div style={styles.formGroup}>
+              <div style={{ ...styles.formGroup, minWidth: 0 }}>
                 <label style={styles.label}>Catégorie</label>
                 <select
                   value={category}
                   onChange={(e) => setCategory(e.target.value)}
-                  style={styles.input}
+                  style={{
+                    ...styles.input,
+                    width: "100%",
+                    minWidth: 0,
+                    boxSizing: "border-box",
+                  }}
                 >
                   {(categories || []).map((item) => (
                     <option key={item} value={item}>
@@ -2911,7 +2817,15 @@ if (page === "reglages") {
                 </select>
               </div>
 
-              <button style={styles.primaryButton} onClick={savePhrase}>
+              <button
+                style={{
+                  ...styles.primaryButton,
+                  width: "100%",
+                  minWidth: 0,
+                  boxSizing: "border-box",
+                }}
+                onClick={savePhrase}
+              >
                 Enregistrer la phrase
               </button>
             </div>
