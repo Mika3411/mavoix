@@ -168,12 +168,77 @@ const ACCENT_OPTIONS = {
     focusTextArea(0, 0);
   }
 
+  function getGraphemeSegments(currentValue) {
+    if (!currentValue) return [];
+
+    const intlObject =
+      typeof Intl !== "undefined" ? Intl : undefined;
+    const segmenterCtor =
+      intlObject && typeof intlObject === "object"
+        ? intlObject["Segmenter"]
+        : undefined;
+
+    if (typeof segmenterCtor === "function") {
+      const segmenter = new segmenterCtor("fr", { granularity: "grapheme" });
+      return Array.from(segmenter.segment(currentValue), ({ segment, index }) => ({
+        segment,
+        index,
+      }));
+    }
+
+    return Array.from(currentValue).map((segment, index) => ({
+      segment,
+      index,
+    }));
+  }
+
+  function removePreviousGrapheme(currentValue, cursorPosition) {
+    const segments = getGraphemeSegments(currentValue);
+
+    if (!segments.length) return null;
+
+    let segmentIndex = -1;
+
+    for (let i = 0; i < segments.length; i += 1) {
+      const start = segments[i].index;
+      const end = start + segments[i].segment.length;
+
+      if (cursorPosition > start && cursorPosition <= end) {
+        segmentIndex = i;
+        break;
+      }
+
+      if (cursorPosition <= start) {
+        segmentIndex = i - 1;
+        break;
+      }
+    }
+
+    if (segmentIndex === -1) {
+      segmentIndex = segments.length - 1;
+    }
+
+    if (segmentIndex < 0) return null;
+
+    const segmentToRemove = segments[segmentIndex];
+    const nextValue =
+      currentValue.slice(0, segmentToRemove.index) +
+      currentValue.slice(segmentToRemove.index + segmentToRemove.segment.length);
+
+    return {
+      nextValue,
+      nextCursor: segmentToRemove.index,
+    };
+  }
+
   function removeLastCharacter() {
     const textarea = textAreaRef.current;
     const currentValue = textarea ? String(textarea.value || "") : String(text || "");
 
     if (!textarea) {
-      setText((prev) => formatTextSmart(String(prev || "").slice(0, -1)));
+      const result = removePreviousGrapheme(currentValue, currentValue.length);
+      if (!result) return;
+      setText(formatTextSmart(result.nextValue));
       return;
     }
 
@@ -190,12 +255,11 @@ const ACCENT_OPTIONS = {
 
     if (selectionStart == null || selectionStart === 0) return;
 
-    const nextValue =
-      currentValue.slice(0, selectionStart - 1) + currentValue.slice(selectionEnd);
+    const result = removePreviousGrapheme(currentValue, selectionStart);
+    if (!result) return;
 
-    const nextCursor = selectionStart - 1;
-    setText(formatTextSmart(nextValue));
-    focusTextArea(nextCursor, nextCursor);
+    setText(formatTextSmart(result.nextValue));
+    focusTextArea(result.nextCursor, result.nextCursor);
   }
 
   function toggleKeyboardMode() {
@@ -818,7 +882,7 @@ function toggleEmojiMenu(event) {
 <div
   style={{
     display: "grid",
-    gridTemplateColumns: "auto 1fr auto auto",
+    gridTemplateColumns: "auto 1fr auto auto auto",
     gap: gapSize,
   }}
 >
@@ -876,6 +940,35 @@ function toggleEmojiMenu(event) {
     )}
   >
     Espace
+  </button>
+
+  <button
+    type="button"
+    onMouseEnter={() => setHoveredKey("enter")}
+    onMouseLeave={() => {
+      setHoveredKey((prev) => (prev === "enter" ? null : prev));
+      setPressedKey((prev) => (prev === "enter" ? null : prev));
+    }}
+    onMouseDown={(event) => {
+      event.preventDefault();
+      setPressedKey("enter");
+    }}
+    onMouseUp={() => {
+      setPressedKey((prev) => (prev === "enter" ? null : prev));
+    }}
+    onClick={() => insertAtCursor("\n")}
+    style={getInteractiveKeyStyle(
+      {
+        ...styles.primaryButton,
+        minHeight: actionMinHeight,
+        padding: "8px 16px",
+        fontSize: 18,
+        fontWeight: 800,
+      },
+      "enter"
+    )}
+  >
+    ↵ Entrée
   </button>
 
   <button
@@ -2689,9 +2782,13 @@ if (page === "reglages") {
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "1fr",
+              gridTemplateColumns:
+                window.innerWidth > 1400
+                  ? "minmax(0, 1fr) minmax(0, 1fr)"
+                  : "1fr",
               gap: 14,
               marginTop: 12,
+              alignItems: "stretch",
             }}
           >
             <div
@@ -2700,8 +2797,8 @@ if (page === "reglages") {
                 padding: 14,
                 display: "grid",
                 gridTemplateColumns:
-                  window.innerWidth > 1024
-                    ? "minmax(260px, 1.35fr) minmax(180px, 0.8fr) minmax(180px, 0.8fr)"
+                  window.innerWidth > 1400
+                    ? "minmax(240px, 1.25fr) minmax(180px, 0.8fr) minmax(180px, 0.8fr)"
                     : "1fr",
                 gap: 14,
                 alignItems: "end",
@@ -2773,8 +2870,8 @@ if (page === "reglages") {
                 padding: 14,
                 display: "grid",
                 gridTemplateColumns:
-                  window.innerWidth > 1024
-                    ? "minmax(260px, 1.2fr) minmax(180px, 0.8fr) minmax(220px, 0.9fr)"
+                  window.innerWidth > 1400
+                    ? "minmax(220px, 1.1fr) minmax(170px, 0.8fr) minmax(220px, 0.9fr)"
                     : "1fr",
                 gap: 14,
                 alignItems: "end",
