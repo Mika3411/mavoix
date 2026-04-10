@@ -65,7 +65,7 @@ function buildRealtimeAssist(inputText: string) {
     return {
       correctedText: "",
       completion: "",
-      displayText: "L'IA corrige votre phrase en direct et essaie de deviner la suite ici.",
+      displayText: "L'IA corrige votre texte en direct ici.",
     };
   }
 
@@ -77,30 +77,12 @@ function buildRealtimeAssist(inputText: string) {
   const correctedText = correctedWords.join(" ");
 
   const lowerCorrected = correctedText.toLowerCase();
-  const matchingQuickSuggestion = QUICK_SUGGESTIONS.find((phrase) => {
-    const lowerPhrase = phrase.toLowerCase();
-    return lowerPhrase.startsWith(lowerCorrected) && lowerPhrase !== lowerCorrected;
-  });
-
-  let completion = "";
-
-  if (matchingQuickSuggestion) {
-    completion = matchingQuickSuggestion.slice(correctedText.length).trimStart();
-  } else {
-    const nextWord = WORD_SUGGESTIONS.find((word) =>
-      word.toLowerCase().startsWith(correctedLastWord.toLowerCase()) &&
-      word.toLowerCase() !== correctedLastWord.toLowerCase()
-    );
-
-    if (nextWord) {
-      completion = nextWord;
-    }
-  }
+  const completion = "";
 
   return {
     correctedText,
     completion,
-    displayText: completion ? `${correctedText} ${completion}` : correctedText,
+    displayText: correctedText,
   };
 }
 
