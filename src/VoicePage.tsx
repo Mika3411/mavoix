@@ -1,29 +1,30 @@
 import React from "react";
 
-export default function VoicePage({
-  styles,
-  defaultVoice,
-  defaultVoiceSettings,
-  voices,
-  voiceStatus,
-  testVoice,
-  updateCurrentProfileField,
-  currentProfile,
-  savedPhrases,
-  selectedPhraseId,
-  setSelectedPhraseId,
-  selectedPhrase,
-  voiceEditor,
-  setVoiceEditor,
-  categories,
-  saveSelectedPhraseVoiceSettings,
-  speakText,
-  recordingPhraseId,
-  stopRecording,
-  startRecording,
-  audioMap,
-  deleteRecording,
-}) {
+export default function VoicePage(props: any) {
+  const {
+    styles,
+    defaultVoice,
+    defaultVoiceSettings,
+    voices,
+    voiceStatus,
+    testVoice,
+    updateCurrentProfileField,
+    currentProfile,
+    savedPhrases,
+    selectedPhraseId,
+    setSelectedPhraseId,
+    selectedPhrase,
+    voiceEditor,
+    setVoiceEditor,
+    categories,
+    saveSelectedPhraseVoiceSettings,
+    speakText,
+    recordingPhraseId,
+    stopRecording,
+    startRecording,
+    audioMap,
+    deleteRecording,
+  } = props;
   const visibleVoices = voices.filter(
     (voice) => voiceStatus?.[voice.voiceURI] !== "failed"
   );

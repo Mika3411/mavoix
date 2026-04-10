@@ -1,13 +1,16 @@
 import React, { useMemo, useState } from "react";
+import { API_BASE } from "./services/config";
 
-const API_BASE = "https://mavoix.onrender.com";
-
-export default function CreditsPage({
-  styles,
-  aiUsage,
-  aiStatusLoading,
-  onBackToEditor,
-}) {
+export default function CreditsPage(props: any) {
+  const {
+    styles,
+    aiUsage,
+    aiStatusLoading,
+    onBackToEditor,
+    creditsPurchaseLoading,
+    creditsMessage,
+    onPurchase,
+  } = props;
   const donorWall = aiUsage?.donorWall || [];
 
   const isAdminRoute =

@@ -1,17 +1,18 @@
 import React from "react";
 
-export default function CommunicationPage({
-  styles,
-  categoryOptions,
-  filter,
-  setFilter,
-  filteredPhrases,
-  getCategoryBackground,
-  speakText,
-  movePhrase,
-  updatePhrase,
-  deletePhrase,
-}) {
+export default function CommunicationPage(props: any) {
+  const {
+    styles,
+    categoryOptions,
+    filter,
+    setFilter,
+    filteredPhrases,
+    getCategoryBackground,
+    speakText,
+    movePhrase,
+    updatePhrase,
+    deletePhrase,
+  } = props;
   return (
     <div style={styles.gridSingle}>
       <div style={styles.card}>

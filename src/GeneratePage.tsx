@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { QUICK_SUGGESTIONS, WORD_SUGGESTIONS } from "./utils/suggestions";
+import { normalizeWhatsAppPhone } from "./utils/phone";
 
 type Contact = {
   name: string;
@@ -6,36 +8,107 @@ type Contact = {
   relation?: string;
 };
 
-const QUICK_SUGGESTIONS = [
-  "Bonjour",
-  "Merci",
-  "Oui",
-  "Non",
-  "J'ai besoin d'aide",
-  "Je suis fatigué",
-];
+function levenshtein(a: string, b: string) {
+  const rows = a.length + 1;
+  const cols = b.length + 1;
+  const dp = Array.from({ length: rows }, () => Array(cols).fill(0));
 
-const WORD_SUGGESTIONS = [
-  "Bonjour",
-  "Bonsoir",
-  "Bonne journée",
-  "Merci",
-  "S'il te plaît",
-  "Je suis fatigué",
-  "J'ai besoin d'aide",
-  "Je voudrais boire",
-  "Je voudrais manger",
-  "Je suis en douleur",
-  "Appelle-moi",
-  "À plus tard",
-];
+  for (let i = 0; i < rows; i += 1) dp[i][0] = i;
+  for (let j = 0; j < cols; j += 1) dp[0][j] = j;
+
+  for (let i = 1; i < rows; i += 1) {
+    for (let j = 1; j < cols; j += 1) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      dp[i][j] = Math.min(
+        dp[i - 1][j] + 1,
+        dp[i][j - 1] + 1,
+        dp[i - 1][j - 1] + cost
+      );
+    }
+  }
+
+  return dp[a.length][b.length];
+}
+
+function getBestCorrection(word: string) {
+  const normalized = String(word || "").trim().toLowerCase();
+  if (!normalized) return "";
+
+  let best = normalized;
+  let bestScore = Number.POSITIVE_INFINITY;
+
+  for (const candidate of WORD_SUGGESTIONS) {
+    const current = String(candidate || "").trim().toLowerCase();
+    if (!current) continue;
+
+    const distance = levenshtein(normalized, current);
+    if (distance < bestScore) {
+      best = current;
+      bestScore = distance;
+    }
+
+    if (distance === 0) break;
+  }
+
+  if (bestScore <= 2 || best.startsWith(normalized.slice(0, Math.max(1, normalized.length - 1)))) {
+    return best;
+  }
+
+  return normalized;
+}
+
+function buildRealtimeAssist(inputText: string) {
+  const raw = String(inputText || "");
+  const trimmed = raw.trim();
+
+  if (!trimmed) {
+    return {
+      correctedText: "",
+      completion: "",
+      displayText: "L'IA corrige votre phrase en direct et essaie de deviner la suite ici.",
+    };
+  }
+
+  const words = trimmed.split(/\s+/);
+  const lastWord = words[words.length - 1] || "";
+  const correctedLastWord = getBestCorrection(lastWord);
+  const correctedWords = [...words];
+  correctedWords[correctedWords.length - 1] = correctedLastWord;
+  const correctedText = correctedWords.join(" ");
+
+  const lowerCorrected = correctedText.toLowerCase();
+  const matchingQuickSuggestion = QUICK_SUGGESTIONS.find((phrase) => {
+    const lowerPhrase = phrase.toLowerCase();
+    return lowerPhrase.startsWith(lowerCorrected) && lowerPhrase !== lowerCorrected;
+  });
+
+  let completion = "";
+
+  if (matchingQuickSuggestion) {
+    completion = matchingQuickSuggestion.slice(correctedText.length).trimStart();
+  } else {
+    const nextWord = WORD_SUGGESTIONS.find((word) =>
+      word.toLowerCase().startsWith(correctedLastWord.toLowerCase()) &&
+      word.toLowerCase() !== correctedLastWord.toLowerCase()
+    );
+
+    if (nextWord) {
+      completion = nextWord;
+    }
+  }
+
+  return {
+    correctedText,
+    completion,
+    displayText: completion ? `${correctedText} ${completion}` : correctedText,
+  };
+}
 
 export default function GeneratePage() {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [selectedContactName, setSelectedContactName] = useState("");
   const [sendMode, setSendMode] = useState<"sms" | "whatsapp">("sms");
   const [inputText, setInputText] = useState("");
-  const [generatedText, setGeneratedText] = useState("");
 
   useEffect(() => {
     const saved = localStorage.getItem("contacts");
@@ -57,52 +130,12 @@ export default function GeneratePage() {
   const selectedContact =
     contacts.find((contact) => contact.name === selectedContactName) ?? null;
 
-  const normalizeWhatsAppPhone = (rawPhone: string) => {
-    const cleaned = rawPhone.replace(/\s+/g, "").replace(/[^\d+]/g, "");
-
-    if (cleaned.startsWith("+33")) {
-      return cleaned.slice(1);
-    }
-
-    if (cleaned.startsWith("0")) {
-      return `33${cleaned.slice(1)}`;
-    }
-
-    return cleaned.replace(/^\+/, "");
-  };
-
-  const suggestions = useMemo(() => {
-    const lastWord = inputText.trim().split(/\s+/).pop()?.toLowerCase() ?? "";
-
-    if (lastWord.length < 1) return [];
-
-    return WORD_SUGGESTIONS.filter((word) =>
-      word.toLowerCase().startsWith(lastWord)
-    ).slice(0, 6);
-  }, [inputText]);
-
-  const replaceLastWord = (suggestion: string) => {
-    const hasTrailingSpace = /\s$/.test(inputText);
-    const parts = inputText.split(/\s+/).filter(Boolean);
-
-    if (parts.length === 0 || hasTrailingSpace) {
-      setInputText((prev) => `${prev}${prev.endsWith(" ") || prev.length === 0 ? "" : " "}${suggestion} `);
-      return;
-    }
-
-    parts[parts.length - 1] = suggestion;
-    setInputText(`${parts.join(" ")} `);
-  };
-
-  const applyQuickSuggestion = (phrase: string) => {
-    setInputText(phrase);
-    setGeneratedText("");
-  };
+  const aiAssist = useMemo(() => buildRealtimeAssist(inputText), [inputText]);
 
   const handleSendMessage = () => {
     if (!selectedContact) return;
 
-    const message = (generatedText || inputText).trim();
+    const message = (aiAssist.correctedText || inputText).trim();
     if (!message) {
       alert("Aucun message à envoyer");
       return;
@@ -130,11 +163,11 @@ export default function GeneratePage() {
     <div style={{ color: "white" }}>
       <div
         style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "12px",
-          flexWrap: "wrap",
-          marginBottom: "14px",
+          display: "grid",
+          gridTemplateColumns: "minmax(220px, 260px) minmax(320px, 1fr)",
+          gap: "18px",
+          alignItems: "start",
+          marginBottom: "20px",
         }}
       >
         <h2 style={{ margin: 0, fontSize: "20px", fontWeight: 800 }}>
@@ -143,38 +176,18 @@ export default function GeneratePage() {
 
         <div
           style={{
-            display: "flex",
-            gap: "8px",
-            flexWrap: "wrap",
-            alignItems: "center",
+            minHeight: "88px",
+            background: "rgba(255,255,255,0.05)",
+            border: "1px solid rgba(255,255,255,0.08)",
+            borderRadius: "24px",
+            padding: "20px",
+            fontSize: "18px",
+            lineHeight: 1.4,
+            color: "#e5e7eb",
+            boxSizing: "border-box",
           }}
         >
-          {(suggestions.length > 0 ? suggestions : QUICK_SUGGESTIONS).map((phrase) => (
-            <button
-              key={phrase}
-              type="button"
-              onClick={() =>
-                suggestions.length > 0
-                  ? replaceLastWord(phrase)
-                  : applyQuickSuggestion(phrase)
-              }
-              style={{
-                background: suggestions.length > 0 ? "#0f766e" : "#2f66f0",
-                color: "white",
-                border: suggestions.length > 0
-                  ? "1px solid #34d399"
-                  : "1px solid #5d8cff",
-                borderRadius: "999px",
-                padding: "8px 14px",
-                cursor: "pointer",
-                fontWeight: 700,
-                fontSize: "14px",
-                boxShadow: "0 0 0 1px rgba(255,255,255,0.05) inset",
-              }}
-            >
-              {phrase}
-            </button>
-          ))}
+          {aiAssist.displayText}
         </div>
       </div>
 
@@ -194,7 +207,6 @@ export default function GeneratePage() {
           value={inputText}
           onChange={(e) => {
             setInputText(e.target.value);
-            setGeneratedText("");
           }}
           placeholder="Écrire ici..."
           style={{
@@ -299,25 +311,6 @@ export default function GeneratePage() {
           }}
         >
           📩 Envoyer à {selectedContact?.name || "..."}
-        </button>
-      </div>
-
-      <div style={{ marginTop: "18px" }}>
-        <button
-          onClick={() => setGeneratedText(inputText)}
-          style={{
-            width: "100%",
-            background: "#2f66f0",
-            color: "white",
-            border: "none",
-            borderRadius: "18px",
-            padding: "16px",
-            cursor: "pointer",
-            fontWeight: 800,
-            fontSize: "16px",
-          }}
-        >
-          ✨ Générer par IA
         </button>
       </div>
     </div>

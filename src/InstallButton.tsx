@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from "react";
 
-export default function InstallButton({ styles }) {
-  const [deferredPrompt, setDeferredPrompt] = useState(null);
+export default function InstallButton(props: any) {
+  const { styles } = props;
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isInstalled, setIsInstalled] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
 

@@ -1,23 +1,78 @@
 import React from "react";
+import type { CSSProperties } from "react";
 import { createStyles, getActiveTheme } from "./themes";
 
-export default function ProfileInfoPage(props) {
+type Treatment = {
+  id?: string;
+  name?: string;
+  dosage?: string;
+  frequency?: string;
+};
+
+type EmergencyContact = {
+  id?: string;
+  name?: string;
+  phone?: string;
+  relation?: string;
+  usage?: string;
+};
+
+type DoctorInfo = {
+  name?: string;
+  phone?: string;
+};
+
+type MedicalInfo = {
+  bloodType?: string;
+  allergies?: string;
+  medicalHistory?: string;
+  condition?: string;
+  treatments?: Treatment[];
+};
+
+type ProfileLike = {
+  id?: string;
+  categories?: unknown[];
+  phrases?: unknown[];
+  audioMap?: Record<string, unknown>;
+  profilePhoto?: string;
+  photo?: string;
+  firstName?: string;
+  lastName?: string;
+  name?: string;
+  birthDate?: string;
+  address?: string;
+  language?: string;
+  socialSecurityNumber?: string;
+  medicalInfo?: MedicalInfo;
+  emergencyContacts?: EmergencyContact[];
+  doctorInfo?: DoctorInfo;
+};
+
+type ProfileInfoPageProps = {
+  profile?: ProfileLike;
+  currentProfile?: ProfileLike;
+  onSpeak?: (message: string) => void | Promise<void>;
+  styles?: unknown;
+};
+
+export default function ProfileInfoPage(props: ProfileInfoPageProps) {
   const profile = props.profile || props.currentProfile;
   const onSpeak = props.onSpeak;
 
   if (!profile) return null;
 
-  const theme = getActiveTheme(profile);
+  const theme = getActiveTheme(profile as any);
   const styles = createStyles(theme);
 
-  const compactSectionTitle = {
+  const compactSectionTitle: CSSProperties = {
     ...styles.sectionTitle,
     fontSize: 20,
     marginBottom: 12,
     lineHeight: 1.25,
   };
 
-  const compactCard = {
+  const compactCard: CSSProperties = {
     ...styles.card,
     display: "inline-block",
     width: "100%",
@@ -25,13 +80,12 @@ export default function ProfileInfoPage(props) {
     padding: 14,
     borderRadius: 18,
     breakInside: "avoid",
-    WebkitColumnBreakInside: "avoid",
     pageBreakInside: "avoid",
     boxSizing: "border-box",
     verticalAlign: "top",
   };
 
-  const quickButtonStyle = {
+  const quickButtonStyle: CSSProperties = {
     ...styles.primaryButton,
     width: "100%",
     padding: "10px 14px",
@@ -41,13 +95,13 @@ export default function ProfileInfoPage(props) {
     borderRadius: 16,
   };
 
-  const compactManagerBox = {
+  const compactManagerBox: CSSProperties = {
     ...styles.categoryManagerBox,
     padding: 10,
     borderRadius: 14,
   };
 
-  const compactSecondaryButton = {
+  const compactSecondaryButton: CSSProperties = {
     ...styles.secondaryButton,
     padding: "10px 14px",
     fontSize: 17,
@@ -71,16 +125,19 @@ export default function ProfileInfoPage(props) {
   );
   const doctorInfo = profile.doctorInfo || {};
 
-  function getUsageLabel(contact) {
-    if (contact?.usage === "urgence") return "Urgence";
-    if (contact?.usage === "both") return "Les deux";
-    return "Contact";
-  }
+  const columnCount =
+    typeof window !== "undefined"
+      ? window.innerWidth > 1240
+        ? 3
+        : window.innerWidth > 820
+        ? 2
+        : 1
+      : 1;
 
   return (
     <div
       style={{
-        columnCount: window.innerWidth > 1240 ? 3 : window.innerWidth > 820 ? 2 : 1,
+        columnCount,
         columnGap: 14,
       }}
     >
@@ -285,8 +342,8 @@ export default function ProfileInfoPage(props) {
 
         {treatments.length > 0 ? (
           <div style={styles.customCategoryList}>
-            {treatments.map((treatment) => (
-              <div key={treatment.id} style={compactManagerBox}>
+            {treatments.map((treatment, index) => (
+              <div key={treatment.id || index} style={compactManagerBox}>
                 <div style={styles.formGroup}>
                   <label style={styles.label}>Nom</label>
                   <div style={styles.readOnlyBox}>
