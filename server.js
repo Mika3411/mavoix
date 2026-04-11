@@ -7,49 +7,21 @@ const { createClient } = require("@supabase/supabase-js");
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: "1mb" }));
 
 const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const hasSupabaseConfig =
+  Boolean(process.env.SUPABASE_URL) && Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY);
+
+const supabase = hasSupabaseConfig
+  ? createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
+  : null;
 
 const CREDITS_PER_EURO = 1000;
 const ADMIN_TOKEN = (process.env.ADMIN_TOKEN || "").trim();
-
-async function getAppState() {
-  const { data, error } = await supabase
-    .from("app_state")
-    .select("credits, donor_wall")
-    .eq("id", "global")
-    .single();
-
-  if (error && error.code !== "PGRST116") {
-    throw error;
-  }
-
-  return {
-    credits: Number(data?.credits || 0),
-    donorWall: Array.isArray(data?.donor_wall) ? data.donor_wall : [],
-  };
-}
-
-async function saveAppState(credits, donorWall) {
-  const { error } = await supabase.from("app_state").upsert({
-    id: "global",
-    credits,
-    donor_wall: donorWall,
-    updated_at: new Date().toISOString(),
-  });
-
-  if (error) {
-    throw error;
-  }
-}
 
 function getErrorMessage(error, fallback) {
   return error?.message || fallback;
@@ -63,6 +35,60 @@ function parsePositiveNumber(value) {
 function sanitizeText(value, maxLength = 140) {
   if (typeof value !== "string") return "";
   return value.trim().replace(/\s+/g, " ").slice(0, maxLength);
+}
+
+function buildUsagePayload(credits, donorWall) {
+  return {
+    creditsRemaining: credits,
+    globalCreditsRemaining: credits,
+    donorWall,
+  };
+}
+
+async function getAppState() {
+  if (!supabase) {
+    return { credits: 0, donorWall: [] };
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from("app_state")
+      .select("credits, donor_wall")
+      .eq("id", "global")
+      .maybeSingle();
+
+    if (error) {
+      console.error("[getAppState] Supabase error:", error);
+      return { credits: 0, donorWall: [] };
+    }
+
+    return {
+      credits: Number(data?.credits || 0),
+      donorWall: Array.isArray(data?.donor_wall) ? data.donor_wall : [],
+    };
+  } catch (error) {
+    console.error("[getAppState] Unexpected error:", error);
+    return { credits: 0, donorWall: [] };
+  }
+}
+
+async function saveAppState(credits, donorWall) {
+  if (!supabase) return;
+
+  try {
+    const { error } = await supabase.from("app_state").upsert({
+      id: "global",
+      credits,
+      donor_wall: donorWall,
+      updated_at: new Date().toISOString(),
+    });
+
+    if (error) {
+      console.error("[saveAppState] Supabase error:", error);
+    }
+  } catch (error) {
+    console.error("[saveAppState] Unexpected error:", error);
+  }
 }
 
 function requireAdmin(req, res) {
@@ -84,13 +110,14 @@ function requireAdmin(req, res) {
   return true;
 }
 
-function buildUsagePayload(credits, donorWall) {
-  return {
-    creditsRemaining: credits,
-    globalCreditsRemaining: credits,
-    donorWall,
-  };
-}
+app.get("/api/health", (_req, res) => {
+  res.json({
+    ok: true,
+    hasOpenAIKey: Boolean(process.env.OPENAI_API_KEY),
+    hasSupabaseConfig,
+    hasAdminToken: Boolean(ADMIN_TOKEN),
+  });
+});
 
 app.get("/api/app-state", async (_req, res) => {
   try {
@@ -120,7 +147,7 @@ app.post("/api/admin/add-credits", async (req, res) => {
 
     const state = await getAppState();
     const updatedCredits = state.credits + Math.round(creditsToAdd);
-    const updatedDonorWall = state.donorWall;
+    const updatedDonorWall = Array.isArray(state.donorWall) ? [...state.donorWall] : [];
 
     if (label) {
       updatedDonorWall.unshift({
@@ -133,12 +160,12 @@ app.post("/api/admin/add-credits", async (req, res) => {
       });
     }
 
-    await saveAppState(updatedCredits, updatedDonorWall);
+    await saveAppState(updatedCredits, updatedDonorWall.slice(0, 100));
 
     res.json({
       success: true,
       message: "Crédits ajoutés.",
-      usage: buildUsagePayload(updatedCredits, updatedDonorWall),
+      usage: buildUsagePayload(updatedCredits, updatedDonorWall.slice(0, 100)),
     });
   } catch (error) {
     res.status(500).json({
@@ -177,7 +204,7 @@ app.post("/api/admin/add-donation", async (req, res) => {
           `Merci à ${donorName} pour son don de ${amountEuro.toLocaleString("fr-FR")}€`,
         createdAt: new Date().toISOString(),
       },
-      ...state.donorWall,
+      ...(Array.isArray(state.donorWall) ? state.donorWall : []),
     ].slice(0, 100);
 
     await saveAppState(updatedCredits, updatedDonorWall);
@@ -197,8 +224,14 @@ app.post("/api/admin/add-donation", async (req, res) => {
 
 app.post("/api/generate", async (req, res) => {
   try {
-    const { prompt, keywords, text } = req.body || {};
+    if (!process.env.OPENAI_API_KEY) {
+      return res.status(500).json({
+        error: "Erreur serveur",
+        details: "OPENAI_API_KEY manquante sur le serveur.",
+      });
+    }
 
+    const { prompt, keywords, text } = req.body || {};
     const state = await getAppState();
     let credits = state.credits;
     const donorWall = state.donorWall;
@@ -207,8 +240,8 @@ app.post("/api/generate", async (req, res) => {
       typeof text === "string" && text.trim()
         ? text.trim()
         : typeof keywords === "string" && keywords.trim()
-        ? keywords.trim()
-        : "";
+          ? keywords.trim()
+          : "";
 
     const input =
       typeof prompt === "string" && prompt.trim()
@@ -242,6 +275,7 @@ Texte : ${sourceText}`;
       usage: buildUsagePayload(credits, donorWall),
     });
   } catch (error) {
+    console.error("[/api/generate] error:", error);
     res.status(500).json({
       error: "Erreur serveur",
       details: getErrorMessage(error, "Erreur inconnue"),
