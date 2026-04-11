@@ -1,6 +1,30 @@
 import React, { useMemo, useState } from "react";
 import { API_BASE } from "./services/config";
 
+async function readJsonResponse(response: Response) {
+  const rawText = await response.text();
+
+  if (!rawText) {
+    return {};
+  }
+
+  try {
+    return JSON.parse(rawText);
+  } catch {
+    throw new Error(
+      `Le serveur a renvoyé une réponse invalide (${response.status}). Vérifie l'URL API et les routes backend.`
+    );
+  }
+}
+
+function getErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  return fallback;
+}
+
 export default function CreditsPage(props: any) {
   const {
     styles,
@@ -51,10 +75,12 @@ export default function CreditsPage(props: any) {
         }),
       });
 
-      const data = await response.json();
+      const data = await readJsonResponse(response);
 
       if (!response.ok) {
-        throw new Error(data.error || "Impossible d'ajouter le don.");
+        throw new Error(
+          data.error || data.details || "Impossible d'ajouter le don."
+        );
       }
 
       setAdminMessage("Don ajouté. Recharge la page pour voir le compteur mis à jour.");
@@ -62,7 +88,7 @@ export default function CreditsPage(props: any) {
       setAmountEuro("");
       setNote("");
     } catch (error) {
-      setAdminMessage(error.message || "Impossible d'ajouter le don.");
+      setAdminMessage(getErrorMessage(error, "Impossible d'ajouter le don."));
     } finally {
       setAdminLoading(false);
     }
@@ -85,17 +111,19 @@ export default function CreditsPage(props: any) {
         }),
       });
 
-      const data = await response.json();
+      const data = await readJsonResponse(response);
 
       if (!response.ok) {
-        throw new Error(data.error || "Impossible d'ajouter les crédits.");
+        throw new Error(
+          data.error || data.details || "Impossible d'ajouter les crédits."
+        );
       }
 
       setAdminMessage("Crédits ajoutés. Recharge la page pour voir le compteur mis à jour.");
       setManualCredits("");
       setManualLabel("");
     } catch (error) {
-      setAdminMessage(error.message || "Impossible d'ajouter les crédits.");
+      setAdminMessage(getErrorMessage(error, "Impossible d'ajouter les crédits."));
     } finally {
       setAdminLoading(false);
     }
@@ -250,7 +278,7 @@ export default function CreditsPage(props: any) {
             }}
           >
             {donorWall.length > 0 ? (
-              donorWall.map((donor) => (
+              donorWall.map((donor: any) => (
                 <div
                   key={donor.id || donor.message}
                   style={{
@@ -258,11 +286,14 @@ export default function CreditsPage(props: any) {
                     borderRadius: 16,
                     background: "rgba(59,130,246,0.10)",
                     border: "1px solid rgba(59,130,246,0.18)",
-                    fontSize: 16,
-                    lineHeight: 1.6,
                   }}
                 >
-                  {donor.message}
+                  <div style={{ fontWeight: 700, marginBottom: 4 }}>
+                    {donor.donorName || "Don solidaire"}
+                  </div>
+                  <div style={{ opacity: 0.9 }}>
+                    {donor.message || "Merci pour votre soutien."}
+                  </div>
                 </div>
               ))
             ) : (
@@ -270,7 +301,7 @@ export default function CreditsPage(props: any) {
                 style={{
                   padding: 14,
                   borderRadius: 16,
-                  background: "rgba(255,255,255,0.04)",
+                  background: "rgba(255,255,255,0.05)",
                   border: "1px solid rgba(255,255,255,0.08)",
                 }}
               >
@@ -282,17 +313,13 @@ export default function CreditsPage(props: any) {
 
         <div
           style={{
+            marginBottom: 18,
             padding: 18,
             borderRadius: 22,
-            background: "rgba(34,197,94,0.10)",
-            border: "1px solid rgba(34,197,94,0.22)",
-            marginBottom: showAdmin ? 18 : 0,
+            background: "rgba(255,255,255,0.04)",
+            border: "1px solid rgba(255,255,255,0.08)",
           }}
         >
-          <div style={{ fontSize: 20, fontWeight: 800, marginBottom: 8 }}>
-            Soutenez-nous
-          </div>
-
           <p
             style={{
               margin: "0 0 14px",
