@@ -18,6 +18,9 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
+const CREDITS_PER_EURO = 1000;
+const ADMIN_TOKEN = (process.env.ADMIN_TOKEN || "").trim();
+
 async function getAppState() {
   const { data, error } = await supabase
     .from("app_state")
@@ -25,7 +28,7 @@ async function getAppState() {
     .eq("id", "global")
     .single();
 
-  if (error) {
+  if (error && error.code !== "PGRST116") {
     throw error;
   }
 
@@ -48,13 +51,148 @@ async function saveAppState(credits, donorWall) {
   }
 }
 
-app.get("/api/health", async (req, res) => {
-  res.json({
-    ok: true,
-    hasOpenAIKey: Boolean(process.env.OPENAI_API_KEY),
-    hasSupabaseUrl: Boolean(process.env.SUPABASE_URL),
-    hasSupabaseServiceRoleKey: Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY),
-  });
+function getErrorMessage(error, fallback) {
+  return error?.message || fallback;
+}
+
+function parsePositiveNumber(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+function sanitizeText(value, maxLength = 140) {
+  if (typeof value !== "string") return "";
+  return value.trim().replace(/\s+/g, " ").slice(0, maxLength);
+}
+
+function requireAdmin(req, res) {
+  if (!ADMIN_TOKEN) {
+    res.status(503).json({
+      error: "Admin désactivé",
+      details: "La variable ADMIN_TOKEN n'est pas configurée sur le serveur.",
+    });
+    return false;
+  }
+
+  const receivedToken = String(req.headers["x-admin-token"] || "").trim();
+
+  if (!receivedToken || receivedToken !== ADMIN_TOKEN) {
+    res.status(401).json({ error: "Accès refusé" });
+    return false;
+  }
+
+  return true;
+}
+
+function buildUsagePayload(credits, donorWall) {
+  return {
+    creditsRemaining: credits,
+    globalCreditsRemaining: credits,
+    donorWall,
+  };
+}
+
+app.get("/api/app-state", async (_req, res) => {
+  try {
+    const state = await getAppState();
+    res.json({ usage: buildUsagePayload(state.credits, state.donorWall) });
+  } catch (error) {
+    res.status(500).json({
+      error: "Erreur serveur",
+      details: getErrorMessage(error, "Impossible de récupérer l'état de l'application."),
+    });
+  }
+});
+
+app.post("/api/admin/add-credits", async (req, res) => {
+  if (!requireAdmin(req, res)) return;
+
+  try {
+    const creditsToAdd = parsePositiveNumber(req.body?.creditsToAdd);
+    const label = sanitizeText(req.body?.label, 220);
+
+    if (!creditsToAdd) {
+      return res.status(400).json({
+        error: "Montant invalide",
+        details: "Le nombre de crédits à ajouter doit être supérieur à 0.",
+      });
+    }
+
+    const state = await getAppState();
+    const updatedCredits = state.credits + Math.round(creditsToAdd);
+    const updatedDonorWall = state.donorWall;
+
+    if (label) {
+      updatedDonorWall.unshift({
+        id: `manual-${Date.now()}`,
+        donorName: "Admin",
+        amountEuro: null,
+        creditsAdded: Math.round(creditsToAdd),
+        message: label,
+        createdAt: new Date().toISOString(),
+      });
+    }
+
+    await saveAppState(updatedCredits, updatedDonorWall);
+
+    res.json({
+      success: true,
+      message: "Crédits ajoutés.",
+      usage: buildUsagePayload(updatedCredits, updatedDonorWall),
+    });
+  } catch (error) {
+    res.status(500).json({
+      error: "Erreur serveur",
+      details: getErrorMessage(error, "Impossible d'ajouter les crédits."),
+    });
+  }
+});
+
+app.post("/api/admin/add-donation", async (req, res) => {
+  if (!requireAdmin(req, res)) return;
+
+  try {
+    const donorName = sanitizeText(req.body?.donorName, 80) || "Don anonyme";
+    const amountEuro = parsePositiveNumber(req.body?.amountEuro);
+    const note = sanitizeText(req.body?.note, 220);
+
+    if (!amountEuro) {
+      return res.status(400).json({
+        error: "Montant invalide",
+        details: "Le montant du don doit être supérieur à 0.",
+      });
+    }
+
+    const creditsAdded = Math.round(amountEuro * CREDITS_PER_EURO);
+    const state = await getAppState();
+    const updatedCredits = state.credits + creditsAdded;
+    const updatedDonorWall = [
+      {
+        id: `don-${Date.now()}`,
+        donorName,
+        amountEuro,
+        creditsAdded,
+        message:
+          note ||
+          `Merci à ${donorName} pour son don de ${amountEuro.toLocaleString("fr-FR")}€`,
+        createdAt: new Date().toISOString(),
+      },
+      ...state.donorWall,
+    ].slice(0, 100);
+
+    await saveAppState(updatedCredits, updatedDonorWall);
+
+    res.json({
+      success: true,
+      message: "Don ajouté.",
+      usage: buildUsagePayload(updatedCredits, updatedDonorWall),
+    });
+  } catch (error) {
+    res.status(500).json({
+      error: "Erreur serveur",
+      details: getErrorMessage(error, "Impossible d'ajouter le don."),
+    });
+  }
 });
 
 app.post("/api/generate", async (req, res) => {
@@ -101,17 +239,12 @@ Texte : ${sourceText}`;
     res.json({
       text: textOutput,
       message: textOutput,
-      usage: {
-        creditsRemaining: credits,
-        globalCreditsRemaining: credits,
-        donorWall,
-      },
+      usage: buildUsagePayload(credits, donorWall),
     });
-  } catch (e) {
-    console.error("ERROR /api/generate:", e);
+  } catch (error) {
     res.status(500).json({
       error: "Erreur serveur",
-      details: e?.message || "Erreur inconnue",
+      details: getErrorMessage(error, "Erreur inconnue"),
     });
   }
 });
