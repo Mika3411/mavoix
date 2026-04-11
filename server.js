@@ -1,4 +1,3 @@
-
 require("dotenv").config();
 
 const express = require("express");
@@ -20,11 +19,15 @@ const supabase = createClient(
 );
 
 async function getAppState() {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("app_state")
     .select("credits, donor_wall")
     .eq("id", "global")
     .single();
+
+  if (error) {
+    throw error;
+  }
 
   return {
     credits: Number(data?.credits || 0),
@@ -33,40 +36,62 @@ async function getAppState() {
 }
 
 async function saveAppState(credits, donorWall) {
-  await supabase.from("app_state").upsert({
+  const { error } = await supabase.from("app_state").upsert({
     id: "global",
     credits,
     donor_wall: donorWall,
     updated_at: new Date().toISOString(),
   });
+
+  if (error) {
+    throw error;
+  }
 }
+
+app.get("/api/health", async (req, res) => {
+  res.json({
+    ok: true,
+    hasOpenAIKey: Boolean(process.env.OPENAI_API_KEY),
+    hasSupabaseUrl: Boolean(process.env.SUPABASE_URL),
+    hasSupabaseServiceRoleKey: Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY),
+  });
+});
 
 app.post("/api/generate", async (req, res) => {
   try {
-    const { prompt, keywords } = req.body || {};
+    const { prompt, keywords, text } = req.body || {};
 
     const state = await getAppState();
     let credits = state.credits;
     const donorWall = state.donorWall;
 
+    const sourceText =
+      typeof text === "string" && text.trim()
+        ? text.trim()
+        : typeof keywords === "string" && keywords.trim()
+        ? keywords.trim()
+        : "";
+
     const input =
       typeof prompt === "string" && prompt.trim()
         ? prompt.trim()
-        : `Corrige cette phrase en français en temps réel.
-Améliore l’orthographe, la grammaire et rends-la naturelle.
-Si possible, propose une suite courte cohérente.
+        : `Corrige uniquement le texte suivant en français.
+Améliore l’orthographe, la grammaire, la ponctuation et la casse.
+Ne complète pas la phrase.
+N’ajoute aucun mot.
+N’invente pas de suite.
+Conserve exactement l’intention du texte saisi.
+Réponds uniquement avec le texte corrigé, sans guillemets.
 
-Phrase : ${keywords || ""}
-
-Réponds uniquement avec la phrase corrigée.`;
+Texte : ${sourceText}`;
 
     const response = await client.responses.create({
       model: "gpt-4o-mini",
       input,
-      temperature: 0.3,
+      temperature: 0,
     });
 
-    const text = response.output_text || "";
+    const textOutput = (response.output_text || "").trim();
 
     if (credits > 0) {
       credits -= 1;
@@ -74,8 +99,8 @@ Réponds uniquement avec la phrase corrigée.`;
     }
 
     res.json({
-      text,
-      message: text,
+      text: textOutput,
+      message: textOutput,
       usage: {
         creditsRemaining: credits,
         globalCreditsRemaining: credits,
@@ -83,6 +108,7 @@ Réponds uniquement avec la phrase corrigée.`;
       },
     });
   } catch (e) {
+    console.error("ERROR /api/generate:", e);
     res.status(500).json({
       error: "Erreur serveur",
       details: e?.message || "Erreur inconnue",
