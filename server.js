@@ -55,6 +55,11 @@ const DESKTOP_BUILD_DIR = path.join(__dirname, "build");
 const ANDROID_BUILD_DIR = process.env.ANDROID_BUILD_DIR
   ? path.resolve(process.env.ANDROID_BUILD_DIR)
   : path.resolve(__dirname, "..", "ma-voix-android", "build");
+const DEFAULT_ALARM_AUDIO_FILE = path.join(
+  __dirname,
+  "public",
+  "aidant-alarm-default.mp3"
+);
 
 async function getAppState() {
   const { data, error } = await supabase
@@ -935,6 +940,15 @@ app.post("/api/ai/purchase", (_req, res) => {
 
 app.get("/aidant-alerte", (_req, res) => {
   res.type("html").send(getCaregiverAlertPageHtml());
+});
+
+app.get("/aidant-alarm-default.mp3", (_req, res, next) => {
+  if (!fs.existsSync(DEFAULT_ALARM_AUDIO_FILE)) {
+    next();
+    return;
+  }
+
+  res.type("audio/mpeg").sendFile(DEFAULT_ALARM_AUDIO_FILE);
 });
 
 app.get("/api/caregiver-alert/stream", (req, res) => {
