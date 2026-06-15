@@ -384,6 +384,8 @@ function getCaregiverAlertPageHtml() {
       const alarmDbName = "maVoixCaregiverAlarm";
       const alarmStoreName = "settings";
       const customSoundKey = "customSound";
+      const defaultAlarmUrl = "/aidant-alarm-default.mp3";
+      const defaultAlarmName = "0615.MP3";
 
       function setStatus(message, isAlert = false) {
         statusElement.textContent = message;
@@ -412,7 +414,7 @@ function getCaregiverAlertPageHtml() {
           return;
         }
 
-        customSoundNameElement.textContent = "Son actuel : alarme par défaut.";
+        customSoundNameElement.textContent = "Son actuel : " + defaultAlarmName + " par défaut.";
         clearSoundButton.disabled = true;
       }
 
@@ -515,6 +517,17 @@ function getCaregiverAlertPageHtml() {
         return true;
       }
 
+      async function playDefaultAlarmMusic(loop) {
+        if (!soundEnabled) return false;
+
+        stopCustomAudio();
+        customAudio = new Audio(defaultAlarmUrl);
+        customAudio.loop = Boolean(loop);
+        customAudio.volume = 1;
+        await customAudio.play();
+        return true;
+      }
+
       async function playDefaultAlarmTone() {
         if (!soundEnabled) return;
         await ensureAudioContext();
@@ -555,7 +568,11 @@ function getCaregiverAlertPageHtml() {
           return;
         }
 
-        await playDefaultAlarmTone();
+        try {
+          await playDefaultAlarmMusic(false);
+        } catch (error) {
+          await playDefaultAlarmTone();
+        }
       }
 
       async function startAlarmSound() {
@@ -570,10 +587,21 @@ function getCaregiverAlertPageHtml() {
           return;
         }
 
-        await playDefaultAlarmTone();
-        alarmInterval = window.setInterval(() => {
-          void playDefaultAlarmTone();
-        }, 850);
+        try {
+          await playDefaultAlarmMusic(true);
+          if (navigator.vibrate) {
+            navigator.vibrate([280, 120, 280]);
+            alarmInterval = window.setInterval(() => {
+              navigator.vibrate([280, 120, 280]);
+            }, 1200);
+          }
+          return;
+        } catch (error) {
+          await playDefaultAlarmTone();
+          alarmInterval = window.setInterval(() => {
+            void playDefaultAlarmTone();
+          }, 850);
+        }
       }
 
       function startAlarm(payload) {
