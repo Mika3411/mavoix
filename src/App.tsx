@@ -561,11 +561,6 @@ export default function App() {
     if (category === categoryName) setCategory("Général");
     if (filter === categoryName) setFilter("Toutes");
   }
-  function openInfosAndAskForHelp() {
-    setPage("infos");
-    speakText("J'ai besoin d'aide immédiatement", "default");
-  }
-
   function updateCaregiverAlertLink(
     linkId: string,
     patch: Partial<Pick<CaregiverAlertLink, "name" | "enabled">>
@@ -1460,19 +1455,6 @@ export default function App() {
         }}
       >
         🔔
-      </button>
-
-      <button
-        onClick={openInfosAndAskForHelp}
-        style={{
-          ...styles.urgentFloatingButton,
-          position: "fixed",
-          right: 20,
-          bottom: 20,
-          zIndex: 9999,
-        }}
-      >
-        🚨 URGENCE
       </button>
 
       {toastMessage && (
