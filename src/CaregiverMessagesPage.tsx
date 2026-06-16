@@ -603,33 +603,19 @@ export default function CaregiverMessagesPage(props: any) {
                             : ""}
                         </div>
                         {isAudioMessage(message) ? (
-                          <>
-                            <button
-                              type="button"
-                              style={{
-                                ...styles.secondaryButton,
-                                minHeight: 44,
-                                padding: "8px 12px",
-                                fontSize: 15,
-                              }}
-                              onClick={() => speakText?.(message.message)}
-                              disabled={!message.message}
-                            >
-                              ▶️ {isUser ? "Audio envoyé" : "Audio reçu"}
-                            </button>
-                            {message.message ? (
-                              <div
-                                style={{
-                                  whiteSpace: "pre-wrap",
-                                  overflowWrap: "anywhere",
-                                  lineHeight: 1.35,
-                                  opacity: 0.9,
-                                }}
-                              >
-                                {message.message}
-                              </div>
-                            ) : null}
-                          </>
+                          <button
+                            type="button"
+                            style={{
+                              ...styles.secondaryButton,
+                              minHeight: 44,
+                              padding: "8px 12px",
+                              fontSize: 15,
+                            }}
+                            onClick={() => speakText?.(message.message)}
+                            disabled={!message.message}
+                          >
+                            ▶️ {isUser ? "Audio envoyé" : "Audio reçu"}
+                          </button>
                         ) : (
                           <div
                             style={{

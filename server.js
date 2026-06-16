@@ -7,6 +7,8 @@ const fs = require("fs");
 const path = require("path");
 
 const app = express();
+app.set("trust proxy", 1);
+app.disable("x-powered-by");
 
 const DEFAULT_ALLOWED_ORIGINS = [
   "https://mavoix.onrender.com",
@@ -54,7 +56,17 @@ app.use(
     },
   })
 );
-app.use(express.json());
+app.use((req, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("Referrer-Policy", "no-referrer");
+
+  if (req.path.startsWith("/api/") || req.path === "/aidant-alerte") {
+    res.setHeader("Cache-Control", "no-store");
+  }
+
+  next();
+});
+app.use(express.json({ limit: "32kb" }));
 
 const DESKTOP_BUILD_DIR = path.join(__dirname, "build");
 const ANDROID_BUILD_DIR = process.env.ANDROID_BUILD_DIR
@@ -81,6 +93,10 @@ const caregiverAlertClients = new Map();
 const caregiverMessageClients = new Map();
 const caregiverMessageHistory = new Map();
 const CAREGIVER_MESSAGE_HISTORY_LIMIT = 80;
+const CAREGIVER_MESSAGE_RETENTION_MS = Math.max(
+  0,
+  Number(process.env.MESSAGE_RETENTION_MS || 24 * 60 * 60 * 1000)
+);
 
 function getCaregiverAlertClients(channel) {
   if (!caregiverAlertClients.has(channel)) {
@@ -133,15 +149,37 @@ function getCaregiverMessageHistory(channel) {
     caregiverMessageHistory.set(channel, []);
   }
 
-  return caregiverMessageHistory.get(channel);
+  const history = caregiverMessageHistory.get(channel);
+  pruneCaregiverMessageHistory(history);
+  return history;
+}
+
+function getMessageTimestamp(payload) {
+  const timestamp = Date.parse(payload?.createdAt || "");
+  return Number.isFinite(timestamp) ? timestamp : Date.now();
+}
+
+function pruneCaregiverMessageHistory(history) {
+  if (!history) return;
+
+  if (CAREGIVER_MESSAGE_RETENTION_MS > 0) {
+    const cutoff = Date.now() - CAREGIVER_MESSAGE_RETENTION_MS;
+    for (let index = history.length - 1; index >= 0; index -= 1) {
+      if (getMessageTimestamp(history[index]) < cutoff) {
+        history.splice(index, 1);
+      }
+    }
+  }
+
+  if (history.length > CAREGIVER_MESSAGE_HISTORY_LIMIT) {
+    history.splice(0, history.length - CAREGIVER_MESSAGE_HISTORY_LIMIT);
+  }
 }
 
 function saveCaregiverMessage(channel, payload) {
   const history = getCaregiverMessageHistory(channel);
   history.push(payload);
-  if (history.length > CAREGIVER_MESSAGE_HISTORY_LIMIT) {
-    history.splice(0, history.length - CAREGIVER_MESSAGE_HISTORY_LIMIT);
-  }
+  pruneCaregiverMessageHistory(history);
 }
 
 function removeCaregiverMessageClient(channel, client) {
@@ -221,7 +259,7 @@ function getCaregiverAlertPageHtml() {
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Ma Voix - Alerte auxiliaire</title>
+    <title>Ma Voix - Alerte aidant</title>
     <style>
       :root {
         color-scheme: dark;
@@ -494,10 +532,6 @@ function getCaregiverAlertPageHtml() {
         text-align: left;
       }
 
-      .message-audio-caption {
-        color: rgba(248, 250, 252, 0.88);
-      }
-
       .message-input {
         width: 100%;
         min-height: 110px;
@@ -526,8 +560,8 @@ function getCaregiverAlertPageHtml() {
   <body>
     <main>
       <section class="card">
-        <h1>Alarme auxiliaire</h1>
-        <p>Garde cette page ouverte sur le téléphone de l'auxiliaire. Appuie une fois sur “Activer le son”. Quand Ma Voix envoie une alerte, ce téléphone sonnera.</p>
+        <h1>Alarme aidant</h1>
+        <p>Garde cette page ouverte sur le téléphone de l'aidant. Appuie une fois sur “Activer le son”. Quand Ma Voix envoie une alerte, ce téléphone sonnera.</p>
       </section>
 
       <section class="card section-menu">
@@ -562,7 +596,7 @@ function getCaregiverAlertPageHtml() {
             <button id="copyLink" class="secondary" type="button">Copier le lien</button>
           </div>
           <h2>Son d'alarme</h2>
-          <p>L'auxiliaire peut importer un son depuis son téléphone. Le fichier reste enregistré localement sur ce téléphone.</p>
+          <p>L'aidant peut importer un son depuis son téléphone. Le fichier reste enregistré localement sur ce téléphone.</p>
           <label class="file-label">
             Importer un son
             <input id="importSound" type="file" accept="audio/*" />
@@ -773,7 +807,7 @@ function getCaregiverAlertPageHtml() {
 
       function getMessagePreview(item) {
         if (isAudioMessage(item)) {
-          return item.message ? "Audio reçu : " + item.message : "Audio reçu";
+          return "Audio reçu";
         }
 
         return item && item.message ? item.message : "";
@@ -839,13 +873,6 @@ function getCaregiverAlertPageHtml() {
               item.senderRole === "caregiver" ? "▶ Audio envoyé" : "▶ Audio reçu";
             audioButton.addEventListener("click", () => playReceivedAudio(item));
             bubble.appendChild(audioButton);
-
-            if (item.message) {
-              const caption = document.createElement("div");
-              caption.className = "message-text message-audio-caption";
-              caption.textContent = item.message;
-              bubble.appendChild(caption);
-            }
           } else {
             const text = document.createElement("div");
             text.className = "message-text";
@@ -1496,7 +1523,7 @@ app.get("/api/caregiver-alert/stream", (req, res) => {
   if (!channel) {
     res.status(400).json({
       error: "Canal invalide",
-      details: "Le lien d'alerte auxiliaire est incomplet ou invalide.",
+      details: "Le lien d'alerte aidant est incomplet ou invalide.",
     });
     return;
   }
@@ -1579,7 +1606,7 @@ app.post("/api/caregiver-alert", (req, res) => {
   if (!channel) {
     res.status(400).json({
       error: "Canal invalide",
-      details: "Aucun téléphone auxiliaire n'est associé à cette app.",
+      details: "Aucun téléphone aidant n'est associé à cette app.",
     });
     return;
   }
@@ -1590,7 +1617,7 @@ app.post("/api/caregiver-alert", (req, res) => {
     profileName: sanitizeText(req.body?.profileName, 80),
     message:
       sanitizeText(req.body?.message, 180) ||
-      "J'ai besoin de mon auxiliaire de vie.",
+      "J'ai besoin de mon aidant.",
   };
   const deliveredTo = broadcastCaregiverAlert(channel, payload);
 
@@ -1658,3 +1685,4 @@ const PORT = process.env.PORT || 3001;
 app.listen(PORT, "0.0.0.0", () => {
   console.log("Server running on " + PORT);
 });
+

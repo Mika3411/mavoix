@@ -2369,7 +2369,7 @@ export default function ProfileSettingsPage(props: any) {
         </div>
 
         <div style={compactCard}>
-          <h2 style={styles.sectionTitle}>Téléphone auxiliaire</h2>
+          <h2 style={styles.sectionTitle}>Téléphone aidant</h2>
 
           <div style={{ ...styles.infoBox, marginBottom: 14, lineHeight: 1.55 }}>
             <strong style={{ display: "block", marginBottom: 6 }}>
@@ -2553,7 +2553,7 @@ export default function ProfileSettingsPage(props: any) {
             <button
               type="button"
               style={styles.secondaryButton}
-              onClick={() => openNoticeSection?.("auxiliaire")}
+              onClick={() => openNoticeSection?.("aidant")}
             >
               Aide
             </button>
@@ -3038,3 +3038,4 @@ export default function ProfileSettingsPage(props: any) {
 
   return null;
 }
+

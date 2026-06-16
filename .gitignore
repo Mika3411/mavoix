@@ -1,4 +1,11 @@
 .env
+.env.*
+!.env.example
+*.jks
+*.keystore
+.idea/
+*.log
+~$*.docx
 build
 node_modules
 data/ai-usage-store.json

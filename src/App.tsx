@@ -630,7 +630,7 @@ export default function App() {
       await window.navigator.clipboard.writeText(target.alertLink);
       showToast(`Lien ${target.name || "aidant"} copié`);
     } catch {
-      window.prompt("Lien du téléphone auxiliaire", target.alertLink);
+      window.prompt("Lien du téléphone aidant", target.alertLink);
     }
   }
 
@@ -658,7 +658,7 @@ export default function App() {
         body: JSON.stringify({
           channel: selectedCaregiverAlertTarget.channel,
           profileName: currentProfile?.firstName || currentProfile?.name || "",
-          message: "J'ai besoin de mon auxiliaire de vie.",
+          message: "J'ai besoin de mon aidant.",
         }),
       });
       const data = await response.json().catch(() => ({}));
@@ -680,7 +680,7 @@ export default function App() {
       showToast(
         getCaregiverNetworkErrorMessage(
           error,
-          "Impossible d'envoyer l'alerte auxiliaire"
+          "Impossible d'envoyer l'alerte aidant"
         )
       );
     } finally {
@@ -1377,7 +1377,7 @@ export default function App() {
                   </a>
                   <div style={{ fontSize: 13, opacity: 0.65 }}>
                     {downloadDevice === "android"
-                      ? "Télécharge Ma Voix pour l'utilisateur, ou l'application aidant pour le téléphone auxiliaire."
+                      ? "Télécharge Ma Voix pour l'utilisateur, ou l'application aidant pour le téléphone aidant."
                       : "Depuis un PC, télécharge les fichiers puis transfère le bon APK sur chaque téléphone Android."}
                   </div>
                 </div>
@@ -1658,3 +1658,4 @@ export default function App() {
     </div>
   );
 }
+

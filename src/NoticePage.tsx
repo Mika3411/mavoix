@@ -15,8 +15,9 @@ export type SectionKey =
   | "dictionnaire"
   | "profil"
   | "infos"
-  | "auxiliaire"
+  | "aidant"
   | "sauvegarde"
+  | "confidentialite"
   | "telechargement";
 
 type Section = {
@@ -139,9 +140,10 @@ export default function NoticePage({
                   "6. Dictionnaire d'abréviations",
                   "7. Profil, santé et contacts",
                   "8. Infos d'urgence",
-                  "9. Téléphone auxiliaire",
+                  "9. Téléphone aidant",
                   "10. Sauvegarde, sécurité et données locales",
-                  "11. Téléchargement et installation",
+                  "11. Confidentialité et RGPD",
+                  "12. Téléchargement et installation",
                 ]}
               />
             </NoticeBlock>
@@ -590,16 +592,16 @@ export default function NoticePage({
         ),
       },
       {
-        key: "auxiliaire",
-        label: "Auxiliaire",
-        title: "Téléphone auxiliaire",
+        key: "aidant",
+        label: "Aidant",
+        title: "Téléphone aidant",
         content: (
           <>
             <NoticeBlock>
               <NoticeParagraph>
-                La fonction Téléphone auxiliaire permet de préparer plusieurs
+                La fonction Téléphone aidant permet de préparer plusieurs
                 liens d'alarme associés au profil actif. Chaque lien est à
-                ouvrir sur le téléphone d'une auxiliaire ou d'un aidant.
+                ouvrir sur le téléphone d'un aidant.
               </NoticeParagraph>
             </NoticeBlock>
 
@@ -607,12 +609,12 @@ export default function NoticePage({
               <NoticeList
                 items={[
                   "Ouvrez Profil ou Configurer.",
-                  "Repérez la section Téléphone auxiliaire.",
+                  "Repérez la section Téléphone aidant.",
                   "Ajoutez un aidant si plusieurs téléphones doivent avoir leur propre lien.",
                   "Cochez Disponible pour Appel aidant pour chaque aidant qui doit apparaître dans la liste de choix.",
                   "Dans Aidant appelé par la cloche, choisissez l'aidant qui doit recevoir l'alarme.",
-                  "Copiez le lien d'alarme ou ouvrez le mode auxiliaire quand il est proposé.",
-                  "Sur Android, le lien direct peut ouvrir l'application Ma Voix Auxiliaire si elle est installée.",
+                  "Copiez le lien d'alarme ou ouvrez le mode aidant quand il est proposé.",
+                  "Sur Android, le lien direct peut ouvrir l'application Ma Voix Aidant si elle est installée.",
                 ]}
               />
             </NoticeBlock>
@@ -621,14 +623,14 @@ export default function NoticePage({
               <NoticeParagraph>
                 La cloche orange, placée en bas de l'application, envoie
                 l'alarme uniquement à l'aidant choisi dans Configurer, section
-                Téléphone auxiliaire. Si son téléphone n'est pas connecté,
+                Téléphone aidant. Si son téléphone n'est pas connecté,
                 l'application l'indique.
               </NoticeParagraph>
             </NoticeBlock>
 
-            <NoticeBlock title="Sonnerie auxiliaire">
+            <NoticeBlock title="Sonnerie aidant">
               <NoticeParagraph>
-                L'application auxiliaire peut garder l'alarme connectée et
+                L'application aidant peut garder l'alarme connectée et
                 importer son propre son d'alarme sur le téléphone de l'aidant.
               </NoticeParagraph>
             </NoticeBlock>
@@ -670,6 +672,61 @@ export default function NoticePage({
                   "Testez régulièrement les phrases importantes.",
                   "Gardez une sauvegarde récente après une grosse modification.",
                   "Évitez de partager une exportation si elle contient des données sensibles.",
+                ]}
+              />
+            </NoticeBlock>
+          </>
+        ),
+      },
+      {
+        key: "confidentialite",
+        label: "Confidentialité",
+        title: "Confidentialité et RGPD",
+        content: (
+          <>
+            <NoticeBlock title="Principe général">
+              <NoticeParagraph>
+                Ma Voix traite des informations personnelles et parfois des
+                informations de santé. Ces données doivent rester limitées à ce
+                qui est utile pour communiquer, aider au quotidien et répondre à
+                une urgence.
+              </NoticeParagraph>
+              <NoticeParagraph>
+                L'éditeur ou la personne qui déploie le service doit compléter
+                les mentions légales avec son identité, son moyen de contact et
+                la base légale retenue pour chaque usage.
+              </NoticeParagraph>
+            </NoticeBlock>
+
+            <NoticeBlock title="Données conservées sur l'appareil">
+              <NoticeList
+                items={[
+                  "Profils, phrases, catégories, préférences de voix et réglages visuels.",
+                  "Informations d'identité, contacts d'urgence et informations médicales saisies volontairement.",
+                  "Audios enregistrés pour certaines phrases et sons importés localement.",
+                  "Ces données restent sur l'appareil sauf export volontaire, sauvegarde ou envoi d'un message.",
+                ]}
+              />
+            </NoticeBlock>
+
+            <NoticeBlock title="Données transitant par le serveur">
+              <NoticeList
+                items={[
+                  "Les alertes aidant utilisent un canal technique généré par l'application.",
+                  "Les messages aidant transitent par le serveur pour être remis à l'autre appareil.",
+                  "L'historique serveur est temporaire, limité en volume et destiné à la remise récente des messages.",
+                  "Aucune clé API personnelle ne doit être placée dans le code source public.",
+                ]}
+              />
+            </NoticeBlock>
+
+            <NoticeBlock title="Droits et sécurité">
+              <NoticeList
+                items={[
+                  "La personne concernée doit pouvoir être informée clairement de l'utilisation de ses données.",
+                  "Elle doit pouvoir demander l'accès, la rectification ou la suppression des données qui la concernent.",
+                  "Les exports et sauvegardes doivent être conservés dans un endroit de confiance.",
+                  "Les appareils utilisés par le patient et les aidants doivent être verrouillés et maintenus à jour.",
                 ]}
               />
             </NoticeBlock>
@@ -818,3 +875,4 @@ export default function NoticePage({
     </div>
   );
 }
+
