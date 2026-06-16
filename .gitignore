@@ -1,4 +1,12 @@
 .env
+.env.*
+!.env.example
+*.jks
+*.keystore
+android/keystore.properties
+.idea/
+*.log
+~$*.docx
 build
 node_modules
 data/ai-usage-store.json

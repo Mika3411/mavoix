@@ -32,63 +32,14 @@ export default function VoicePage(props: any) {
   const voicesToDisplay = visibleVoices.length > 0 ? visibleVoices : voices;
 
   return (
-    <div style={styles.grid}>
+  <div
+  style={{
+    ...styles.grid,
+    gridTemplateColumns: "1fr",
+  }}
+>
       <div style={styles.card}>
         <h2 style={styles.sectionTitle}>Réglages voix</h2>
-
-        <div style={styles.formGroup}>
-          <label style={styles.label}>Voix française par défaut</label>
-          <select
-            value={defaultVoice}
-            onChange={(e) =>
-              updateCurrentProfileField("defaultVoice", e.target.value)
-            }
-            style={styles.input}
-          >
-            <option value="default">Voix du navigateur</option>
-            {voicesToDisplay.map((voice) => (
-              <option key={voice.voiceURI} value={voice.voiceURI}>
-                {voice.name} {voice.lang ? `(${voice.lang})` : ""}
-              </option>
-            ))}
-          </select>
-
-          <div
-            style={{
-              marginTop: 8,
-              display: "flex",
-              gap: 10,
-              flexWrap: "wrap",
-              alignItems: "center",
-            }}
-          >
-            <div style={{ fontSize: 13, opacity: 0.78 }}>
-              Certaines voix proposées par le navigateur peuvent ne pas fonctionner selon l'appareil.
-            </div>
-
-            {defaultVoice !== "default" ? (
-              <button
-                type="button"
-                style={styles.secondaryButton}
-                onClick={() => testVoice(defaultVoice)}
-              >
-                Tester cette voix
-              </button>
-            ) : null}
-          </div>
-        </div>
-
-        <div style={styles.formGroup}>
-          <label style={styles.label}>Langue du profil</label>
-          <input
-            value={currentProfile.language}
-            onChange={(e) =>
-              updateCurrentProfileField("language", e.target.value)
-            }
-            style={styles.input}
-            placeholder="fr-FR"
-          />
-        </div>
 
         <div
           style={{
@@ -181,7 +132,7 @@ export default function VoicePage(props: any) {
         </div>
 
         <div style={styles.infoBox}>
-          Chaque profil peut avoir sa propre voix par défaut, sa vitesse, son
+          Chaque profil peut avoir sa propre vitesse, son
           volume et sa hauteur de voix, ainsi que ses propres enregistrements
           audio.
           {defaultVoice !== "default" && voiceStatus?.[defaultVoice] === "failed" ? (
@@ -262,51 +213,6 @@ export default function VoicePage(props: any) {
                       </option>
                     ))}
                   </select>
-                </div>
-
-                <div style={styles.formGroup}>
-                  <label style={styles.label}>Voix associée</label>
-                  <select
-                    value={voiceEditor.assignedVoice || "default"}
-                    onChange={(e) =>
-                      setVoiceEditor((prev) => ({
-                        ...prev,
-                        assignedVoice: e.target.value,
-                      }))
-                    }
-                    style={styles.input}
-                  >
-                    <option value="default">Voix par défaut</option>
-                    {voicesToDisplay.map((voice) => (
-                      <option key={voice.voiceURI} value={voice.voiceURI}>
-                        {voice.name} {voice.lang ? `(${voice.lang})` : ""}
-                      </option>
-                    ))}
-                  </select>
-
-                  <div
-                    style={{
-                      marginTop: 8,
-                      display: "flex",
-                      gap: 10,
-                      flexWrap: "wrap",
-                      alignItems: "center",
-                    }}
-                  >
-                    <div style={{ fontSize: 13, opacity: 0.78 }}>
-                      Les voix détectées comme instables sont masquées automatiquement.
-                    </div>
-
-                    {(voiceEditor.assignedVoice || "default") !== "default" ? (
-                      <button
-                        type="button"
-                        style={styles.secondaryButton}
-                        onClick={() => testVoice(voiceEditor.assignedVoice)}
-                      >
-                        Tester cette voix
-                      </button>
-                    ) : null}
-                  </div>
                 </div>
 
                 <div style={styles.categoryManagerBox}>

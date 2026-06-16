@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 
 export default function CommunicationPage(props: any) {
   const {
@@ -13,13 +13,39 @@ export default function CommunicationPage(props: any) {
     updatePhrase,
     deletePhrase,
   } = props;
+
+  const [isEditMode, setIsEditMode] = useState(false);
+
   return (
     <div style={styles.gridSingle}>
       <div style={styles.card}>
         <h2 style={styles.sectionTitle}>Communication rapide</h2>
 
         <div style={{ marginBottom: 16 }}>
-          <p style={styles.filterTitle}>Catégories</p>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 12,
+              marginBottom: 8,
+            }}
+          >
+            <p style={{ ...styles.filterTitle, margin: 0 }}>Catégories</p>
+
+            <button
+              onClick={() => setIsEditMode((prev) => !prev)}
+              style={{
+                ...styles.smallActionButton,
+                minWidth: 80,
+                height: 36,
+                padding: "6px 12px",
+                fontSize: 14,
+              }}
+            >
+              {isEditMode ? "Retour" : "Éditer"}
+            </button>
+          </div>
 
           <div style={styles.categoryGrid}>
             {categoryOptions.map((cat) => (
@@ -48,7 +74,9 @@ export default function CommunicationPage(props: any) {
           <div
             style={{
               ...styles.quickPhraseGrid,
-              gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+              gridTemplateColumns: isEditMode
+                ? "minmax(0, 1fr)"
+                : "repeat(2, minmax(0, 1fr))",
               gap: 8,
               alignItems: "start",
             }}
@@ -80,75 +108,77 @@ export default function CommunicationPage(props: any) {
                   {item.text}
                 </button>
 
-                <div
-                  style={{
-                    ...styles.quickPhraseActions,
-                    gap: 6,
-                    justifyContent: "space-between",
-                    flexWrap: "nowrap",
-                  }}
-                >
-                  <button
-                    onClick={() => movePhrase(item.id, "up")}
+                {isEditMode && (
+                  <div
                     style={{
-                      ...styles.smallActionButton,
-                      minWidth: 36,
-                      height: 36,
-                      fontSize: 14,
-                      padding: "4px 6px",
+                      ...styles.quickPhraseActions,
+                      gap: 6,
+                      justifyContent: "space-between",
+                      flexWrap: "nowrap",
                     }}
-                    title="Monter"
                   >
-                    ⬆
-                  </button>
+                    <button
+                      onClick={() => movePhrase(item.id, "up")}
+                      style={{
+                        ...styles.smallActionButton,
+                        minWidth: 36,
+                        height: 36,
+                        fontSize: 14,
+                        padding: "4px 6px",
+                      }}
+                      title="Monter"
+                    >
+                      ↑
+                    </button>
 
-                  <button
-                    onClick={() => movePhrase(item.id, "down")}
-                    style={{
-                      ...styles.smallActionButton,
-                      minWidth: 36,
-                      height: 36,
-                      fontSize: 14,
-                      padding: "4px 6px",
-                    }}
-                    title="Descendre"
-                  >
-                    ⬇
-                  </button>
+                    <button
+                      onClick={() => movePhrase(item.id, "down")}
+                      style={{
+                        ...styles.smallActionButton,
+                        minWidth: 36,
+                        height: 36,
+                        fontSize: 14,
+                        padding: "4px 6px",
+                      }}
+                      title="Descendre"
+                    >
+                      ↓
+                    </button>
 
-                  <button
-                    onClick={() =>
-                      updatePhrase(item.id, "favorite", !item.favorite)
-                    }
-                    style={{
-                      ...styles.favoriteButton,
-                      width: 36,
-                      minWidth: 36,
-                      height: 36,
-                      fontSize: 16,
-                    }}
-                    title={
-                      item.favorite
-                        ? "Retirer des favoris"
-                        : "Ajouter aux favoris"
-                    }
-                  >
-                    {item.favorite ? "⭐" : "☆"}
-                  </button>
+                    <button
+                      onClick={() =>
+                        updatePhrase(item.id, "favorite", !item.favorite)
+                      }
+                      style={{
+                        ...styles.favoriteButton,
+                        width: 36,
+                        minWidth: 36,
+                        height: 36,
+                        fontSize: 16,
+                      }}
+                      title={
+                        item.favorite
+                          ? "Retirer des favoris"
+                          : "Ajouter aux favoris"
+                      }
+                    >
+                      {item.favorite ? "⭐" : "☆"}
+                    </button>
 
-                  <button
-                    onClick={() => deletePhrase(item.id)}
-                    style={{
-                      ...styles.deleteButton,
-                      minWidth: 72,
-                      height: 36,
-                      fontSize: 12,
-                      padding: "4px 8px",
-                    }}
-                  >
-                    Supprimer
-                  </button>
-                </div>
+                    <button
+                      onClick={() => deletePhrase(item.id)}
+                      style={{
+                        ...styles.deleteButton,
+                        minWidth: 36,
+                        height: 36,
+                        fontSize: 12,
+                        padding: "4px 8px",
+                      }}
+                    >
+                      Supprimer
+                    </button>
+                  </div>
+                )}
               </div>
             ))}
           </div>

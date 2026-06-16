@@ -26,7 +26,6 @@ export const THEMES = {
     badgeSuccessText: "#86efac",
     badgeNeutralBackground: "rgba(51, 65, 85, 0.55)",
     badgeNeutralText: "#cbd5e1",
-    floatingUrgencyBackground: "linear-gradient(135deg, #ef4444, #dc2626)",
   },
 
   light: {
@@ -56,7 +55,6 @@ export const THEMES = {
     badgeSuccessText: "#166534",
     badgeNeutralBackground: "#e2e8f0",
     badgeNeutralText: "#334155",
-    floatingUrgencyBackground: "linear-gradient(135deg, #ef4444, #dc2626)",
   },
 
   colorful: {
@@ -87,7 +85,6 @@ export const THEMES = {
     badgeSuccessText: "#bbf7d0",
     badgeNeutralBackground: "rgba(99, 102, 241, 0.35)",
     badgeNeutralText: "#ffffff",
-    floatingUrgencyBackground: "linear-gradient(135deg, #ef4444, #dc2626)",
   },
 };
 
@@ -141,9 +138,6 @@ export function getActiveTheme(profile) {
       badgeNeutralBackground:
         custom.badgeNeutralBackground || THEMES.dark.badgeNeutralBackground,
       badgeNeutralText: custom.badgeNeutralText || THEMES.dark.badgeNeutralText,
-      floatingUrgencyBackground:
-        custom.floatingUrgencyBackground ||
-        THEMES.dark.floatingUrgencyBackground,
     };
   }
 
@@ -608,21 +602,6 @@ export function createStyles(theme) {
       fontSize: 16,
       fontWeight: 700,
       color: theme.titleColor,
-    },
-    urgentFloatingButton: {
-      position: "fixed",
-      right: 18,
-      bottom: 18,
-      background: theme.floatingUrgencyBackground,
-      color: "white",
-      border: "none",
-      borderRadius: 20,
-      padding: "14px 18px",
-      fontSize: 17,
-      fontWeight: 900,
-      cursor: "pointer",
-      boxShadow: "0 20px 40px rgba(239, 68, 68, 0.35)",
-      zIndex: 1000,
     },
     themePreviewRow: {
       display: "flex",

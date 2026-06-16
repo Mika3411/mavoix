@@ -1,132 +1,280 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Capacitor } from "@capacitor/core";
+import { useRef, useState } from "react";
+import { VoiceRecorder } from "capacitor-voice-recorder";
 
-import type { Profile } from "../types";
+type Profile = {
+  audioMap?: Record<string, string>;
+  [key: string]: any;
+};
 
-export default function useAudioRecording({ updateCurrentProfile }: { updateCurrentProfile: (updater: (profile: Profile) => Profile) => void }) {
-  const mediaRecorderRef = useRef(null);
-  const streamRef = useRef(null);
-  const chunksRef = useRef([]);
-  const [recordingPhraseId, setRecordingPhraseId] = useState(null);
+type SetAudioMap =
+  | ((next: Record<string, string>) => void)
+  | ((updater: (prev: Record<string, string>) => Record<string, string>) => void);
 
-  const cleanupStream = useCallback(() => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop());
-      streamRef.current = null;
+type UseAudioRecordingParams = {
+  audioMap?: Record<string, string>;
+  setAudioMap?: SetAudioMap;
+  updateCurrentProfile?: (updater: (profile: Profile) => Profile) => void;
+};
+
+export default function useAudioRecording(params: UseAudioRecordingParams = {}) {
+  const { audioMap = {}, setAudioMap, updateCurrentProfile } = params;
+
+  const [recordingPhraseId, setRecordingPhraseId] = useState<string | null>(null);
+
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const chunksRef = useRef<BlobPart[]>([]);
+  const pendingPhraseIdRef = useRef<string | null>(null);
+
+  const applyAudioMapUpdate = (
+    updater: (currentAudioMap: Record<string, string>) => Record<string, string>
+  ) => {
+    if (updateCurrentProfile) {
+      updateCurrentProfile((profile) => ({
+        ...profile,
+        audioMap: updater(profile.audioMap || {}),
+      }));
+      return;
     }
-  }, []);
 
-  const stopRecording = useCallback(() => {
-    mediaRecorderRef.current?.stop?.();
-    cleanupStream();
-  }, [cleanupStream]);
+    const nextAudioMap = updater(audioMap);
 
-  const startRecording = useCallback(
-    async (phraseId: string) => {
+    if (setAudioMap) {
       try {
-        if (!navigator.mediaDevices?.getUserMedia) {
-          alert("L'enregistrement micro n'est pas disponible sur ce navigateur.");
+        (setAudioMap as any)(nextAudioMap);
+        return;
+      } catch {}
+      try {
+        (setAudioMap as any)((prev: Record<string, string>) => updater(prev || {}));
+        return;
+      } catch {}
+    }
+  };
+
+  const stopTracks = () => {
+    mediaStreamRef.current?.getTracks()?.forEach((track) => {
+      try {
+        track.stop();
+      } catch {}
+    });
+    mediaStreamRef.current = null;
+  };
+
+  const blobToDataUrl = (blob: Blob): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(String(reader.result || ""));
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+
+  const saveRecordedData = async (phraseId: string, dataUrl: string) => {
+    applyAudioMapUpdate((currentAudioMap) => ({
+      ...currentAudioMap,
+      [phraseId]: dataUrl,
+    }));
+  };
+
+  const startNativeRecording = async (id: string) => {
+    try {
+      const hasPermission = await VoiceRecorder.hasAudioRecordingPermission();
+      if (!hasPermission.value) {
+        const request = await VoiceRecorder.requestAudioRecordingPermission();
+        if (!request.value) {
+          alert("Permission micro refusée.");
           return;
         }
+      }
 
-        if (typeof MediaRecorder === "undefined") {
-          alert("L'enregistrement audio n'est pas disponible sur ce navigateur.");
-          return;
-        }
+      const canRecord = await VoiceRecorder.canDeviceVoiceRecord();
+      if (!canRecord.value) {
+        alert("Enregistrement non supporté sur cet appareil.");
+        return;
+      }
 
-        if (mediaRecorderRef.current?.state === "recording") {
-          mediaRecorderRef.current.stop();
-        }
+      pendingPhraseIdRef.current = id;
+      await VoiceRecorder.startRecording();
+      setRecordingPhraseId(id);
+      console.log("🎙️ startNativeRecording", id);
+    } catch (error) {
+      console.error("Erreur démarrage enregistrement natif", error);
+      alert("Impossible de démarrer l'enregistrement.");
+      setRecordingPhraseId(null);
+    }
+  };
 
-        cleanupStream();
+  const stopNativeRecording = async () => {
+    try {
+      const result = await VoiceRecorder.stopRecording();
+      const recordDataBase64 = (result as any)?.value?.recordDataBase64;
+      const mimeType = (result as any)?.value?.mimeType || "audio/aac";
 
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        streamRef.current = stream;
-
-        const mimeType = MediaRecorder.isTypeSupported("audio/webm")
-          ? "audio/webm"
-          : MediaRecorder.isTypeSupported("audio/mp4")
-            ? "audio/mp4"
-            : "";
-
-        const mediaRecorder = new MediaRecorder(
-          stream,
-          mimeType ? { mimeType } : undefined
-        );
-
-        chunksRef.current = [];
-        mediaRecorderRef.current = mediaRecorder;
-        setRecordingPhraseId(phraseId);
-
-        mediaRecorder.ondataavailable = (event) => {
-          if (event.data.size > 0) {
-            chunksRef.current.push(event.data);
-          }
-        };
-
-        mediaRecorder.onstop = () => {
-          const blob = new Blob(
-            chunksRef.current,
-            mimeType ? { type: mimeType } : undefined
-          );
-          const reader = new FileReader();
-
-          reader.onloadend = () => {
-            updateCurrentProfile((profile) => ({
-              ...profile,
-              audioMap: {
-                ...profile.audioMap,
-                [phraseId]: String(reader.result || ""),
-              },
-            }));
-          };
-
-          reader.readAsDataURL(blob);
-
-          cleanupStream();
-          mediaRecorderRef.current = null;
-          setRecordingPhraseId(null);
-        };
-
-        mediaRecorder.start();
-      } catch (error) {
-        console.error(error);
-        alert("Impossible d'accéder au micro.");
-        cleanupStream();
-        mediaRecorderRef.current = null;
+      if (!recordDataBase64) {
         setRecordingPhraseId(null);
+        return;
       }
-    },
-    [cleanupStream, updateCurrentProfile]
-  );
 
-  const deleteRecording = useCallback(
-    (phraseId: string) => {
-      updateCurrentProfile((profile) => {
-        const nextAudioMap = { ...profile.audioMap };
-        delete nextAudioMap[phraseId];
+      const dataUrl = `data:${mimeType};base64,${recordDataBase64}`;
+      const currentId = pendingPhraseIdRef.current || "temp";
 
-        return {
-          ...profile,
-          audioMap: nextAudioMap,
-        };
-      });
-    },
-    [updateCurrentProfile]
-  );
+      await saveRecordedData(currentId, dataUrl);
+    } catch (error) {
+      console.error("Erreur arrêt enregistrement natif", error);
+      alert("Impossible d'arrêter l'enregistrement.");
+    } finally {
+      setRecordingPhraseId(null);
+      pendingPhraseIdRef.current = null;
+    }
+  };
 
-  useEffect(() => {
-    return () => {
-      if (mediaRecorderRef.current?.state === "recording") {
-        mediaRecorderRef.current.stop();
+  const startWebRecording = async (id: string) => {
+    if (
+      typeof navigator === "undefined" ||
+      !navigator.mediaDevices ||
+      !navigator.mediaDevices.getUserMedia
+    ) {
+      alert("Enregistrement non supporté sur cet appareil.");
+      return;
+    }
+
+    try {
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+        try {
+          mediaRecorderRef.current.stop();
+        } catch {}
       }
-      cleanupStream();
-    };
-  }, [cleanupStream]);
+
+      chunksRef.current = [];
+      pendingPhraseIdRef.current = id;
+
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaStreamRef.current = stream;
+
+      let mimeType = "";
+      const candidates = [
+        "audio/webm;codecs=opus",
+        "audio/webm",
+        "audio/mp4",
+        "audio/ogg;codecs=opus",
+      ];
+
+      for (const candidate of candidates) {
+        try {
+          if ((window as any).MediaRecorder?.isTypeSupported?.(candidate)) {
+            mimeType = candidate;
+            break;
+          }
+        } catch {}
+      }
+
+      const recorder = mimeType
+        ? new MediaRecorder(stream, { mimeType })
+        : new MediaRecorder(stream);
+
+      mediaRecorderRef.current = recorder;
+
+      recorder.ondataavailable = (event: BlobEvent) => {
+        if (event.data && event.data.size > 0) {
+          chunksRef.current.push(event.data);
+        }
+      };
+
+      recorder.onerror = (event: any) => {
+        console.error("Erreur enregistrement", event);
+        alert("Erreur pendant l'enregistrement audio.");
+        setRecordingPhraseId(null);
+        stopTracks();
+      };
+
+      recorder.onstop = async () => {
+        try {
+          const finalMimeType = recorder.mimeType || mimeType || "audio/webm";
+          const blob = new Blob(chunksRef.current, { type: finalMimeType });
+
+          if (blob.size === 0) {
+            setRecordingPhraseId(null);
+            stopTracks();
+            return;
+          }
+
+          const dataUrl = await blobToDataUrl(blob);
+          const currentId = pendingPhraseIdRef.current || "temp";
+          await saveRecordedData(currentId, dataUrl);
+        } catch (error) {
+          console.error("Erreur sauvegarde audio", error);
+          alert("Impossible de sauvegarder l'audio.");
+        } finally {
+          setRecordingPhraseId(null);
+          chunksRef.current = [];
+          pendingPhraseIdRef.current = null;
+          stopTracks();
+        }
+      };
+
+      recorder.start();
+      setRecordingPhraseId(id);
+      console.log("🎙️ startWebRecording", id);
+    } catch (error) {
+      console.error("Erreur démarrage enregistrement web", error);
+      alert("Micro refusé ou indisponible.");
+      setRecordingPhraseId(null);
+      stopTracks();
+    }
+  };
+
+  const startRecording = async (phraseId?: string | number) => {
+    const id = phraseId != null ? String(phraseId) : "temp";
+
+    if (Capacitor.isNativePlatform()) {
+      await startNativeRecording(id);
+      return;
+    }
+
+    await startWebRecording(id);
+  };
+
+  const stopRecording = async () => {
+    if (Capacitor.isNativePlatform()) {
+      await stopNativeRecording();
+      return;
+    }
+
+    try {
+      const recorder = mediaRecorderRef.current;
+
+      if (recorder && recorder.state !== "inactive") {
+        recorder.stop();
+      } else {
+        setRecordingPhraseId(null);
+        stopTracks();
+      }
+    } catch (error) {
+      console.error("Erreur arrêt enregistrement", error);
+      setRecordingPhraseId(null);
+      stopTracks();
+    }
+  };
+
+  const deleteRecording = async (phraseId: string | number) => {
+    const id = String(phraseId);
+
+    applyAudioMapUpdate((currentAudioMap) => {
+      const nextAudioMap = { ...currentAudioMap };
+      delete nextAudioMap[id];
+      return nextAudioMap;
+    });
+  };
+
+  const getRecordingUrl = (phraseId: string | number) => {
+    return audioMap[String(phraseId)] || "";
+  };
 
   return {
     recordingPhraseId,
     startRecording,
     stopRecording,
     deleteRecording,
+    getRecordingUrl,
   };
 }

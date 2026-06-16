@@ -1,0 +1,748 @@
+import React from "react";
+import { Capacitor } from "@capacitor/core";
+import { API_BASE, getCaregiverNetworkErrorMessage } from "./services/config";
+import MessageNotifier from "./plugins/MessageNotifier";
+import { formatTextSmart } from "./utils/textFormatting";
+
+type CaregiverTarget = {
+  id: string;
+  name: string;
+  channel: string;
+};
+
+type CaregiverMessage = {
+  id: string;
+  channel: string;
+  createdAt: string;
+  senderRole: "user" | "caregiver";
+  senderName: string;
+  message: string;
+  messageType?: "text" | "audio";
+};
+
+type MessageStore = {
+  key: string;
+  data: Record<string, CaregiverMessage[]>;
+};
+
+const MESSAGE_HISTORY_LIMIT = 80;
+
+type AudioWindow = Window &
+  typeof globalThis & {
+    webkitAudioContext?: typeof AudioContext;
+  };
+
+type MessageNotificationPermission = NotificationPermission | "unsupported";
+
+function playIncomingMessageSound() {
+  if (typeof window === "undefined") return;
+
+  const vibrate = () => {
+    try {
+      window.navigator.vibrate?.([90]);
+    } catch {}
+  };
+
+  try {
+    const AudioContextConstructor =
+      window.AudioContext || (window as AudioWindow).webkitAudioContext;
+    if (!AudioContextConstructor) {
+      vibrate();
+      return;
+    }
+
+    const audioContext = new AudioContextConstructor();
+    const playTone = () => {
+      const now = audioContext.currentTime;
+      const gain = audioContext.createGain();
+      const firstTone = audioContext.createOscillator();
+      const secondTone = audioContext.createOscillator();
+
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.exponentialRampToValueAtTime(0.16, now + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.34);
+
+      firstTone.type = "sine";
+      firstTone.frequency.setValueAtTime(740, now);
+      secondTone.type = "sine";
+      secondTone.frequency.setValueAtTime(980, now + 0.13);
+
+      firstTone.connect(gain);
+      secondTone.connect(gain);
+      gain.connect(audioContext.destination);
+      firstTone.start(now);
+      firstTone.stop(now + 0.16);
+      secondTone.start(now + 0.13);
+      secondTone.stop(now + 0.34);
+      secondTone.onended = () => {
+        firstTone.disconnect();
+        secondTone.disconnect();
+        gain.disconnect();
+        void audioContext.close?.();
+      };
+      vibrate();
+    };
+
+    if (audioContext.state === "suspended") {
+      void audioContext.resume().then(playTone).catch(vibrate);
+      return;
+    }
+
+    playTone();
+  } catch {
+    vibrate();
+  }
+}
+
+function getMessageNotificationPermission(): MessageNotificationPermission {
+  if (Capacitor.isNativePlatform()) {
+    return "default";
+  }
+
+  if (typeof window === "undefined" || !("Notification" in window)) {
+    return "unsupported";
+  }
+
+  return window.Notification.permission;
+}
+
+async function requestMessageNotificationPermission() {
+  try {
+    const nativePermission = await MessageNotifier.requestPermission();
+    if (nativePermission?.granted) {
+      return "granted";
+    }
+    if (nativePermission?.permission === "denied") {
+      return "denied";
+    }
+    if (nativePermission?.permission === "prompted") {
+      return "default";
+    }
+  } catch {}
+
+  if (typeof window === "undefined" || !("Notification" in window)) {
+    return "unsupported";
+  }
+
+  if (window.Notification.permission === "default") {
+    return window.Notification.requestPermission();
+  }
+
+  return window.Notification.permission;
+}
+
+function truncateNotificationText(value: string) {
+  const text = String(value || "").replace(/\s+/g, " ").trim();
+  return text.length > 140 ? `${text.slice(0, 137)}...` : text;
+}
+
+async function showBrowserIncomingMessageNotification(
+  title: string,
+  body: string,
+  tag: string
+) {
+  if (
+    typeof window === "undefined" ||
+    !("Notification" in window) ||
+    window.Notification.permission !== "granted"
+  ) {
+    return;
+  }
+
+  const options: NotificationOptions = {
+    body,
+    icon: "/icon-192.png",
+    tag,
+    renotify: true,
+    data: {
+      url: window.location.href,
+    },
+  };
+
+  try {
+    if ("serviceWorker" in navigator) {
+      const registration = await navigator.serviceWorker.ready;
+      await registration.showNotification(title, options);
+      return;
+    }
+  } catch {}
+
+  try {
+    new window.Notification(title, options);
+  } catch {}
+}
+
+async function showIncomingMessageNotification(
+  message: CaregiverMessage,
+  caregiverName: string
+) {
+  const title = `Message de ${caregiverName || message.senderName || "l'aidant"}`;
+  const body = truncateNotificationText(message.message);
+  const tag = `ma-voix-message-${message.channel || "aidant"}`;
+
+  try {
+    const result = await MessageNotifier.showIncoming({
+      title,
+      body,
+      tag,
+      url: typeof window !== "undefined" ? window.location.href : "",
+    });
+    if (result?.shown) return;
+  } catch {}
+
+  await showBrowserIncomingMessageNotification(title, body, tag);
+}
+
+function readMessages(storageKey: string) {
+  if (typeof window === "undefined") return {};
+
+  try {
+    const saved = window.localStorage.getItem(storageKey);
+    const parsed = saved ? JSON.parse(saved) : {};
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function mergeMessages(
+  currentMessages: CaregiverMessage[] = [],
+  incomingMessages: CaregiverMessage[] = []
+) {
+  const messageMap = new Map<string, CaregiverMessage>();
+
+  [...currentMessages, ...incomingMessages].forEach((message) => {
+    if (!message?.id || (!message?.message && message?.messageType !== "audio")) return;
+    messageMap.set(message.id, message);
+  });
+
+  return Array.from(messageMap.values())
+    .sort(
+      (a, b) =>
+        new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+    )
+    .slice(-MESSAGE_HISTORY_LIMIT);
+}
+
+function buildMessageStreamUrl(channel: string) {
+  const url = new URL("/api/caregiver-messages/stream", API_BASE);
+  url.searchParams.set("channel", channel);
+  url.searchParams.set("role", "user");
+  return url.href;
+}
+
+function formatMessageTime(value: string) {
+  try {
+    return new Intl.DateTimeFormat("fr-FR", {
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(new Date(value));
+  } catch {
+    return "";
+  }
+}
+
+function isAudioMessage(message: CaregiverMessage) {
+  return message.messageType === "audio";
+}
+
+export default function CaregiverMessagesPage(props: any) {
+  const {
+    styles,
+    caregiverAlertLinks = [],
+    currentProfile,
+    currentProfileId,
+    text,
+    setText,
+    isListening,
+    startDictation,
+    speakText,
+    showToast,
+  } = props;
+
+  const caregiverTargets = React.useMemo<CaregiverTarget[]>(
+    () =>
+      (caregiverAlertLinks || [])
+        .filter((link) => link?.channel)
+        .map((link, index) => ({
+          id: link.id || link.channel,
+          name: link.name || `Aidant ${index + 1}`,
+          channel: link.channel,
+        })),
+    [caregiverAlertLinks]
+  );
+  const caregiverChannelKey = React.useMemo(
+    () => caregiverTargets.map((target) => target.channel).join("|"),
+    [caregiverTargets]
+  );
+  const storageKey = React.useMemo(
+    () =>
+      `maVoixCaregiverMessages:${
+        currentProfileId || currentProfile?.id || "default"
+      }`,
+    [currentProfileId, currentProfile?.id]
+  );
+
+  const [selectedCaregiverId, setSelectedCaregiverId] = React.useState("");
+  const [messageStore, setMessageStore] = React.useState<MessageStore>(() => ({
+    key: storageKey,
+    data: readMessages(storageKey),
+  }));
+  const [connectedCaregivers, setConnectedCaregivers] = React.useState<
+    Record<string, number>
+  >({});
+  const [statusText, setStatusText] = React.useState("");
+  const [isSending, setIsSending] = React.useState(false);
+  const [notificationPermission, setNotificationPermission] =
+    React.useState<MessageNotificationPermission>(() =>
+      getMessageNotificationPermission()
+    );
+
+  React.useEffect(() => {
+    setNotificationPermission(getMessageNotificationPermission());
+  }, []);
+
+  React.useEffect(() => {
+    setMessageStore({
+      key: storageKey,
+      data: readMessages(storageKey),
+    });
+  }, [storageKey]);
+
+  React.useEffect(() => {
+    if (messageStore.key !== storageKey || typeof window === "undefined") {
+      return;
+    }
+
+    window.localStorage.setItem(storageKey, JSON.stringify(messageStore.data));
+  }, [messageStore, storageKey]);
+
+  React.useEffect(() => {
+    if (caregiverTargets.length === 0) {
+      setSelectedCaregiverId("");
+      return;
+    }
+
+    const selectedExists = caregiverTargets.some(
+      (target) => target.id === selectedCaregiverId
+    );
+    if (!selectedExists) {
+      setSelectedCaregiverId(caregiverTargets[0].id);
+    }
+  }, [caregiverTargets, selectedCaregiverId]);
+
+  const updateChannelMessages = React.useCallback(
+    (channel: string, incomingMessages: CaregiverMessage[]) => {
+      setMessageStore((prev) => ({
+        key: prev.key,
+        data: {
+          ...prev.data,
+          [channel]: mergeMessages(prev.data[channel], incomingMessages),
+        },
+      }));
+    },
+    []
+  );
+
+  React.useEffect(() => {
+    if (caregiverTargets.length === 0) return;
+
+    const sources = caregiverTargets.map((target) => {
+      const source = new EventSource(buildMessageStreamUrl(target.channel));
+
+      source.addEventListener("connected", (event) => {
+        try {
+          const payload = JSON.parse((event as MessageEvent).data || "{}");
+          setConnectedCaregivers((prev) => ({
+            ...prev,
+            [target.channel]: Number(payload.connectedCaregivers || 0),
+          }));
+          setStatusText("Conversation connectée.");
+        } catch {
+          setStatusText("Conversation connectée.");
+        }
+      });
+
+      source.addEventListener("caregiver-presence", (event) => {
+        try {
+          const payload = JSON.parse((event as MessageEvent).data || "{}");
+          setConnectedCaregivers((prev) => ({
+            ...prev,
+            [target.channel]: Number(payload.connectedCaregivers || 0),
+          }));
+        } catch {}
+      });
+
+      source.addEventListener("caregiver-message-history", (event) => {
+        try {
+          const payload = JSON.parse((event as MessageEvent).data || "{}");
+          updateChannelMessages(
+            target.channel,
+            Array.isArray(payload.messages) ? payload.messages : []
+          );
+        } catch {}
+      });
+
+      source.addEventListener("caregiver-message", (event) => {
+        try {
+          const payload = JSON.parse((event as MessageEvent).data || "{}");
+          updateChannelMessages(target.channel, [payload]);
+          if (payload?.senderRole === "caregiver") {
+            playIncomingMessageSound();
+            void showIncomingMessageNotification(payload, target.name);
+          }
+          setStatusText("Nouveau message reçu.");
+        } catch {}
+      });
+
+      source.onerror = () => {
+        setStatusText("Connexion messages interrompue. Reconnexion en cours...");
+      };
+
+      return source;
+    });
+
+    return () => {
+      sources.forEach((source) => source.close());
+    };
+  }, [caregiverChannelKey, caregiverTargets, updateChannelMessages]);
+
+  const selectedCaregiver =
+    caregiverTargets.find((target) => target.id === selectedCaregiverId) ||
+    caregiverTargets[0] ||
+    null;
+  const selectedMessages = selectedCaregiver
+    ? messageStore.data[selectedCaregiver.channel] || []
+    : [];
+  const selectedConnectedCount = selectedCaregiver
+    ? connectedCaregivers[selectedCaregiver.channel] || 0
+    : 0;
+
+  async function sendCaregiverMessage(messageType: "text" | "audio" = "text") {
+    if (!selectedCaregiver || isSending) return;
+
+    const message = String(text || "").trim();
+    if (!message) {
+      setStatusText(
+        messageType === "audio"
+          ? "Écris un message avant d'envoyer l'audio."
+          : "Écris un message avant l'envoi."
+      );
+      return;
+    }
+
+    try {
+      setIsSending(true);
+
+      const response = await fetch(`${API_BASE}/api/caregiver-messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          channel: selectedCaregiver.channel,
+          senderRole: "user",
+          senderName: currentProfile?.firstName || currentProfile?.name || "Utilisateur",
+          message,
+          messageType,
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(
+          data?.details || data?.error || "Impossible d'envoyer le message."
+        );
+      }
+
+      if (data?.message) {
+        updateChannelMessages(selectedCaregiver.channel, [data.message]);
+      }
+      setText("");
+
+      const nextStatus =
+        Number(data?.deliveredTo || 0) > 0
+          ? messageType === "audio"
+            ? `Audio envoyé à ${selectedCaregiver.name}.`
+            : `Message envoyé à ${selectedCaregiver.name}.`
+          : messageType === "audio"
+            ? `Audio enregistré pour ${selectedCaregiver.name}.`
+            : `Message enregistré pour ${selectedCaregiver.name}.`;
+      setStatusText(nextStatus);
+      showToast?.(nextStatus);
+    } catch (error) {
+      const nextStatus = getCaregiverNetworkErrorMessage(
+        error,
+        "Impossible d'envoyer le message."
+      );
+      setStatusText(nextStatus);
+      showToast?.(nextStatus);
+    } finally {
+      setIsSending(false);
+    }
+  }
+
+  async function enableMessageNotifications() {
+    const nextPermission = await requestMessageNotificationPermission();
+    setNotificationPermission(nextPermission);
+
+    if (nextPermission === "granted") {
+      const nextStatus = "Notifications messages activées.";
+      setStatusText(nextStatus);
+      showToast?.(nextStatus);
+      return;
+    }
+
+    if (nextPermission === "denied") {
+      const nextStatus =
+        "Notifications bloquées. Autorise-les dans les réglages du téléphone.";
+      setStatusText(nextStatus);
+      showToast?.(nextStatus);
+      return;
+    }
+
+    if (nextPermission === "unsupported") {
+      const nextStatus =
+        "Les notifications ne sont pas disponibles sur cet appareil.";
+      setStatusText(nextStatus);
+      showToast?.(nextStatus);
+    }
+  }
+
+  const notificationButtonLabel =
+    notificationPermission === "granted"
+      ? "Notifications activées"
+      : notificationPermission === "denied"
+      ? "Notifications bloquées"
+      : "Activer notifications";
+
+  return (
+    <div style={styles.gridSingle}>
+      <div style={styles.card}>
+        <h2 style={styles.sectionTitle}>Messages aidants</h2>
+
+        {caregiverTargets.length === 0 ? (
+          <p style={styles.emptyText}>
+            Ajoute un aidant dans Profil pour ouvrir une conversation.
+          </p>
+        ) : (
+          <>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns:
+                  window.innerWidth > 900 ? "minmax(0, 0.9fr) minmax(0, 1.4fr)" : "1fr",
+                gap: 14,
+                alignItems: "start",
+              }}
+            >
+              <div style={{ display: "grid", gap: 12 }}>
+                <div style={styles.formGroup}>
+                  <label style={styles.label}>Choisir l'aidant</label>
+                  <select
+                    value={selectedCaregiver?.id || ""}
+                    onChange={(event) => setSelectedCaregiverId(event.target.value)}
+                    style={styles.input}
+                  >
+                    {caregiverTargets.map((target) => (
+                      <option key={target.id} value={target.id}>
+                        {target.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div
+                  style={{
+                    padding: 14,
+                    borderRadius: 18,
+                    background:
+                      selectedConnectedCount > 0
+                        ? "rgba(34,197,94,0.14)"
+                        : "rgba(245,158,11,0.14)",
+                    border:
+                      selectedConnectedCount > 0
+                        ? "1px solid rgba(74,222,128,0.32)"
+                        : "1px solid rgba(251,191,36,0.32)",
+                    color: "rgba(255,255,255,0.88)",
+                    fontWeight: 700,
+                  }}
+                >
+                  {selectedConnectedCount > 0
+                    ? `${selectedCaregiver?.name} est connecté.`
+                    : `${selectedCaregiver?.name} n'est pas connecté pour le moment.`}
+                </div>
+
+                {notificationPermission !== "unsupported" ? (
+                  <button
+                    type="button"
+                    style={{
+                      ...styles.secondaryButton,
+                      fontSize: 16,
+                      opacity: notificationPermission === "granted" ? 0.78 : 1,
+                    }}
+                    onClick={enableMessageNotifications}
+                    disabled={notificationPermission === "granted"}
+                  >
+                    {notificationButtonLabel}
+                  </button>
+                ) : null}
+              </div>
+
+              <div
+                style={{
+                  minHeight: 260,
+                  maxHeight: 420,
+                  overflowY: "auto",
+                  display: "grid",
+                  alignContent: "start",
+                  gap: 10,
+                  padding: 12,
+                  borderRadius: 18,
+                  background: "rgba(0,0,0,0.16)",
+                  border: "1px solid rgba(255,255,255,0.08)",
+                }}
+              >
+                {selectedMessages.length === 0 ? (
+                  <div style={{ ...styles.emptyText, margin: 0 }}>
+                    Aucun message avec cet aidant.
+                  </div>
+                ) : (
+                  selectedMessages.map((message) => {
+                    const isUser = message.senderRole === "user";
+                    return (
+                      <div
+                        key={message.id}
+                        style={{
+                          justifySelf: isUser ? "end" : "start",
+                          maxWidth: "88%",
+                          display: "grid",
+                          gap: 5,
+                          padding: "11px 13px",
+                          borderRadius: 16,
+                          background: isUser
+                            ? "rgba(37,99,235,0.32)"
+                            : "rgba(34,197,94,0.18)",
+                          border: isUser
+                            ? "1px solid rgba(96,165,250,0.36)"
+                            : "1px solid rgba(74,222,128,0.28)",
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontSize: 12,
+                            opacity: 0.78,
+                            fontWeight: 800,
+                          }}
+                        >
+                          {isUser
+                            ? currentProfile?.firstName ||
+                              currentProfile?.name ||
+                              "Moi"
+                            : message.senderName || selectedCaregiver?.name}
+                          {formatMessageTime(message.createdAt)
+                            ? ` - ${formatMessageTime(message.createdAt)}`
+                            : ""}
+                        </div>
+                        {isAudioMessage(message) ? (
+                          <button
+                            type="button"
+                            style={{
+                              ...styles.secondaryButton,
+                              minHeight: 44,
+                              padding: "8px 12px",
+                              fontSize: 15,
+                            }}
+                            onClick={() => speakText?.(message.message)}
+                            disabled={!message.message}
+                          >
+                            ▶️ {isUser ? "Audio envoyé" : "Audio reçu"}
+                          </button>
+                        ) : (
+                          <div
+                            style={{
+                              whiteSpace: "pre-wrap",
+                              overflowWrap: "anywhere",
+                              lineHeight: 1.35,
+                            }}
+                          >
+                            {message.message}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+
+            <div style={{ ...styles.formGroup, marginTop: 16 }}>
+              <label style={styles.label}>Message</label>
+              <textarea
+                value={text}
+                onChange={(event) => setText(formatTextSmart(event.target.value))}
+                style={styles.textarea}
+                placeholder="Écrire ici..."
+              />
+            </div>
+
+            <div
+              style={{
+                marginTop: 12,
+                display: "grid",
+                gridTemplateColumns:
+                  window.innerWidth > 760
+                    ? "repeat(3, minmax(0, 1fr))"
+                    : "1fr",
+                gap: 10,
+              }}
+            >
+              <button
+                type="button"
+                style={{
+                  ...styles.primaryButton,
+                  opacity: isListening ? 0.6 : 1,
+                }}
+                onClick={startDictation}
+                disabled={isListening}
+              >
+                🎤 Dicter
+              </button>
+
+              <button
+                type="button"
+                style={styles.secondaryButton}
+                onClick={() => sendCaregiverMessage("audio")}
+                disabled={isSending || !selectedCaregiver}
+              >
+                ▶️ Envoyer l'audio
+              </button>
+
+              <button
+                type="button"
+                style={{
+                  ...styles.primaryButton,
+                  opacity: isSending ? 0.7 : 1,
+                }}
+                onClick={() => sendCaregiverMessage("text")}
+                disabled={isSending || !selectedCaregiver}
+              >
+                {isSending ? "Envoi..." : "Envoyer"}
+              </button>
+            </div>
+
+            {statusText ? (
+              <div
+                style={{
+                  ...styles.infoBox,
+                  marginTop: 14,
+                  lineHeight: 1.45,
+                }}
+              >
+                {statusText}
+              </div>
+            ) : null}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}

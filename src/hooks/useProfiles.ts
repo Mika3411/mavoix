@@ -1,7 +1,16 @@
 import type React from "react";
 import { useMemo, useState, useEffect, useCallback } from "react";
-import { DEFAULT_CATEGORIES, createProfile, generateId, readJSON } from "../data";
+import { Capacitor } from "@capacitor/core";
+import DocumentSaver from "../plugins/DocumentSaver";
+import { DEFAULT_CATEGORIES, createProfile, generateId } from "../data";
 import type { Profile, UseProfilesOptions } from "../types";
+import {
+  mergePrivateProfileData,
+  persistLocalProfiles,
+  readLocalProfilesSnapshot,
+  readPrivateProfiles,
+  stripPrivateProfileData,
+} from "../utils/localPrivacy";
 import {
   createEmptyEmergencyContact,
   ensureDoctorInfo,
@@ -9,12 +18,21 @@ import {
   ensureMedicalInfo,
   ensureProfile,
 } from "../utils/normalize";
+import { createCaregiverAlertLink } from "../utils/caregiverAlerts";
 
 export default function useProfiles() {
-  const initialProfiles =
-    typeof window !== "undefined"
-      ? readJSON("maVoixProfiles", null) || [createProfile()]
-      : [createProfile()];
+  const [initialSnapshot] = useState(() => {
+    const fallbackProfiles = [ensureProfile(createProfile() as Profile)];
+    return typeof window !== "undefined"
+      ? readLocalProfilesSnapshot(fallbackProfiles)
+      : {
+          profiles: fallbackProfiles,
+          hasPrivateVault: false,
+          passwordProtected: false,
+        };
+  });
+
+  const initialProfiles = initialSnapshot.profiles;
 
   const initialCurrentProfileId =
     typeof window !== "undefined"
@@ -23,12 +41,101 @@ export default function useProfiles() {
 
   const [profiles, setProfiles] = useState<Profile[]>(initialProfiles as Profile[]);
   const [currentProfileId, setCurrentProfileId] = useState<string>(initialCurrentProfileId);
+  const [privateDataLoaded, setPrivateDataLoaded] = useState(
+    !initialSnapshot.hasPrivateVault
+  );
+  const [privacyPassword, setPrivacyPassword] = useState("");
+  const [privacyStatus, setPrivacyStatus] = useState({
+    privateDataLoaded: !initialSnapshot.hasPrivateVault,
+    protectedAtRest: initialSnapshot.hasPrivateVault,
+    passwordProtected: initialSnapshot.passwordProtected,
+    locked: initialSnapshot.passwordProtected,
+    error: "",
+  });
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      localStorage.setItem("maVoixProfiles", JSON.stringify(profiles));
+    if (
+      typeof window === "undefined" ||
+      !initialSnapshot.hasPrivateVault ||
+      initialSnapshot.passwordProtected
+    ) {
+      return;
     }
-  }, [profiles]);
+
+    let cancelled = false;
+
+    async function loadPrivateProfiles() {
+      try {
+        const privateProfiles = await readPrivateProfiles();
+        if (cancelled) return;
+
+        setProfiles((prev) => mergePrivateProfileData(prev, privateProfiles));
+        setPrivateDataLoaded(true);
+        setPrivacyStatus({
+          privateDataLoaded: true,
+          protectedAtRest: true,
+          passwordProtected: false,
+          locked: false,
+          error: "",
+        });
+      } catch (error) {
+        console.error("Impossible de dechiffrer les donnees privees :", error);
+        if (cancelled) return;
+
+        setPrivacyStatus({
+          privateDataLoaded: false,
+          protectedAtRest: true,
+          passwordProtected: false,
+          locked: false,
+          error:
+            "Les donnees medicales locales sont protegees, mais elles n'ont pas pu etre chargees sur cet appareil.",
+        });
+      }
+    }
+
+    loadPrivateProfiles();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [initialSnapshot.hasPrivateVault, initialSnapshot.passwordProtected]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !privateDataLoaded) {
+      return;
+    }
+
+    let cancelled = false;
+
+    persistLocalProfiles(profiles, privacyPassword)
+      .then((protectedAtRest) => {
+        if (cancelled) return;
+        setPrivacyStatus({
+          privateDataLoaded: true,
+          protectedAtRest,
+          passwordProtected: Boolean(privacyPassword),
+          locked: false,
+          error: protectedAtRest
+            ? ""
+            : "Le navigateur ne permet pas de chiffrer le stockage local.",
+        });
+      })
+      .catch((error) => {
+        console.error("Impossible de proteger les profils locaux :", error);
+        if (cancelled) return;
+        setPrivacyStatus({
+          privateDataLoaded: true,
+          protectedAtRest: false,
+          passwordProtected: Boolean(privacyPassword),
+          locked: false,
+          error: "Impossible de chiffrer les donnees medicales locales.",
+        });
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [profiles, privateDataLoaded, privacyPassword]);
 
   useEffect(() => {
     if (typeof window !== "undefined" && currentProfileId) {
@@ -43,10 +150,18 @@ export default function useProfiles() {
     }
   }, [profiles, currentProfileId]);
 
-  const currentProfile = useMemo(
-    () => profiles.find((profile) => profile.id === currentProfileId) || profiles[0],
-    [profiles, currentProfileId]
-  );
+  const currentProfile = useMemo(() => {
+    const profile = profiles.find((profile) => profile.id === currentProfileId) || profiles[0];
+    if (!profile) return profile;
+
+    return {
+      ...profile,
+      pinProtection: {
+        enabled: Boolean((profile as any)?.pinProtection?.enabled),
+        pin: String((profile as any)?.pinProtection?.pin || "").replace(/\D/g, "").slice(0, 4),
+      },
+    } as Profile;
+  }, [profiles, currentProfileId]);
 
   const customCategories = currentProfile?.categories || DEFAULT_CATEGORIES;
   const savedPhrases = currentProfile?.phrases || [];
@@ -228,7 +343,8 @@ export default function useProfiles() {
     const newProfile = ensureProfile({
       ...(createProfile(`Profil ${profiles.length + 1}`) as Profile),
       phrases: [],
-    });
+      pinProtection: { enabled: false, pin: "" },
+    } as Profile);
     setProfiles((prev) => [...prev, newProfile]);
     setCurrentProfileId(newProfile.id);
     onAfterCreate?.(newProfile);
@@ -259,6 +375,14 @@ export default function useProfiles() {
       })
     );
 
+    const duplicatedCaregiverAlertLinks = (currentProfile?.caregiverAlertLinks || []).map(
+      (link, index) => ({
+        ...link,
+        id: generateId(),
+        channel: createCaregiverAlertLink(index).channel,
+      })
+    );
+
     const duplicatedTreatments = (currentProfile?.medicalInfo?.treatments || []).map((treatment) => ({
       ...treatment,
       id: generateId(),
@@ -280,7 +404,12 @@ export default function useProfiles() {
         duplicatedEmergencyContacts.length > 0
           ? duplicatedEmergencyContacts
           : [createEmptyEmergencyContact()],
-    });
+      pinProtection: {
+        enabled: Boolean((currentProfile as any)?.pinProtection?.enabled),
+        pin: String((currentProfile as any)?.pinProtection?.pin || "").replace(/\D/g, "").slice(0, 4),
+      },
+      caregiverAlertLinks: duplicatedCaregiverAlertLinks,
+    } as Profile);
 
     setProfiles((prev) => [...prev, copy]);
     setCurrentProfileId(copy.id);
@@ -298,26 +427,126 @@ export default function useProfiles() {
     onAfterDelete?.(nextProfiles[0]);
   }, [profiles, currentProfileId]);
 
-  const exportAllProfiles = useCallback(() => {
-    const data = {
-      appName: "Ma Voix",
-      version: 1,
-      exportDate: new Date().toISOString(),
-      currentProfileId,
-      profiles,
-    };
+  const enablePrivacyPassword = useCallback(
+    async (password: string) => {
+      const nextPassword = String(password || "");
 
-    const blob = new Blob([JSON.stringify(data, null, 2)], {
-      type: "application/json",
+      if (nextPassword.length < 8) {
+        throw new Error("Choisis un mot de passe d'au moins 8 caracteres.");
+      }
+
+      await persistLocalProfiles(profiles, nextPassword);
+      setPrivacyPassword(nextPassword);
+      setPrivateDataLoaded(true);
+      setPrivacyStatus({
+        privateDataLoaded: true,
+        protectedAtRest: true,
+        passwordProtected: true,
+        locked: false,
+        error: "",
+      });
+    },
+    [profiles]
+  );
+
+  const unlockPrivateData = useCallback(
+    async (password: string) => {
+      const privateProfiles = await readPrivateProfiles(String(password || ""));
+
+      setProfiles((prev) => mergePrivateProfileData(prev, privateProfiles));
+      setPrivacyPassword(String(password || ""));
+      setPrivateDataLoaded(true);
+      setPrivacyStatus({
+        privateDataLoaded: true,
+        protectedAtRest: true,
+        passwordProtected: true,
+        locked: false,
+        error: "",
+      });
+    },
+    []
+  );
+
+  const lockPrivateData = useCallback(() => {
+    setPrivacyPassword("");
+    setProfiles((prev) =>
+      prev.map((profile) => ensureProfile(stripPrivateProfileData(profile)))
+    );
+    setPrivateDataLoaded(false);
+    setPrivacyStatus({
+      privateDataLoaded: false,
+      protectedAtRest: true,
+      passwordProtected: true,
+      locked: true,
+      error: "",
     });
+  }, []);
 
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "ma-voix-profils.json";
-    link.click();
-    URL.revokeObjectURL(url);
-  }, [currentProfileId, profiles]);
+  const exportAllProfiles = useCallback(async () => {
+    if (!privateDataLoaded) {
+      alert("Les donnees medicales protegees sont encore en cours de chargement.");
+      return;
+    }
+
+    if (
+      typeof window !== "undefined" &&
+      !window.confirm(
+        "L'export contient les informations medicales et personnelles en clair. Continuer ?"
+      )
+    ) {
+      return;
+    }
+
+    try {
+      const data = {
+        appName: "Ma Voix",
+        version: 1,
+        exportDate: new Date().toISOString(),
+        privacy: {
+          containsSensitiveMedicalData: true,
+          localStorageProtectedAtRest: privacyStatus.protectedAtRest,
+          passwordProtected: privacyStatus.passwordProtected,
+        },
+        currentProfileId,
+        profiles,
+      };
+
+      const fileName = `ma-voix-profils-${new Date().toISOString().slice(0, 10)}.json`;
+      const json = JSON.stringify(data, null, 2);
+
+      if (Capacitor.getPlatform() === "android" && Capacitor.isNativePlatform()) {
+        await DocumentSaver.saveJson({
+          fileName,
+          content: json,
+          mimeType: "application/json",
+        });
+        alert("Export enregistré avec succès.");
+        return;
+      }
+
+      const blob = new Blob([json], {
+        type: "application/json",
+      });
+
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Erreur export :", error);
+      alert(`Impossible d'exporter les profils. ${String(error)}`);
+    }
+  }, [
+    currentProfileId,
+    privacyStatus.protectedAtRest,
+    privacyStatus.passwordProtected,
+    privateDataLoaded,
+    profiles,
+  ]);
 
   const importAllProfiles = useCallback((event: React.ChangeEvent<HTMLInputElement>, { onAfterImport }: UseProfilesOptions = {}) => {
     const file = event.target.files?.[0];
@@ -332,7 +561,15 @@ export default function useProfiles() {
           throw new Error("Fichier invalide");
         }
 
-        const normalizedProfiles = parsed.profiles.map((profile) => ensureProfile(profile));
+        const normalizedProfiles = parsed.profiles.map((profile) =>
+          ensureProfile({
+            ...profile,
+            pinProtection: {
+              enabled: Boolean((profile as any)?.pinProtection?.enabled),
+              pin: String((profile as any)?.pinProtection?.pin || "").replace(/\D/g, "").slice(0, 4),
+            },
+          } as Profile)
+        );
 
         setProfiles(normalizedProfiles);
 
@@ -368,6 +605,10 @@ export default function useProfiles() {
     defaultVoice,
     defaultVoiceSettings,
     emergencyContacts,
+    privacyStatus,
+    enablePrivacyPassword,
+    unlockPrivateData,
+    lockPrivateData,
     updateCurrentProfile,
     updateCurrentProfileField,
     updateNestedProfileField,

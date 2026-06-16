@@ -1,1167 +1,8 @@
 import type { CSSProperties } from "react";
 
 import React from "react";
-import { formatTextSmart, normalizeTextFormatting } from "./utils/textFormatting";
+import { formatTextSmart } from "./utils/textFormatting";
 import { createCompactCardStyle } from "./utils/profileCardStyles";
-
-
-function VirtualKeyboard({
-  text,
-  setText,
-  saveWordToHistory,
-  speakText,
-  stopSpeaking,
-  styles,
-}) {
-  const keyboardContainerRef = React.useRef(null);
-  const textAreaRef = React.useRef(null);
-  const longPressTimerRef = React.useRef(null);
-  const longPressTriggeredRef = React.useRef(false);
-  const backspaceHoldTimeoutRef = React.useRef(null);
-  const deleteRepeatTimerRef = React.useRef(null);
-
-  const [isShiftActive, setIsShiftActive] = React.useState(false);
-  const [keyboardMode, setKeyboardMode] = React.useState("letters");
-  const [accentMenu, setAccentMenu] = React.useState(null);
-  const [punctuationMenu, setPunctuationMenu] = React.useState(null);
-  const [emojiMenu, setEmojiMenu] = React.useState(null);
-  const [hoveredKey, setHoveredKey] = React.useState(null);
-  const [pressedKey, setPressedKey] = React.useState(null);
-
-  const letterRows = [
-    ["a", "z", "e", "r", "t", "y", "u", "i", "o", "p"],
-    ["q", "s", "d", "f", "g", "h", "j", "k", "l", "m"],
-    ["Maj", "w", "x", "c", "v", "b", "n", "⌫", "123#+"],
-  ];
-
-  const symbolRows = [
-    ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"],
-    [".", ",", "?", "!", "'", ":", ";", "-"],
-    ["ABC", "@", "#", "+", "/", "€", "(", ")", "&"],
-  ];
-
-const ACCENT_OPTIONS = {
-  a: ["à", "â", "ä", "á", "ã", "1", "@", "#", "+", "-"],
-  z: ["2"],
-  e: ["é", "è", "ê", "ë", "€", "3"],
-  r: ["4"],
-  t: ["5"],
-  y: ["ÿ", "6"],
-  u: ["ù", "û", "ü", "ú", "7"],
-  i: ["î", "ï", "í", "ì", "8"],
-  o: ["ô", "ö", "ó", "ò", "õ", "9"],
-  p: ["0"],
-  c: ["ç"],
-};
-
-  const isCompactScreen =
-    typeof window !== "undefined" && window.innerHeight < 900;
-
-  function focusTextArea(nextCursorStart = null, nextCursorEnd = null) {
-    window.requestAnimationFrame(() => {
-      if (!textAreaRef.current) return;
-      textAreaRef.current.focus();
-
-      const startPos =
-        typeof nextCursorStart === "number"
-          ? nextCursorStart
-          : textAreaRef.current.value.length;
-      const endPos =
-        typeof nextCursorEnd === "number" ? nextCursorEnd : startPos;
-
-      try {
-        textAreaRef.current.setSelectionRange(startPos, endPos);
-      } catch (error) {
-        console.error("Impossible de positionner le curseur :", error);
-      }
-    });
-  }
-
-  function getFormattedCursorPosition(rawValue, formattedValue, rawCursorPosition) {
-    if (rawCursorPosition <= 0) return 0;
-    if (rawValue === formattedValue) return rawCursorPosition;
-
-    let rawIndex = 0;
-    let formattedIndex = 0;
-
-    while (rawIndex < rawCursorPosition && formattedIndex < formattedValue.length) {
-      if (rawValue[rawIndex] === formattedValue[formattedIndex]) {
-        rawIndex += 1;
-        formattedIndex += 1;
-        continue;
-      }
-
-      formattedIndex += 1;
-    }
-
-    while (rawIndex < rawCursorPosition && formattedIndex < formattedValue.length) {
-      rawIndex += 1;
-      formattedIndex += 1;
-    }
-
-    return formattedIndex;
-  }
-
-  function insertAtCursor(insertedText) {
-    const currentValue = String(text || "");
-    const textarea = textAreaRef.current;
-    const selectionStart =
-      textarea && typeof textarea.selectionStart === "number"
-        ? textarea.selectionStart
-        : currentValue.length;
-    const selectionEnd =
-      textarea && typeof textarea.selectionEnd === "number"
-        ? textarea.selectionEnd
-        : currentValue.length;
-
-    const rawNextValue =
-      currentValue.slice(0, selectionStart) +
-      insertedText +
-      currentValue.slice(selectionEnd);
-
-    const rawCursor = selectionStart + insertedText.length;
-    const formattedValue = formatTextSmart(rawNextValue);
-    const nextCursor = getFormattedCursorPosition(
-      rawNextValue,
-      formattedValue,
-      rawCursor
-    );
-
-    setText(formattedValue);
-    focusTextArea(nextCursor, nextCursor);
-
-    if (keyboardMode === "letters" && isShiftActive && /[a-zà-ÿA-ZÀ-Ÿ]/.test(insertedText)) {
-      setIsShiftActive(false);
-    }
-  }
-
-  function handleTextAreaChange(event) {
-    const nextValue = formatTextSmart(event.target.value);
-    setText(nextValue);
-  }
-
-  function handleTextAreaKeyUp() {
-    if (!textAreaRef.current) return;
-    const currentValue = String(textAreaRef.current.value || "");
-
-    if (/\s$/.test(currentValue)) {
-      const typedWords = currentValue
-        .trim()
-        .toLowerCase()
-        .split(/\s+/)
-        .filter(Boolean);
-
-      const lastTypedWord = typedWords[typedWords.length - 1];
-      if (lastTypedWord) {
-        saveWordToHistory(lastTypedWord);
-      }
-    }
-  }
-
-  function addCharacter(character) {
-    const value =
-      keyboardMode === "letters" && isShiftActive
-        ? character.toUpperCase()
-        : character;
-    insertAtCursor(value);
-  }
-
-  function addSpace() {
-    const currentValue = String(text || "");
-    const textarea = textAreaRef.current;
-    const selectionStart =
-      textarea && typeof textarea.selectionStart === "number"
-        ? textarea.selectionStart
-        : currentValue.length;
-    const selectionEnd =
-      textarea && typeof textarea.selectionEnd === "number"
-        ? textarea.selectionEnd
-        : currentValue.length;
-
-    const nextValue =
-      currentValue.slice(0, selectionStart) +
-      " " +
-      currentValue.slice(selectionEnd);
-
-    const typedWords = nextValue.trim().toLowerCase().split(/\s+/).filter(Boolean);
-    const lastTypedWord = typedWords[typedWords.length - 1];
-    if (lastTypedWord) {
-      saveWordToHistory(lastTypedWord);
-    }
-
-    const nextCursor = selectionStart + 1;
-    setText(formatTextSmart(nextValue));
-    focusTextArea(nextCursor, nextCursor);
-  }
-
-  function clearAll() {
-    setText("");
-    focusTextArea(0, 0);
-  }
-
-  function getGraphemeSegments(currentValue) {
-    if (!currentValue) return [];
-
-    const intlObject =
-      typeof Intl !== "undefined" ? Intl : undefined;
-    const segmenterCtor =
-      intlObject && typeof intlObject === "object"
-        ? intlObject["Segmenter"]
-        : undefined;
-
-    if (typeof segmenterCtor === "function") {
-      const segmenter = new segmenterCtor("fr", { granularity: "grapheme" });
-      return Array.from(segmenter.segment(currentValue), ({ segment, index }) => ({
-        segment,
-        index,
-      }));
-    }
-
-    return Array.from(currentValue).map((segment, index) => ({
-      segment,
-      index,
-    }));
-  }
-
-  function removePreviousGrapheme(currentValue, cursorPosition) {
-    const segments = getGraphemeSegments(currentValue);
-
-    if (!segments.length) return null;
-
-    let segmentIndex = -1;
-
-    for (let i = 0; i < segments.length; i += 1) {
-      const start = segments[i].index;
-      const end = start + segments[i].segment.length;
-
-      if (cursorPosition > start && cursorPosition <= end) {
-        segmentIndex = i;
-        break;
-      }
-
-      if (cursorPosition <= start) {
-        segmentIndex = i - 1;
-        break;
-      }
-    }
-
-    if (segmentIndex === -1) {
-      segmentIndex = segments.length - 1;
-    }
-
-    if (segmentIndex < 0) return null;
-
-    const segmentToRemove = segments[segmentIndex];
-    const nextValue =
-      currentValue.slice(0, segmentToRemove.index) +
-      currentValue.slice(segmentToRemove.index + segmentToRemove.segment.length);
-
-    return {
-      nextValue,
-      nextCursor: segmentToRemove.index,
-    };
-  }
-
-  function removeLastCharacter() {
-    const textarea = textAreaRef.current;
-    const currentValue = textarea ? String(textarea.value || "") : String(text || "");
-
-    if (!textarea) {
-      const result = removePreviousGrapheme(currentValue, currentValue.length);
-      if (!result) return;
-      setText(formatTextSmart(result.nextValue));
-      return;
-    }
-
-    const selectionStart = textarea.selectionStart;
-    const selectionEnd = textarea.selectionEnd;
-
-    if (selectionStart != null && selectionEnd != null && selectionStart !== selectionEnd) {
-      const nextValue =
-        currentValue.slice(0, selectionStart) + currentValue.slice(selectionEnd);
-      setText(formatTextSmart(nextValue));
-      focusTextArea(selectionStart, selectionStart);
-      return;
-    }
-
-    if (selectionStart == null || selectionStart === 0) return;
-
-    const result = removePreviousGrapheme(currentValue, selectionStart);
-    if (!result) return;
-
-    setText(formatTextSmart(result.nextValue));
-    focusTextArea(result.nextCursor, result.nextCursor);
-  }
-
-  function toggleKeyboardMode() {
-    setKeyboardMode((prev) => (prev === "letters" ? "symbols" : "letters"));
-    setIsShiftActive(false);
-    setAccentMenu(null);
-    setPunctuationMenu(null);
-    setEmojiMenu(null);
-    focusTextArea();
-  }
-
-  function clearLongPressTimer() {
-    if (longPressTimerRef.current) {
-      window.clearTimeout(longPressTimerRef.current);
-      longPressTimerRef.current = null;
-    }
-  }
-
-  function startLongPress(letter, event) {
-    if (keyboardMode !== "letters") return;
-    if (!ACCENT_OPTIONS[letter]) return;
-    if (!keyboardContainerRef.current) return;
-
-    longPressTriggeredRef.current = false;
-    clearLongPressTimer();
-
-    const button = event.currentTarget;
-    longPressTimerRef.current = window.setTimeout(() => {
-      const buttonRect = button.getBoundingClientRect();
-      const containerRect = keyboardContainerRef.current.getBoundingClientRect();
-      const variants = ACCENT_OPTIONS[letter].map((char) =>
-        isShiftActive ? char.toUpperCase() : char
-      );
-
-      const columns = Math.min(4, variants.length);
-      const rows = Math.ceil(variants.length / columns);
-      const estimatedWidth = columns * 54 + (columns - 1) * 6 + 16;
-      const estimatedHeight = rows * 48 + (rows - 1) * 6 + 16;
-      const leftCenter = buttonRect.left - containerRect.left + buttonRect.width / 2;
-      const clampedLeft = Math.min(
-        Math.max(leftCenter, estimatedWidth / 2 + 8),
-        containerRect.width - estimatedWidth / 2 - 8
-      );
-
-      let top = buttonRect.top - containerRect.top - estimatedHeight - 10;
-      if (top < 8) {
-        top = buttonRect.bottom - containerRect.top + 8;
-      }
-
-      setAccentMenu({
-        key: letter,
-        variants,
-        top,
-        left: clampedLeft,
-      });
-      longPressTriggeredRef.current = true;
-      longPressTimerRef.current = null;
-    }, 380);
-  }
-
-  function stopLongPress() {
-    const wasLongPress = longPressTriggeredRef.current;
-    clearLongPressTimer();
-    return wasLongPress;
-  }
-
-
-  function startPunctuationLongPress(event) {
-    if (!keyboardContainerRef.current) return;
-
-    longPressTriggeredRef.current = false;
-    clearLongPressTimer();
-
-    const button = event.currentTarget;
-    longPressTimerRef.current = window.setTimeout(() => {
-      const buttonRect = button.getBoundingClientRect();
-      const containerRect = keyboardContainerRef.current.getBoundingClientRect();
-      const variants = [".", ",", "?", "!", ";", ":"];
-
-      const columns = Math.min(4, variants.length);
-      const rows = Math.ceil(variants.length / columns);
-      const estimatedWidth = columns * 54 + (columns - 1) * 6 + 16;
-      const estimatedHeight = rows * 48 + (rows - 1) * 6 + 16;
-      const leftCenter = buttonRect.left - containerRect.left + buttonRect.width / 2;
-      const clampedLeft = Math.min(
-        Math.max(leftCenter, estimatedWidth / 2 + 8),
-        containerRect.width - estimatedWidth / 2 - 8
-      );
-
-      let top = buttonRect.top - containerRect.top - estimatedHeight - 10;
-      if (top < 8) {
-        top = buttonRect.bottom - containerRect.top + 8;
-      }
-
-      setPunctuationMenu({
-        variants,
-        top,
-        left: clampedLeft,
-      });
-      longPressTriggeredRef.current = true;
-      longPressTimerRef.current = null;
-    }, 380);
-  }
-
-function startApostropheLongPress(event) {
-  if (!keyboardContainerRef.current) return;
-
-  longPressTriggeredRef.current = false;
-  clearLongPressTimer();
-
-  const button = event.currentTarget;
-  longPressTimerRef.current = window.setTimeout(() => {
-    const buttonRect = button.getBoundingClientRect();
-    const containerRect = keyboardContainerRef.current.getBoundingClientRect();
-    const variants = ["'", '"', "(", ")"];
-
-      const columns = Math.min(4, variants.length);
-      const rows = Math.ceil(variants.length / columns);
-      const estimatedWidth = columns * 54 + (columns - 1) * 6 + 16;
-      const estimatedHeight = rows * 48 + (rows - 1) * 6 + 16;
-      const leftCenter = buttonRect.left - containerRect.left + buttonRect.width / 2;
-      const clampedLeft = Math.min(
-        Math.max(leftCenter, estimatedWidth / 2 + 8),
-        containerRect.width - estimatedWidth / 2 - 8
-      );
-
-      let top = buttonRect.top - containerRect.top - estimatedHeight - 10;
-    if (top < 8) {
-      top = buttonRect.bottom - containerRect.top + 8;
-    }
-
-    setPunctuationMenu({
-      variants,
-      top,
-      left: clampedLeft,
-    });
-    longPressTriggeredRef.current = true;
-    longPressTimerRef.current = null;
-  }, 380);
-}
-
-function toggleEmojiMenu(event) {
-  if (!keyboardContainerRef.current) return;
-
-  const button = event.currentTarget;
-  const buttonRect = button.getBoundingClientRect();
-  const containerRect = keyboardContainerRef.current.getBoundingClientRect();
-  const variants = [
-    "😀", "😁", "😂", "🤣", "😊",
-    "😍", "😘", "😎", "🤔", "😴",
-    "😢", "😭", "😡", "😱", "👍",
-    "👎", "👏", "🙏", "❤️", "🔥",
-  ];
-
-  const columns = 5;
-  const rows = 4;
-  const keySize = 48;
-  const gap = 6;
-  const padding = 8;
-
-  const estimatedWidth = columns * keySize + (columns - 1) * gap + padding * 2;
-  const estimatedHeight = rows * keySize + (rows - 1) * gap + padding * 2;
-
-  const leftCenter = buttonRect.left - containerRect.left + buttonRect.width / 2;
-  const clampedLeft = Math.min(
-    Math.max(leftCenter, estimatedWidth / 2 + 8),
-    containerRect.width - estimatedWidth / 2 - 8
-  );
-
-  let top = buttonRect.top - containerRect.top - estimatedHeight - 10;
-  if (top < 8) {
-    top = buttonRect.bottom - containerRect.top + 8;
-  }
-
-  setAccentMenu(null);
-  setPunctuationMenu(null);
-  setEmojiMenu((prev) =>
-    prev
-      ? null
-      : {
-          variants,
-          top,
-          left: clampedLeft,
-        }
-  );
-}
-
-
-  function startDeleteHold() {
-    stopDeleteHold();
-    deleteRepeatTimerRef.current = window.setInterval(() => {
-      removeLastCharacter();
-    }, 90);
-  }
-
-  function stopDeleteHold() {
-    if (backspaceHoldTimeoutRef.current) {
-      window.clearTimeout(backspaceHoldTimeoutRef.current);
-      backspaceHoldTimeoutRef.current = null;
-    }
-    if (deleteRepeatTimerRef.current) {
-      window.clearInterval(deleteRepeatTimerRef.current);
-      deleteRepeatTimerRef.current = null;
-    }
-  }
-
-  React.useEffect(() => {
-    function handleGlobalPointerDown(event) {
-      if (!accentMenu && !punctuationMenu && !emojiMenu) return;
-      const target = event.target;
-      if (target && target.closest && target.closest("[data-accent-menu='true']")) {
-        return;
-      }
-      setAccentMenu(null);
-      setPunctuationMenu(null);
-      setEmojiMenu(null);
-    }
-
-    function handleResize() {
-      setAccentMenu(null);
-      setPunctuationMenu(null);
-      setEmojiMenu(null);
-    }
-
-    window.addEventListener("pointerdown", handleGlobalPointerDown);
-    window.addEventListener("resize", handleResize);
-
-    return () => {
-      window.removeEventListener("pointerdown", handleGlobalPointerDown);
-      window.removeEventListener("resize", handleResize);
-      clearLongPressTimer();
-      stopDeleteHold();
-    };
-  }, [accentMenu, punctuationMenu, emojiMenu]);
-
-  const textFontSize = isCompactScreen ? 22 : 28;
-  const textMinHeight = isCompactScreen ? 92 : 116;
-  const suggestionPadding = isCompactScreen ? "6px 10px" : "8px 12px";
-  const suggestionFontSize = isCompactScreen ? 13 : 14;
-  const keyMinHeight = isCompactScreen ? 40 : 48;
-  const keyFontSize = isCompactScreen ? 18 : 22;
-  const keyPadding = isCompactScreen ? "7px 6px" : "9px 6px";
-  const gapSize = isCompactScreen ? 6 : 8;
-  const actionMinHeight = isCompactScreen ? 44 : 52;
-  const displayedRows = keyboardMode === "letters" ? letterRows : symbolRows;
-
-  function renderKeyLabel(item) {
-    if (keyboardMode === "letters" && item === "Maj") {
-      return isShiftActive ? "Maj ON" : "Maj";
-    }
-    if (
-      keyboardMode === "letters" &&
-      isShiftActive &&
-      item.length === 1 &&
-      /[a-z]/i.test(item)
-    ) {
-      return item.toUpperCase();
-    }
-    return item;
-  }
-
-  function handleKeyPress(item) {
-    if (keyboardMode === "letters" && item === "Maj") {
-      setIsShiftActive((prev) => !prev);
-      focusTextArea();
-      return;
-    }
-
-    if (item === "⌫") {
-      removeLastCharacter();
-      return;
-    }
-
-    if (
-      (keyboardMode === "letters" && item === "123#+") ||
-      (keyboardMode === "symbols" && item === "ABC")
-    ) {
-      toggleKeyboardMode();
-      return;
-    }
-
-    addCharacter(item);
-  }
-
-  function getInteractiveKeyStyle(baseStyle, keyId) {
-    const isPressed = pressedKey === keyId;
-    const isHovered = hoveredKey === keyId;
-
-    return {
-      ...baseStyle,
-      transition:
-        "background 0.12s ease, border-color 0.12s ease, transform 0.06s ease, box-shadow 0.12s ease",
-      background: isPressed
-        ? "linear-gradient(180deg, #1d4ed8 0%, #1e40af 100%)"
-        : isHovered
-        ? "rgba(59,130,246,0.24)"
-        : baseStyle.background,
-      borderColor: isPressed
-        ? "rgba(147,197,253,0.95)"
-        : isHovered
-        ? "rgba(96,165,250,0.85)"
-        : baseStyle.borderColor,
-      boxShadow: isPressed
-        ? "inset 0 2px 6px rgba(0,0,0,0.28), 0 0 0 1px rgba(147,197,253,0.22)"
-        : isHovered
-        ? "0 0 0 1px rgba(96,165,250,0.16)"
-        : baseStyle.boxShadow,
-      transform: isPressed ? "scale(0.985)" : "scale(1)",
-    };
-  }
-
-  return (
-    <div
-      ref={keyboardContainerRef}
-      style={{ display: "grid", gap: gapSize, position: "relative", overflow: "visible" }}
-    >
-      <textarea
-        ref={textAreaRef}
-        value={text}
-        onChange={handleTextAreaChange}
-        onKeyUp={handleTextAreaKeyUp}
-        placeholder="Écrire ici..."
-        style={{
-          width: "100%",
-          minHeight: textMinHeight,
-          maxHeight: isCompactScreen ? 128 : 160,
-          resize: "vertical",
-          overflowY: "auto",
-          padding: isCompactScreen ? 12 : 16,
-          borderRadius: 18,
-          background: "rgba(255,255,255,0.04)",
-          border: "1px solid rgba(255,255,255,0.08)",
-          fontSize: textFontSize,
-          lineHeight: 1.3,
-          color: "#ffffff",
-          outline: "none",
-          boxSizing: "border-box",
-        }}
-      />
-
-
-      {accentMenu ? (
-        <div
-          data-accent-menu="true"
-          style={{
-            position: "absolute",
-            top: accentMenu.top,
-            left: accentMenu.left,
-            transform: "translateX(-50%)",
-            zIndex: 50,
-            display: "grid",
-            gridTemplateColumns: `repeat(${Math.min(4, accentMenu.variants.length)}, 48px)`,
-            gap: 6,
-            padding: 8,
-            borderRadius: 16,
-            background: "rgba(8,15,35,0.98)",
-            border: "1px solid rgba(59,130,246,0.5)",
-            boxShadow: "0 10px 30px rgba(0,0,0,0.35)",
-            maxWidth: "calc(100% - 16px)",
-          }}
-        >
-          {accentMenu.variants.map((variant) => {
-            const keyId = `accent-${variant}`;
-            return (
-              <button
-                key={variant}
-                type="button"
-                onMouseEnter={() => setHoveredKey(keyId)}
-                onMouseLeave={() => {
-                  setHoveredKey((prev) => (prev === keyId ? null : prev));
-                  setPressedKey((prev) => (prev === keyId ? null : prev));
-                }}
-                onMouseDown={(event) => {
-                  event.preventDefault();
-                  setPressedKey(keyId);
-                }}
-                onMouseUp={() => {
-                  setPressedKey((prev) => (prev === keyId ? null : prev));
-                }}
-                onClick={() => {
-                  insertAtCursor(variant);
-                  setAccentMenu(null);
-                }}
-                style={getInteractiveKeyStyle(
-                  {
-                    ...styles.secondaryButton,
-                    minWidth: 48,
-                    minHeight: 48,
-                    padding: "8px 10px",
-                    fontSize: 22,
-                    fontWeight: 800,
-                  },
-                  keyId
-                )}
-              >
-                {variant}
-              </button>
-            );
-          })}
-        </div>
-      ) : null}
-
-{emojiMenu ? (
-  <div
-    data-accent-menu="true"
-    style={{
-      position: "absolute",
-      top: emojiMenu.top,
-      left: emojiMenu.left,
-      transform: "translateX(-50%)",
-      zIndex: 50,
-      display: "grid",
-      gridTemplateColumns: "repeat(5, 48px)",
-      gridTemplateRows: "repeat(4, 48px)",
-      gap: 6,
-      padding: 8,
-      borderRadius: 16,
-      background: "rgba(8,15,35,0.98)",
-      border: "1px solid rgba(59,130,246,0.5)",
-      boxShadow: "0 10px 30px rgba(0,0,0,0.35)",
-      width: 292,
-      maxWidth: "calc(100% - 16px)",
-      overflow: "hidden",
-      boxSizing: "border-box",
-    }}
-  >
-    {emojiMenu.variants.map((variant) => {
-      const keyId = `emoji-${variant}`;
-      return (
-        <button
-          key={variant}
-          type="button"
-          onMouseEnter={() => setHoveredKey(keyId)}
-          onMouseLeave={() => {
-            setHoveredKey((prev) => (prev === keyId ? null : prev));
-            setPressedKey((prev) => (prev === keyId ? null : prev));
-          }}
-          onMouseDown={(event) => {
-            event.preventDefault();
-            setPressedKey(keyId);
-          }}
-          onMouseUp={() => {
-            setPressedKey((prev) => (prev === keyId ? null : prev));
-          }}
-          onClick={() => {
-            insertAtCursor(variant);
-            setEmojiMenu(null);
-          }}
-          style={getInteractiveKeyStyle(
-            {
-              ...styles.secondaryButton,
-              width: 48,
-              minWidth: 48,
-              height: 48,
-              minHeight: 48,
-              padding: 0,
-              fontSize: 22,
-              fontWeight: 800,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            },
-            keyId
-          )}
-        >
-          {variant}
-        </button>
-      );
-    })}
-  </div>
-) : null}
-
-      {punctuationMenu ? (
-        <div
-          data-accent-menu="true"
-          style={{
-            position: "absolute",
-            top: punctuationMenu.top,
-            left: punctuationMenu.left,
-            transform: "translateX(-50%)",
-            zIndex: 50,
-            display: "grid",
-            gridTemplateColumns: `repeat(${Math.min(4, punctuationMenu.variants.length)}, 48px)`,
-            gap: 6,
-            padding: 8,
-            borderRadius: 16,
-            background: "rgba(8,15,35,0.98)",
-            border: "1px solid rgba(59,130,246,0.5)",
-            boxShadow: "0 10px 30px rgba(0,0,0,0.35)",
-            maxWidth: "calc(100% - 16px)",
-          }}
-        >
-          {punctuationMenu.variants.map((variant) => {
-            const keyId = `punct-${variant}`;
-            return (
-              <button
-                key={variant}
-                type="button"
-                onMouseEnter={() => setHoveredKey(keyId)}
-                onMouseLeave={() => {
-                  setHoveredKey((prev) => (prev === keyId ? null : prev));
-                  setPressedKey((prev) => (prev === keyId ? null : prev));
-                }}
-                onMouseDown={(event) => {
-                  event.preventDefault();
-                  setPressedKey(keyId);
-                }}
-                onMouseUp={() => {
-                  setPressedKey((prev) => (prev === keyId ? null : prev));
-                }}
-                onClick={() => {
-                  insertAtCursor(variant);
-                  setPunctuationMenu(null);
-                }}
-                style={getInteractiveKeyStyle(
-                  {
-                    ...styles.secondaryButton,
-                    minWidth: 48,
-                    minHeight: 48,
-                    padding: "8px 10px",
-                    fontSize: 22,
-                    fontWeight: 800,
-                  },
-                  keyId
-                )}
-              >
-                {variant}
-              </button>
-            );
-          })}
-        </div>
-      ) : null}
-
-      <div style={{ display: "grid", gap: gapSize }}>
-        {displayedRows.map((row, rowIndex) => (
-          <div
-            key={rowIndex}
-            style={{
-              display: "grid",
-              gridTemplateColumns: `repeat(${row.length}, minmax(0, 1fr))`,
-              gap: gapSize,
-            }}
-          >
-            {row.map((item, itemIndex) => {
-              const isAccentable =
-                keyboardMode === "letters" && Boolean(ACCENT_OPTIONS[item]);
-              const keyId = `key-${keyboardMode}-${rowIndex}-${itemIndex}-${item}`;
-
-              return (
-                <button
-                  key={`${item}-${itemIndex}`}
-                  type="button"
-                  onMouseEnter={() => setHoveredKey(keyId)}
-                  onMouseLeave={() => {
-                    setHoveredKey((prev) => (prev === keyId ? null : prev));
-                    setPressedKey((prev) => (prev === keyId ? null : prev));
-                    clearLongPressTimer();
-                    stopDeleteHold();
-                  }}
-                  onMouseDown={(event) => {
-                    event.preventDefault();
-                    setPressedKey(keyId);
-                    if (item === "⌫") {
-                      backspaceHoldTimeoutRef.current = window.setTimeout(() => {
-                        startDeleteHold();
-                      }, 350);
-                    }
-                    if (isAccentable) {
-                      startLongPress(item, event);
-                    }
-                  }}
-                  onMouseUp={(event) => {
-                    event.preventDefault();
-                    const wasDeleting = item === "⌫" && Boolean(deleteRepeatTimerRef.current);
-                    stopDeleteHold();
-                    setPressedKey((prev) => (prev === keyId ? null : prev));
-                    const wasLongPress = isAccentable ? stopLongPress() : false;
-                    if (wasLongPress || wasDeleting) return;
-                    handleKeyPress(item);
-                  }}
-                  onTouchStart={(event) => {
-                    setPressedKey(keyId);
-                    if (item === "⌫") {
-                      backspaceHoldTimeoutRef.current = window.setTimeout(() => {
-                        startDeleteHold();
-                      }, 350);
-                    }
-                    if (isAccentable) {
-                      startLongPress(item, event);
-                    }
-                  }}
-                  onTouchEnd={(event) => {
-                    event.preventDefault();
-                    const wasDeleting = item === "⌫" && Boolean(deleteRepeatTimerRef.current);
-                    stopDeleteHold();
-                    setPressedKey((prev) => (prev === keyId ? null : prev));
-                    const wasLongPress = isAccentable ? stopLongPress() : false;
-                    if (wasLongPress || wasDeleting) return;
-                    handleKeyPress(item);
-                  }}
-                  style={getInteractiveKeyStyle(
-                    {
-                      ...styles.secondaryButton,
-                      minHeight: keyMinHeight,
-                      fontSize: keyFontSize,
-                      fontWeight: 800,
-                      padding: keyPadding,
-                    },
-                    keyId
-                  )}
-                >
-                  {renderKeyLabel(item)}
-                </button>
-              );
-            })}
-          </div>
-        ))}
-      </div>
-
-<div
-  style={{
-    display: "grid",
-    gridTemplateColumns: "auto 1fr auto auto auto",
-    gap: gapSize,
-  }}
->
-  <button
-    type="button"
-    onMouseEnter={() => setHoveredKey("emoji")}
-    onMouseLeave={() => {
-      setHoveredKey((prev) => (prev === "emoji" ? null : prev));
-      setPressedKey((prev) => (prev === "emoji" ? null : prev));
-    }}
-    onMouseDown={(event) => {
-      event.preventDefault();
-      setPressedKey("emoji");
-    }}
-    onMouseUp={() => {
-      setPressedKey((prev) => (prev === "emoji" ? null : prev));
-    }}
-    onClick={toggleEmojiMenu}
-    style={getInteractiveKeyStyle(
-      {
-        ...styles.secondaryButton,
-        minHeight: actionMinHeight,
-        padding: "8px 16px",
-        fontSize: 18,
-        fontWeight: 800,
-      },
-      "emoji"
-    )}
-  >
-    😀
-  </button>
-
-  <button
-    type="button"
-    onMouseEnter={() => setHoveredKey("space")}
-    onMouseLeave={() => {
-      setHoveredKey((prev) => (prev === "space" ? null : prev));
-      setPressedKey((prev) => (prev === "space" ? null : prev));
-    }}
-    onMouseDown={(event) => {
-      event.preventDefault();
-      setPressedKey("space");
-    }}
-    onMouseUp={() => {
-      setPressedKey((prev) => (prev === "space" ? null : prev));
-    }}
-    onClick={addSpace}
-    style={getInteractiveKeyStyle(
-      {
-        ...styles.primaryButton,
-        minHeight: actionMinHeight,
-        padding: isCompactScreen ? "8px 10px" : undefined,
-      },
-      "space"
-    )}
-  >
-    Espace
-  </button>
-
-  <button
-    type="button"
-    onMouseEnter={() => setHoveredKey("enter")}
-    onMouseLeave={() => {
-      setHoveredKey((prev) => (prev === "enter" ? null : prev));
-      setPressedKey((prev) => (prev === "enter" ? null : prev));
-    }}
-    onMouseDown={(event) => {
-      event.preventDefault();
-      setPressedKey("enter");
-    }}
-    onMouseUp={() => {
-      setPressedKey((prev) => (prev === "enter" ? null : prev));
-    }}
-    onClick={() => insertAtCursor("\n")}
-    style={getInteractiveKeyStyle(
-      {
-        ...styles.primaryButton,
-        minHeight: actionMinHeight,
-        padding: "8px 16px",
-        fontSize: 18,
-        fontWeight: 800,
-      },
-      "enter"
-    )}
-  >
-    ↵ Entrée
-  </button>
-
-  <button
-    type="button"
-    onMouseEnter={() => setHoveredKey("apostrophe")}
-    onMouseLeave={() => {
-      setHoveredKey((prev) => (prev === "apostrophe" ? null : prev));
-      setPressedKey((prev) => (prev === "apostrophe" ? null : prev));
-      clearLongPressTimer();
-    }}
-    onMouseDown={(event) => {
-      event.preventDefault();
-      setPressedKey("apostrophe");
-      startApostropheLongPress(event);
-    }}
-    onMouseUp={(event) => {
-      event.preventDefault();
-      setPressedKey((prev) => (prev === "apostrophe" ? null : prev));
-      const wasLongPress = stopLongPress();
-      if (wasLongPress) return;
-      insertAtCursor("'");
-    }}
-    style={getInteractiveKeyStyle(
-      {
-        ...styles.secondaryButton,
-        minHeight: actionMinHeight,
-        padding: "8px 16px",
-        fontSize: 18,
-        fontWeight: 800,
-      },
-      "apostrophe"
-    )}
-  >
-    '
-  </button>
-
-  <button
-    type="button"
-    onMouseEnter={() => setHoveredKey("dot")}
-    onMouseLeave={() => {
-      setHoveredKey((prev) => (prev === "dot" ? null : prev));
-      setPressedKey((prev) => (prev === "dot" ? null : prev));
-      clearLongPressTimer();
-    }}
-    onMouseDown={(event) => {
-      event.preventDefault();
-      setPressedKey("dot");
-      startPunctuationLongPress(event);
-    }}
-    onMouseUp={(event) => {
-      event.preventDefault();
-      setPressedKey((prev) => (prev === "dot" ? null : prev));
-      const wasLongPress = stopLongPress();
-      if (wasLongPress) return;
-      insertAtCursor(".");
-    }}
-    style={getInteractiveKeyStyle(
-      {
-        ...styles.secondaryButton,
-        minHeight: actionMinHeight,
-        padding: "8px 16px",
-        fontSize: 18,
-        fontWeight: 800,
-      },
-      "dot"
-    )}
-  >
-    .
-  </button>
-</div>
-
-<div
-  style={{
-    display: "grid",
-    gridTemplateColumns: "1fr 1fr 1fr",
-          gap: gapSize,
-        }}
-      >
-        <button
-          type="button"
-          onMouseEnter={() => setHoveredKey("clear")}
-          onMouseLeave={() => {
-            setHoveredKey((prev) => (prev === "clear" ? null : prev));
-            setPressedKey((prev) => (prev === "clear" ? null : prev));
-          }}
-          onMouseDown={(event) => {
-            event.preventDefault();
-            setPressedKey("clear");
-          }}
-          onMouseUp={() => {
-            setPressedKey((prev) => (prev === "clear" ? null : prev));
-          }}
-          onClick={clearAll}
-          style={getInteractiveKeyStyle(
-            {
-              ...styles.deleteButton,
-              minHeight: actionMinHeight,
-              padding: isCompactScreen ? "8px 10px" : undefined,
-            },
-            "clear"
-          )}
-        >
-          Effacer
-        </button>
-        <button
-          type="button"
-          onMouseEnter={() => setHoveredKey("listen")}
-          onMouseLeave={() => {
-            setHoveredKey((prev) => (prev === "listen" ? null : prev));
-            setPressedKey((prev) => (prev === "listen" ? null : prev));
-          }}
-          onMouseDown={(event) => {
-            event.preventDefault();
-            setPressedKey("listen");
-          }}
-          onMouseUp={() => {
-            setPressedKey((prev) => (prev === "listen" ? null : prev));
-          }}
-          onClick={() => speakText(text)}
-          disabled={!String(text || "").trim()}
-          style={getInteractiveKeyStyle(
-            {
-              ...styles.primaryButton,
-              minHeight: actionMinHeight,
-              padding: isCompactScreen ? "8px 10px" : undefined,
-            },
-            "listen"
-          )}
-        >
-          ▶️ Écouter
-        </button>
-        <button
-          type="button"
-          onMouseEnter={() => setHoveredKey("stop")}
-          onMouseLeave={() => {
-            setHoveredKey((prev) => (prev === "stop" ? null : prev));
-            setPressedKey((prev) => (prev === "stop" ? null : prev));
-          }}
-          onMouseDown={(event) => {
-            event.preventDefault();
-            setPressedKey("stop");
-          }}
-          onMouseUp={() => {
-            setPressedKey((prev) => (prev === "stop" ? null : prev));
-          }}
-          onClick={stopSpeaking}
-          style={getInteractiveKeyStyle(
-            {
-              ...styles.secondaryButton,
-              minHeight: actionMinHeight,
-              padding: isCompactScreen ? "8px 10px" : undefined,
-            },
-            "stop"
-          )}
-        >
-          ⏹️ Stop voix
-        </button>
-      </div>
-    </div>
-  );
-}
-
 
 export default function ProfileSettingsPage(props: any) {
   const {
@@ -1186,6 +27,18 @@ export default function ProfileSettingsPage(props: any) {
     exportAllProfiles,
     importAllProfiles,
     fileInputRef,
+    privacyStatus,
+    enablePrivacyPassword,
+    unlockPrivateData,
+    lockPrivateData,
+    caregiverAlertLinks = [],
+    addCaregiverAlertLink,
+    updateCaregiverAlertLink,
+    deleteCaregiverAlertLink,
+    copyCaregiverAlertLink,
+    selectedCaregiverAlertLinkId = "",
+    selectCaregiverAlertTarget,
+    openNoticeSection,
     text,
     setText,
     isListening,
@@ -1210,32 +63,76 @@ export default function ProfileSettingsPage(props: any) {
     addEmergencyContact,
     updateEmergencyContact,
     deleteEmergencyContact,
-    aiGeneratedText,
-    aiLoading,
-    aiError,
-    aiUsage,
-    aiStatusLoading,
-    generateTextWithAI,
-    setAiGeneratedText,
-    goToCreditsPage,
     selectedSmsContactId,
     setSelectedSmsContactId,
   } = props;
   const [showDeleteConfirm, setShowDeleteConfirm] = React.useState(false);
-  const [inputMode, setInputMode] = React.useState("standard");
-  const [autoAiEnabled, setAutoAiEnabled] = React.useState(true);
-  const [tone, setTone] = React.useState("naturel");
-  const [audience, setAudience] = React.useState("général");
   const [isPhraseBrowserOpen, setIsPhraseBrowserOpen] = React.useState(false);
   const [phraseBrowserCategory, setPhraseBrowserCategory] = React.useState("");
   const phraseBrowserRef = React.useRef(null);
   const standardTextAreaRef = React.useRef<HTMLTextAreaElement | null>(null);
-  const lastAutoAiPromptRef = React.useRef("");
 
   const [sendMode, setSendMode] = React.useState("sms");
   const [selectedSendContactId, setSelectedSendContactId] = React.useState(
     emergencyContacts?.[0]?.id || ""
   );
+  const [privacyPassword, setPrivacyPassword] = React.useState("");
+  const [privacyPasswordConfirm, setPrivacyPasswordConfirm] = React.useState("");
+  const [privacyUnlockPassword, setPrivacyUnlockPassword] = React.useState("");
+  const [privacyActionMessage, setPrivacyActionMessage] = React.useState("");
+  const [privacyActionLoading, setPrivacyActionLoading] = React.useState(false);
+  const availableCaregiverAlertLinks = React.useMemo(
+    () => (caregiverAlertLinks || []).filter((link) => link.enabled),
+    [caregiverAlertLinks]
+  );
+  const selectedCaregiverAlertLink =
+    availableCaregiverAlertLinks.find(
+      (link) => link.id === selectedCaregiverAlertLinkId
+    ) ||
+    availableCaregiverAlertLinks[0] ||
+    null;
+
+  async function handleEnablePrivacyPassword() {
+    try {
+      setPrivacyActionLoading(true);
+      setPrivacyActionMessage("");
+
+      if (privacyPassword !== privacyPasswordConfirm) {
+        throw new Error("Les deux mots de passe ne correspondent pas.");
+      }
+
+      await enablePrivacyPassword?.(privacyPassword);
+      setPrivacyPassword("");
+      setPrivacyPasswordConfirm("");
+      setPrivacyActionMessage("Verrou par mot de passe activé.");
+    } catch (error) {
+      setPrivacyActionMessage(
+        error instanceof Error
+          ? error.message
+          : "Impossible d'activer le verrou."
+      );
+    } finally {
+      setPrivacyActionLoading(false);
+    }
+  }
+
+  async function handleUnlockPrivateData() {
+    try {
+      setPrivacyActionLoading(true);
+      setPrivacyActionMessage("");
+      await unlockPrivateData?.(privacyUnlockPassword);
+      setPrivacyUnlockPassword("");
+      setPrivacyActionMessage("Données médicales déverrouillées.");
+    } catch (error) {
+      setPrivacyActionMessage(
+        error instanceof Error
+          ? "Mot de passe incorrect ou coffre illisible."
+          : "Impossible de déverrouiller les données."
+      );
+    } finally {
+      setPrivacyActionLoading(false);
+    }
+  }
 
   function getContactUsage(contact) {
     return contact?.usage || "contact";
@@ -1328,48 +225,6 @@ export default function ProfileSettingsPage(props: any) {
 
     return { start, end };
   }
-
-  React.useEffect(() => {
-    const timeout = window.setTimeout(async () => {
-      if (!autoAiEnabled) return;
-      if (aiUsage?.blocked) return;
-      if (!text.trim()) return;
-      if (aiLoading) return;
-
-      const result = await generateTextWithAI();
-      if (result && result !== text) {
-        setText(formatTextSmart(result));
-      }
-    }, 300);
-
-    return () => window.clearTimeout(timeout);
-  }, [text, autoAiEnabled, aiUsage?.blocked, aiLoading, generateTextWithAI, setText]);
-
-  const aiAssist = React.useMemo(() => {
-    const currentValue = normalizeTextFormatting(String(text || "")).trim();
-    const generatedValue = normalizeTextFormatting(String(aiGeneratedText || "")).trim();
-
-    if (!generatedValue) {
-      return {
-        correction: "",
-        completion: "",
-        hasDifferentCorrection: false,
-      };
-    }
-
-    const lowerCurrent = currentValue.toLowerCase();
-    const lowerGenerated = generatedValue.toLowerCase();
-    const completion =
-      lowerCurrent && lowerGenerated.startsWith(lowerCurrent)
-        ? generatedValue.slice(currentValue.length).trimStart()
-        : "";
-
-    return {
-      correction: generatedValue,
-      completion,
-      hasDifferentCorrection: generatedValue !== currentValue,
-    };
-  }, [text, aiGeneratedText]);
 
   const activeProfile = React.useMemo(() => {
     return (
@@ -1530,7 +385,7 @@ export default function ProfileSettingsPage(props: any) {
       return;
     }
 
-    const message = (aiGeneratedText || text || "").trim();
+    const message = (text || "").trim();
 
     if (!message) {
       window.alert("Aucun message à envoyer.");
@@ -1574,6 +429,57 @@ export default function ProfileSettingsPage(props: any) {
     const compactCard = createCompactCardStyle(styles.card, {
       marginBottom: 20,
     });
+
+    if (privacyStatus?.passwordProtected && privacyStatus?.locked) {
+      return (
+        <div style={styles.gridSingle}>
+          <div style={compactCard}>
+            <h2 style={styles.sectionTitle}>Données médicales verrouillées</h2>
+
+            <div style={{ ...styles.infoBox, marginBottom: 14, lineHeight: 1.55 }}>
+              Les informations médicales, d'identité et le code PIN de ce profil
+              sont protégés par un mot de passe local. Le mot de passe n'est pas
+              stocké.
+            </div>
+
+            <div style={{ display: "grid", gap: 12, maxWidth: 520 }}>
+              <label style={styles.label}>Mot de passe local</label>
+              <input
+                type="password"
+                value={privacyUnlockPassword}
+                onChange={(e) => setPrivacyUnlockPassword(e.target.value)}
+                style={styles.input}
+                placeholder="Déverrouiller les données médicales"
+              />
+
+              <button
+                type="button"
+                style={styles.primaryButton}
+                onClick={handleUnlockPrivateData}
+                disabled={privacyActionLoading || !privacyUnlockPassword}
+              >
+                {privacyActionLoading ? "Déverrouillage..." : "Déverrouiller"}
+              </button>
+
+              {privacyActionMessage ? (
+                <div
+                  style={{
+                    ...styles.infoBox,
+                    color:
+                      privacyActionMessage.toLowerCase().includes("incorrect") ||
+                      privacyActionMessage.toLowerCase().includes("impossible")
+                        ? "#fecaca"
+                        : undefined,
+                  }}
+                >
+                  {privacyActionMessage}
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      );
+    }
 
     return (
       <>
@@ -2219,6 +1125,259 @@ export default function ProfileSettingsPage(props: any) {
         </div>
 
         <div style={compactCard}>
+          <h2 style={styles.sectionTitle}>Protection par code PIN</h2>
+
+          <div style={styles.formGroup}>
+            <label style={styles.label}>Activer la protection des onglets Infos et Profil</label>
+            <label
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                fontSize: 15,
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={Boolean((currentProfile as any)?.pinProtection?.enabled)}
+                onChange={(e) =>
+                  updateCurrentProfileField("pinProtection", {
+                    enabled: e.target.checked,
+                    pin: (currentProfile as any)?.pinProtection?.pin || "",
+                  })
+                }
+              />
+              Protéger l'accès avec un code PIN
+            </label>
+          </div>
+
+          {Boolean((currentProfile as any)?.pinProtection?.enabled) ? (
+            <>
+              <div style={styles.formGroup}>
+                <label style={styles.label}>Code PIN (4 chiffres)</label>
+                <input
+                  type="password"
+                  inputMode="numeric"
+                  maxLength={4}
+                  value={(currentProfile as any)?.pinProtection?.pin || ""}
+                  onChange={(e) => {
+                    const nextPin = e.target.value.replace(/\D/g, "").slice(0, 4);
+                    updateCurrentProfileField("pinProtection", {
+                      enabled: true,
+                      pin: nextPin,
+                    });
+                  }}
+                  style={styles.input}
+                  placeholder="0000"
+                />
+              </div>
+
+              <div
+                style={{
+                  fontSize: 14,
+                  color: "rgba(255,255,255,0.7)",
+                  lineHeight: 1.5,
+                }}
+              >
+                Ce code sera demandé avant d’ouvrir <strong>Infos</strong> et <strong>Profil</strong>.
+              </div>
+            </>
+          ) : null}
+        </div>
+
+        <div style={compactCard}>
+          <h2 style={styles.sectionTitle}>Téléphone aidant</h2>
+
+          <div style={{ ...styles.infoBox, marginBottom: 14, lineHeight: 1.55 }}>
+            <strong style={{ display: "block", marginBottom: 6 }}>
+              À quoi ça sert ?
+            </strong>
+            Crée un lien par aidant, puis coche ceux qui doivent être
+            disponibles dans le choix <strong>Appel aidant</strong>. Avant
+            d'appuyer sur la cloche, choisis l'aidant qui doit recevoir
+            l'alarme.
+          </div>
+
+          {availableCaregiverAlertLinks.length > 0 ? (
+            <div style={{ ...styles.formGroup, marginBottom: 14 }}>
+              <label style={styles.label}>Aidant appelé par la cloche</label>
+              <select
+                value={selectedCaregiverAlertLink?.id || ""}
+                onChange={(event) =>
+                  selectCaregiverAlertTarget?.(event.target.value)
+                }
+                disabled={availableCaregiverAlertLinks.length <= 1}
+                style={styles.input}
+              >
+                {availableCaregiverAlertLinks.map((link) => (
+                  <option key={link.id} value={link.id}>
+                    {link.name || "Aidant"}
+                  </option>
+                ))}
+              </select>
+              <div
+                style={{
+                  ...styles.infoBox,
+                  marginTop: 10,
+                  fontSize: 14,
+                  lineHeight: 1.4,
+                }}
+              >
+                Le bouton Appel aidant enverra l'alarme uniquement à cet
+                aidant.
+              </div>
+            </div>
+          ) : null}
+
+          <div style={{ display: "grid", gap: 14 }}>
+            {caregiverAlertLinks.map((link, index) => (
+              <div
+                key={link.id}
+                style={{
+                  borderTop:
+                    index === 0 ? "none" : "1px solid rgba(148, 163, 184, 0.25)",
+                  paddingTop: index === 0 ? 0 : 14,
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 10,
+                    flexWrap: "wrap",
+                    marginBottom: 10,
+                  }}
+                >
+                  <label style={{ ...styles.label, margin: 0 }}>
+                    Aidant {index + 1}
+                  </label>
+
+                  <label
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 8,
+                      fontWeight: 700,
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={Boolean(link.enabled)}
+                      onChange={(e) =>
+                        updateCaregiverAlertLink?.(link.id, {
+                          enabled: e.target.checked,
+                        })
+                      }
+                    />
+                    Disponible pour Appel aidant
+                  </label>
+                </div>
+
+                <div style={styles.formGroup}>
+                  <label style={styles.label}>Nom de l'aidant</label>
+                  <input
+                    value={link.name || ""}
+                    onChange={(e) =>
+                      updateCaregiverAlertLink?.(link.id, {
+                        name: e.target.value,
+                      })
+                    }
+                    style={styles.input}
+                    placeholder={`Aidant ${index + 1}`}
+                  />
+                </div>
+
+                <div style={styles.formGroup}>
+                  <label style={styles.label}>Lien d'alarme</label>
+                  <input
+                    readOnly
+                    value={link.alertLink || ""}
+                    style={styles.input}
+                  />
+                </div>
+
+                <div style={styles.inlineButtons}>
+                  <button
+                    type="button"
+                    style={styles.secondaryButton}
+                    onClick={() => copyCaregiverAlertLink?.(link.id)}
+                  >
+                    Copier le lien
+                  </button>
+
+                  {link.alertLink ? (
+                    <a
+                      href={link.alertLink}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{
+                        ...styles.secondaryButton,
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        textDecoration: "none",
+                      }}
+                    >
+                      Ouvrir le mode aidant
+                    </a>
+                  ) : null}
+
+                  {link.appLink ? (
+                    <a
+                      href={link.appLink}
+                      style={{
+                        ...styles.secondaryButton,
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        textDecoration: "none",
+                      }}
+                    >
+                      Ouvrir l'application aidant
+                    </a>
+                  ) : null}
+
+                  <button
+                    type="button"
+                    style={{
+                      ...styles.secondaryButton,
+                      opacity: caregiverAlertLinks.length <= 1 ? 0.55 : 1,
+                      cursor:
+                        caregiverAlertLinks.length <= 1
+                          ? "not-allowed"
+                          : "pointer",
+                    }}
+                    disabled={caregiverAlertLinks.length <= 1}
+                    onClick={() => deleteCaregiverAlertLink?.(link.id)}
+                  >
+                    Supprimer
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ ...styles.inlineButtons, marginTop: 14 }}>
+            <button
+              type="button"
+              style={styles.primaryButton}
+              onClick={addCaregiverAlertLink}
+            >
+              Ajouter un aidant
+            </button>
+
+            <button
+              type="button"
+              style={styles.secondaryButton}
+              onClick={() => openNoticeSection?.("aidant")}
+            >
+              Aide
+            </button>
+          </div>
+        </div>
+
+        <div style={compactCard}>
           <h2 style={styles.sectionTitle}>Profils</h2>
 
           <div style={styles.formGroup}>
@@ -2264,6 +1423,122 @@ export default function ProfileSettingsPage(props: any) {
 
           <div style={styles.categoryManagerBox}>
             <h3 style={styles.managerTitle}>Sauvegarde</h3>
+
+            <div
+              style={{
+                ...styles.infoBox,
+                marginBottom: 14,
+                lineHeight: 1.55,
+              }}
+            >
+              <strong>Confidentialité locale</strong>
+              <br />
+              {!privacyStatus?.privateDataLoaded
+                ? "Chargement des données médicales protégées..."
+                : privacyStatus?.passwordProtected
+                ? "Les données médicales sont verrouillées par un mot de passe local non stocké."
+                : privacyStatus?.protectedAtRest
+                ? "Les données médicales, d'identité et le code PIN sont chiffrés dans le stockage local de cet appareil."
+                : "Les données sont enregistrées localement, mais le chiffrement du navigateur n'est pas disponible."}
+              {privacyStatus?.error ? (
+                <div style={{ marginTop: 8, color: "#fecaca", fontWeight: 700 }}>
+                  {privacyStatus.error}
+                </div>
+              ) : null}
+              <div style={{ marginTop: 8, opacity: 0.78 }}>
+                Les exports JSON restent lisibles et doivent être partagés avec prudence.
+              </div>
+              {privacyStatus?.passwordProtected ? (
+                <div style={{ marginTop: 8, opacity: 0.78 }}>
+                  Si le mot de passe est perdu, les données médicales locales ne pourront pas être récupérées.
+                </div>
+              ) : null}
+            </div>
+
+            {privacyStatus?.passwordProtected && privacyStatus?.locked ? (
+              <div style={{ display: "grid", gap: 10, marginBottom: 14 }}>
+                <label style={styles.label}>Mot de passe local</label>
+                <input
+                  type="password"
+                  value={privacyUnlockPassword}
+                  onChange={(e) => setPrivacyUnlockPassword(e.target.value)}
+                  style={styles.input}
+                  placeholder="Déverrouiller les données médicales"
+                />
+                <button
+                  type="button"
+                  style={styles.primaryButton}
+                  onClick={handleUnlockPrivateData}
+                  disabled={privacyActionLoading || !privacyUnlockPassword}
+                >
+                  {privacyActionLoading ? "Déverrouillage..." : "Déverrouiller"}
+                </button>
+              </div>
+            ) : null}
+
+            {!privacyStatus?.passwordProtected && privacyStatus?.privateDataLoaded ? (
+              <div style={{ display: "grid", gap: 10, marginBottom: 14 }}>
+                <label style={styles.label}>Ajouter un mot de passe local</label>
+                <input
+                  type="password"
+                  value={privacyPassword}
+                  onChange={(e) => setPrivacyPassword(e.target.value)}
+                  style={styles.input}
+                  placeholder="Minimum 8 caractères"
+                />
+                <input
+                  type="password"
+                  value={privacyPasswordConfirm}
+                  onChange={(e) => setPrivacyPasswordConfirm(e.target.value)}
+                  style={styles.input}
+                  placeholder="Confirmer le mot de passe"
+                />
+                <button
+                  type="button"
+                  style={styles.primaryButton}
+                  onClick={handleEnablePrivacyPassword}
+                  disabled={
+                    privacyActionLoading ||
+                    !privacyPassword ||
+                    !privacyPasswordConfirm
+                  }
+                >
+                  {privacyActionLoading ? "Activation..." : "Activer le verrou"}
+                </button>
+              </div>
+            ) : null}
+
+            {privacyStatus?.passwordProtected && privacyStatus?.privateDataLoaded ? (
+              <div style={{ marginBottom: 14 }}>
+                <button
+                  type="button"
+                  style={styles.secondaryButton}
+                  onClick={() => {
+                    lockPrivateData?.();
+                    setPrivacyActionMessage("Données médicales verrouillées.");
+                  }}
+                >
+                  Verrouiller maintenant
+                </button>
+              </div>
+            ) : null}
+
+            {privacyActionMessage ? (
+              <div
+                style={{
+                  ...styles.infoBox,
+                  marginBottom: 14,
+                  color:
+                    privacyActionMessage.toLowerCase().includes("impossible") ||
+                    privacyActionMessage.toLowerCase().includes("incorrect") ||
+                    privacyActionMessage.toLowerCase().includes("correspondent")
+                      ? "#fecaca"
+                      : undefined,
+                }}
+              >
+                {privacyActionMessage}
+              </div>
+            ) : null}
 
             <div style={styles.inlineButtons}>
               <button
@@ -2334,7 +1609,7 @@ export default function ProfileSettingsPage(props: any) {
                   marginBottom: 20,
                 }}
               >
-                Cette action est irréversible. Les informations de ce profil seront supprimées, mais les crédits solidaires resteront disponibles pour les autres profils.
+                Cette action est irréversible. Les informations de ce profil seront supprimées.
               </p>
 
               <div
@@ -2377,143 +1652,6 @@ if (page === "reglages") {
           <div style={styles.formGroup}>
             <div
               style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                gap: 12,
-                flexWrap: "wrap",
-                marginBottom: 12,
-              }}
-            >
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns:
-                    window.innerWidth > 980 ? "minmax(0, 1fr)" : "1fr",
-                  gap: 12,
-                  minWidth: 0,
-                  flex: 1,
-                }}
-              >
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns:
-                      window.innerWidth > 980 ? "minmax(0, 1fr) auto" : "1fr",
-                    gridTemplateRows:
-                      window.innerWidth > 980 ? "auto auto" : "auto auto auto",
-                    alignItems: "stretch",
-                    gap: 12,
-                    minWidth: 0,
-                  }}
-                >
-                  {aiError ? (
-                    <div
-                      style={{
-                        background: "rgba(239, 68, 68, 0.16)",
-                        border: "1px solid rgba(239, 68, 68, 0.35)",
-                        color: "#fecaca",
-                        borderRadius: 16,
-                        padding: 14,
-                        fontSize: 18,
-                        lineHeight: 1.5,
-                        minWidth: 0,
-                        gridColumn: 1,
-                        gridRow: window.innerWidth > 980 ? "1 / span 2" : "auto",
-                      }}
-                    >
-                      {aiError}
-                    </div>
-                  ) : (
-                    <div
-                      style={{
-                        minHeight: 72,
-                        padding: 14,
-                        borderRadius: 16,
-                        background: "rgba(255,255,255,0.05)",
-                        border: "1px solid rgba(255,255,255,0.08)",
-                        fontSize: 20,
-                        lineHeight: 1.5,
-                        display: "flex",
-                        alignItems: "center",
-                        minWidth: 0,
-                        gridColumn: 1,
-                        gridRow: window.innerWidth > 980 ? "1 / span 2" : "auto",
-                      }}
-                    >
-                      {aiGeneratedText || "La correction et la suite proposées par l’IA apparaîtront ici."}
-                    </div>
-                  )}
-
-                  <button
-                    type="button"
-                    style={{
-                      ...styles.secondaryButton,
-                      width: window.innerWidth > 980 ? "auto" : "100%",
-                    }}
-                    onClick={() => speakText(aiGeneratedText)}
-                    disabled={!aiGeneratedText}
-                  >
-                    ▶️ Écouter
-                  </button>
-
-                  <button
-                    type="button"
-                    style={{
-                      ...styles.primaryButton,
-                      width: window.innerWidth > 980 ? "auto" : "100%",
-                    }}
-                    onClick={() => {
-                      if (!aiGeneratedText) return;
-                      lastAutoAiPromptRef.current = "";
-                      setText(formatTextSmart(aiGeneratedText));
-                    }}
-                    disabled={!aiGeneratedText}
-                  >
-                    Remplacer
-                  </button>
-                </div>
-              </div>
-
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 10,
-                  alignItems: window.innerWidth > 980 ? "flex-end" : "stretch",
-                  marginLeft: "auto",
-                }}
-              >
-                <button
-                  type="button"
-                  onClick={() => setInputMode("standard")}
-                  style={{
-                    ...(inputMode === "standard"
-                      ? styles.primaryButton
-                      : styles.secondaryButton),
-                    width: window.innerWidth > 980 ? "auto" : "100%",
-                  }}
-                >
-                  Interface classique
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setInputMode("keyboard")}
-                  style={{
-                    ...(inputMode === "keyboard"
-                      ? styles.primaryButton
-                      : styles.secondaryButton),
-                    width: window.innerWidth > 980 ? "auto" : "100%",
-                  }}
-                >
-                  Clavier virtuel
-                </button>
-
-              </div>
-            </div>
-            <div
-              style={{
                 display: "grid",
                 gridTemplateColumns:
                   window.innerWidth > 1180 ? "minmax(0, 1fr) 320px" : "1fr",
@@ -2524,14 +1662,11 @@ if (page === "reglages") {
               <div>
                 <label style={styles.label}>Texte à dire</label>
 
-                {inputMode === "standard" ? (
-                  <>
-                    <textarea
+                <textarea
                       ref={standardTextAreaRef}
                       value={text}
                       onChange={(e) => {
                         const nextValue = e.target.value;
-                        lastAutoAiPromptRef.current = "";
                         setText(formatTextSmart(nextValue));
 
                         if (/\s$/.test(nextValue)) {
@@ -2554,44 +1689,35 @@ if (page === "reglages") {
                     <div
                       style={{
                         marginTop: 12,
-                        display: "grid",
-                        gridTemplateColumns:
-                          window.innerWidth > 900 ? "repeat(3, minmax(0, 1fr))" : "1fr",
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
                         gap: 12,
+                        flexWrap: "nowrap",
                       }}
                     >
                       <button
-                        style={isListening ? styles.recordingButton : styles.primaryButton}
-                        onClick={isListening ? stopDictation : startDictation}
+                        style={{
+                          ...styles.primaryButton,
+                          flex: 1,
+                          opacity: isListening ? 0.6 : 1,
+                        }}
+                        onClick={startDictation}
+                        disabled={isListening}
                       >
-                        {isListening ? "Arrêter la dictée" : "🎤 Dicter"}
+                        🎤 Dicter
                       </button>
 
                       <button
-                        style={styles.secondaryButton}
+                        style={{
+                          ...styles.secondaryButton,
+                          flex: 1,
+                        }}
                         onClick={() => speakText(text)}
                       >
                         ▶️ Écouter
                       </button>
-
-                      <button
-                        style={styles.secondaryButton}
-                        onClick={stopSpeaking}
-                      >
-                        ⏹️ Stop voix
-                      </button>
                     </div>
-                  </>
-                ) : (
-                  <VirtualKeyboard
-                    text={text}
-                    setText={setText}
-                    saveWordToHistory={saveWordToHistory}
-                    speakText={speakText}
-                    stopSpeaking={stopSpeaking}
-                    styles={styles}
-                  />
-                )}
               </div>
 
               <div
@@ -2618,8 +1744,8 @@ if (page === "reglages") {
                   }}
                   style={
                     isPhraseBrowserOpen
-                      ? styles.primaryButton
-                      : styles.secondaryButton
+                      ? { ...styles.primaryButton, width: "100%" }
+                      : { ...styles.secondaryButton, width: "100%" }
                   }
                 >
                   Phrases enregistrées
@@ -2829,80 +1955,7 @@ if (page === "reglages") {
                 display: "grid",
                 gridTemplateColumns:
                   window.innerWidth > 1400
-                    ? "minmax(240px, 1.25fr) minmax(180px, 0.8fr) minmax(180px, 0.8fr)"
-                    : "1fr",
-                gap: 14,
-                alignItems: "end",
-                boxSizing: "border-box",
-                overflow: "hidden",
-              }}
-            >
-              <button
-                type="button"
-                style={{
-                  ...styles.primaryButton,
-                  width: "100%",
-                  minWidth: 0,
-                  boxSizing: "border-box",
-                }}
-                onClick={generateTextWithAI}
-                disabled={aiLoading || !text.trim()}
-              >
-                {aiLoading
-                  ? "Génération..."
-                  : aiUsage?.blocked
-                  ? "✨ Acheter des crédits pour continuer"
-                  : "✨ Générer par IA"}
-              </button>
-
-              <div style={{ ...styles.formGroup, minWidth: 0 }}>
-                <label style={styles.label}>Ton</label>
-                <select
-                  value={tone}
-                  onChange={(e) => setTone(e.target.value)}
-                  style={{
-                    ...styles.input,
-                    width: "100%",
-                    minWidth: 0,
-                    boxSizing: "border-box",
-                  }}
-                >
-                  <option value="naturel">Naturel</option>
-                  <option value="professionnel">Professionnel</option>
-                  <option value="humour">Humour</option>
-                  <option value="direct">Direct</option>
-                </select>
-              </div>
-
-              <div style={{ ...styles.formGroup, minWidth: 0 }}>
-                <label style={styles.label}>À qui je parle</label>
-                <select
-                  value={audience}
-                  onChange={(e) => setAudience(e.target.value)}
-                  style={{
-                    ...styles.input,
-                    width: "100%",
-                    minWidth: 0,
-                    boxSizing: "border-box",
-                  }}
-                >
-                  <option value="général">Général</option>
-                  <option value="ami">Ami</option>
-                  <option value="famille">Famille</option>
-                  <option value="soignant">Soignant</option>
-                  <option value="aidant">Aidant</option>
-                </select>
-              </div>
-            </div>
-
-            <div
-              style={{
-                ...styles.card,
-                padding: 14,
-                display: "grid",
-                gridTemplateColumns:
-                  window.innerWidth > 1400
-                    ? "minmax(220px, 1.1fr) minmax(170px, 0.8fr) minmax(220px, 0.9fr)"
+                    ? "minmax(220px, 1.1fr) minmax(170px, 0.8fr) minmax(320px, 1fr)"
                     : "1fr",
                 gap: 14,
                 alignItems: "end",
@@ -2954,7 +2007,7 @@ if (page === "reglages") {
                 }}
                 onClick={savePhrase}
               >
-                Enregistrer la phrase
+                Enregistrer phrase
               </button>
             </div>
           </div>
@@ -3029,3 +2082,4 @@ if (page === "reglages") {
 
   return null;
 }
+
