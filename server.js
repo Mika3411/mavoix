@@ -968,6 +968,43 @@ function getCaregiverAlertPageHtml() {
         }
       }
 
+      async function playMessageTone() {
+        try {
+          await ensureAudioContext();
+
+          const now = audioContext.currentTime;
+          const gain = audioContext.createGain();
+          const firstTone = audioContext.createOscillator();
+          const secondTone = audioContext.createOscillator();
+
+          gain.gain.setValueAtTime(0.0001, now);
+          gain.gain.exponentialRampToValueAtTime(0.16, now + 0.02);
+          gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.34);
+
+          firstTone.type = "sine";
+          firstTone.frequency.setValueAtTime(740, now);
+          secondTone.type = "sine";
+          secondTone.frequency.setValueAtTime(980, now + 0.13);
+
+          firstTone.connect(gain);
+          secondTone.connect(gain);
+          gain.connect(audioContext.destination);
+          firstTone.start(now);
+          firstTone.stop(now + 0.16);
+          secondTone.start(now + 0.13);
+          secondTone.stop(now + 0.34);
+          secondTone.onended = () => {
+            firstTone.disconnect();
+            secondTone.disconnect();
+            gain.disconnect();
+          };
+        } catch {}
+
+        if (navigator.vibrate) {
+          navigator.vibrate([90]);
+        }
+      }
+
       async function playAlarmOnce() {
         if (!soundEnabled && !customAlarmUrl) return;
 
@@ -1117,7 +1154,12 @@ function getCaregiverAlertPageHtml() {
 
         messageEvents.addEventListener("caregiver-message", (event) => {
           try {
-            upsertMessage(JSON.parse(event.data || "{}"));
+            const payload = JSON.parse(event.data || "{}");
+            const alreadyExists = messageItems.some((item) => item.id === payload.id);
+            upsertMessage(payload);
+            if (!alreadyExists && payload.senderRole !== "caregiver") {
+              void playMessageTone();
+            }
             setMessageStatus("Nouveau message reçu.");
           } catch {}
         });
