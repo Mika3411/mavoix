@@ -211,6 +211,10 @@ function sanitizeMessageRole(value) {
   return value === "caregiver" ? "caregiver" : "user";
 }
 
+function sanitizeMessageType(value) {
+  return value === "audio" ? "audio" : "text";
+}
+
 function getCaregiverAlertPageHtml() {
   return `<!doctype html>
 <html lang="fr">
@@ -478,6 +482,22 @@ function getCaregiverAlertPageHtml() {
         font-size: 17px;
       }
 
+      .message-audio-button {
+        min-height: 44px;
+        border-radius: 14px;
+        padding: 8px 12px;
+        background: rgba(15, 23, 42, 0.58);
+        border: 1px solid rgba(255, 255, 255, 0.16);
+        color: #f8fafc;
+        font-size: 16px;
+        font-weight: 800;
+        text-align: left;
+      }
+
+      .message-audio-caption {
+        color: rgba(248, 250, 252, 0.88);
+      }
+
       .message-input {
         width: 100%;
         min-height: 110px;
@@ -681,7 +701,7 @@ function getCaregiverAlertPageHtml() {
 
           const text = document.createElement("div");
           text.className = "unread-text";
-          text.textContent = item.message || "";
+          text.textContent = getMessagePreview(item);
 
           card.appendChild(meta);
           card.appendChild(text);
@@ -747,6 +767,42 @@ function getCaregiverAlertPageHtml() {
         }
       }
 
+      function isAudioMessage(item) {
+        return item && item.messageType === "audio";
+      }
+
+      function getMessagePreview(item) {
+        if (isAudioMessage(item)) {
+          return item.message ? "Audio reçu : " + item.message : "Audio reçu";
+        }
+
+        return item && item.message ? item.message : "";
+      }
+
+      function playReceivedAudio(item) {
+        const message = item && item.message ? String(item.message) : "";
+        if (!message) {
+          setMessageStatus("Aucun audio à lire.", true);
+          return;
+        }
+
+        const SpeechSynthesisUtteranceConstructor = window.SpeechSynthesisUtterance;
+        if (!window.speechSynthesis || !SpeechSynthesisUtteranceConstructor) {
+          setMessageStatus("Lecture audio indisponible sur cet appareil.", true);
+          return;
+        }
+
+        try {
+          window.speechSynthesis.cancel();
+          const utterance = new SpeechSynthesisUtteranceConstructor(message);
+          utterance.lang = "fr-FR";
+          window.speechSynthesis.speak(utterance);
+          setMessageStatus("Lecture de l'audio reçu.");
+        } catch {
+          setMessageStatus("Impossible de lire cet audio.", true);
+        }
+      }
+
       function renderMessages() {
         messageListElement.innerHTML = "";
 
@@ -773,12 +829,30 @@ function getCaregiverAlertPageHtml() {
           const time = formatMessageTime(item.createdAt);
           meta.textContent = time ? sender + " - " + time : sender;
 
-          const text = document.createElement("div");
-          text.className = "message-text";
-          text.textContent = item.message || "";
-
           bubble.appendChild(meta);
-          bubble.appendChild(text);
+
+          if (isAudioMessage(item)) {
+            const audioButton = document.createElement("button");
+            audioButton.type = "button";
+            audioButton.className = "message-audio-button";
+            audioButton.textContent =
+              item.senderRole === "caregiver" ? "▶ Audio envoyé" : "▶ Audio reçu";
+            audioButton.addEventListener("click", () => playReceivedAudio(item));
+            bubble.appendChild(audioButton);
+
+            if (item.message) {
+              const caption = document.createElement("div");
+              caption.className = "message-text message-audio-caption";
+              caption.textContent = item.message;
+              bubble.appendChild(caption);
+            }
+          } else {
+            const text = document.createElement("div");
+            text.className = "message-text";
+            text.textContent = item.message || "";
+            bubble.appendChild(text);
+          }
+
           messageListElement.appendChild(bubble);
         }
 
@@ -1005,6 +1079,52 @@ function getCaregiverAlertPageHtml() {
         }
       }
 
+      async function requestMessageNotifications() {
+        if (!("Notification" in window)) {
+          return "unsupported";
+        }
+
+        if (Notification.permission === "default") {
+          return Notification.requestPermission();
+        }
+
+        return Notification.permission;
+      }
+
+      function truncateNotificationText(value) {
+        const text = String(value || "").replace(/\s+/g, " ").trim();
+        return text.length > 140 ? text.slice(0, 137) + "..." : text;
+      }
+
+      async function showMessageNotification(payload) {
+        if (!("Notification" in window) || Notification.permission !== "granted") {
+          return;
+        }
+
+        const title = "Message de " + (payload.senderName || "l'utilisateur");
+        const options = {
+          body: truncateNotificationText(payload.message),
+          icon: "/icon-192.png",
+          tag: "ma-voix-aidant-message-" + (payload.channel || channel || "default"),
+          renotify: true,
+          data: { url: window.location.href },
+        };
+
+        try {
+          if ("serviceWorker" in navigator) {
+            const registration = await navigator.serviceWorker.getRegistration();
+            if (registration) {
+              await registration.showNotification(title, options);
+              return;
+            }
+          }
+        } catch {}
+
+        try {
+          new Notification(title, options);
+        } catch {}
+      }
+
       async function playAlarmOnce() {
         if (!soundEnabled && !customAlarmUrl) return;
 
@@ -1159,6 +1279,7 @@ function getCaregiverAlertPageHtml() {
             upsertMessage(payload);
             if (!alreadyExists && payload.senderRole !== "caregiver") {
               void playMessageTone();
+              void showMessageNotification(payload);
             }
             setMessageStatus("Nouveau message reçu.");
           } catch {}
@@ -1172,6 +1293,7 @@ function getCaregiverAlertPageHtml() {
 
       connectionButton.addEventListener("click", async () => {
         try {
+          void requestMessageNotifications();
           soundEnabled = true;
           if (!customAlarmUrl) {
             await ensureAudioContext();
@@ -1489,12 +1611,16 @@ app.post("/api/caregiver-messages", (req, res) => {
     return;
   }
 
+  const messageType = sanitizeMessageType(req.body?.messageType);
   const messageText = sanitizeText(req.body?.message, 600);
 
   if (!messageText) {
     res.status(400).json({
       error: "Message vide",
-      details: "Écris un message avant l'envoi.",
+      details:
+        messageType === "audio"
+          ? "Écris un message avant d'envoyer l'audio."
+          : "Écris un message avant l'envoi.",
     });
     return;
   }
@@ -1507,6 +1633,7 @@ app.post("/api/caregiver-messages", (req, res) => {
     senderRole,
     senderName: sanitizeText(req.body?.senderName, 80),
     message: messageText,
+    messageType,
   };
   const recipientRole = senderRole === "caregiver" ? "user" : "caregiver";
 

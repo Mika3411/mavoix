@@ -15,6 +15,7 @@ type CaregiverMessage = {
   senderRole: "user" | "caregiver";
   senderName: string;
   message: string;
+  messageType?: "text" | "audio";
 };
 
 type MessageStore = {
@@ -28,6 +29,8 @@ type AudioWindow = Window &
   typeof globalThis & {
     webkitAudioContext?: typeof AudioContext;
   };
+
+type MessageNotificationPermission = NotificationPermission | "unsupported";
 
 function playIncomingMessageSound() {
   if (typeof window === "undefined") return;
@@ -89,6 +92,67 @@ function playIncomingMessageSound() {
   }
 }
 
+function getMessageNotificationPermission(): MessageNotificationPermission {
+  if (typeof window === "undefined" || !("Notification" in window)) {
+    return "unsupported";
+  }
+
+  return window.Notification.permission;
+}
+
+async function requestMessageNotificationPermission() {
+  if (typeof window === "undefined" || !("Notification" in window)) {
+    return "unsupported";
+  }
+
+  if (window.Notification.permission === "default") {
+    return window.Notification.requestPermission();
+  }
+
+  return window.Notification.permission;
+}
+
+function truncateNotificationText(value: string) {
+  const text = String(value || "").replace(/\s+/g, " ").trim();
+  return text.length > 140 ? `${text.slice(0, 137)}...` : text;
+}
+
+async function showIncomingMessageNotification(
+  message: CaregiverMessage,
+  caregiverName: string
+) {
+  if (
+    typeof window === "undefined" ||
+    !("Notification" in window) ||
+    window.Notification.permission !== "granted"
+  ) {
+    return;
+  }
+
+  const title = `Message de ${caregiverName || message.senderName || "l'aidant"}`;
+  const options: NotificationOptions = {
+    body: truncateNotificationText(message.message),
+    icon: "/icon-192.png",
+    tag: `ma-voix-message-${message.channel || "aidant"}`,
+    renotify: true,
+    data: {
+      url: window.location.href,
+    },
+  };
+
+  try {
+    if ("serviceWorker" in navigator) {
+      const registration = await navigator.serviceWorker.ready;
+      await registration.showNotification(title, options);
+      return;
+    }
+  } catch {}
+
+  try {
+    new window.Notification(title, options);
+  } catch {}
+}
+
 function readMessages(storageKey: string) {
   if (typeof window === "undefined") return {};
 
@@ -108,7 +172,7 @@ function mergeMessages(
   const messageMap = new Map<string, CaregiverMessage>();
 
   [...currentMessages, ...incomingMessages].forEach((message) => {
-    if (!message?.id || !message?.message) return;
+    if (!message?.id || (!message?.message && message?.messageType !== "audio")) return;
     messageMap.set(message.id, message);
   });
 
@@ -136,6 +200,10 @@ function formatMessageTime(value: string) {
   } catch {
     return "";
   }
+}
+
+function isAudioMessage(message: CaregiverMessage) {
+  return message.messageType === "audio";
 }
 
 export default function CaregiverMessagesPage(props: any) {
@@ -185,6 +253,14 @@ export default function CaregiverMessagesPage(props: any) {
   >({});
   const [statusText, setStatusText] = React.useState("");
   const [isSending, setIsSending] = React.useState(false);
+  const [notificationPermission, setNotificationPermission] =
+    React.useState<MessageNotificationPermission>(() =>
+      getMessageNotificationPermission()
+    );
+
+  React.useEffect(() => {
+    setNotificationPermission(getMessageNotificationPermission());
+  }, []);
 
   React.useEffect(() => {
     setMessageStore({
@@ -273,6 +349,7 @@ export default function CaregiverMessagesPage(props: any) {
           updateChannelMessages(target.channel, [payload]);
           if (payload?.senderRole === "caregiver") {
             playIncomingMessageSound();
+            void showIncomingMessageNotification(payload, target.name);
           }
           setStatusText("Nouveau message reçu.");
         } catch {}
@@ -301,12 +378,16 @@ export default function CaregiverMessagesPage(props: any) {
     ? connectedCaregivers[selectedCaregiver.channel] || 0
     : 0;
 
-  async function sendCaregiverMessage() {
+  async function sendCaregiverMessage(messageType: "text" | "audio" = "text") {
     if (!selectedCaregiver || isSending) return;
 
     const message = String(text || "").trim();
     if (!message) {
-      setStatusText("Écris un message avant l'envoi.");
+      setStatusText(
+        messageType === "audio"
+          ? "Écris un message avant d'envoyer l'audio."
+          : "Écris un message avant l'envoi."
+      );
       return;
     }
 
@@ -321,6 +402,7 @@ export default function CaregiverMessagesPage(props: any) {
           senderRole: "user",
           senderName: currentProfile?.firstName || currentProfile?.name || "Utilisateur",
           message,
+          messageType,
         }),
       });
       const data = await response.json().catch(() => ({}));
@@ -338,8 +420,12 @@ export default function CaregiverMessagesPage(props: any) {
 
       const nextStatus =
         Number(data?.deliveredTo || 0) > 0
-          ? `Message envoyé à ${selectedCaregiver.name}.`
-          : `Message enregistré pour ${selectedCaregiver.name}.`;
+          ? messageType === "audio"
+            ? `Audio envoyé à ${selectedCaregiver.name}.`
+            : `Message envoyé à ${selectedCaregiver.name}.`
+          : messageType === "audio"
+            ? `Audio enregistré pour ${selectedCaregiver.name}.`
+            : `Message enregistré pour ${selectedCaregiver.name}.`;
       setStatusText(nextStatus);
       showToast?.(nextStatus);
     } catch (error) {
@@ -353,6 +439,40 @@ export default function CaregiverMessagesPage(props: any) {
       setIsSending(false);
     }
   }
+
+  async function enableMessageNotifications() {
+    const nextPermission = await requestMessageNotificationPermission();
+    setNotificationPermission(nextPermission);
+
+    if (nextPermission === "granted") {
+      const nextStatus = "Notifications messages activées.";
+      setStatusText(nextStatus);
+      showToast?.(nextStatus);
+      return;
+    }
+
+    if (nextPermission === "denied") {
+      const nextStatus =
+        "Notifications bloquées. Autorise-les dans les réglages du navigateur.";
+      setStatusText(nextStatus);
+      showToast?.(nextStatus);
+      return;
+    }
+
+    if (nextPermission === "unsupported") {
+      const nextStatus =
+        "Les notifications ne sont pas disponibles sur cet appareil.";
+      setStatusText(nextStatus);
+      showToast?.(nextStatus);
+    }
+  }
+
+  const notificationButtonLabel =
+    notificationPermission === "granted"
+      ? "Notifications activées"
+      : notificationPermission === "denied"
+      ? "Notifications bloquées"
+      : "Activer notifications";
 
   return (
     <div style={styles.gridSingle}>
@@ -410,6 +530,21 @@ export default function CaregiverMessagesPage(props: any) {
                     ? `${selectedCaregiver?.name} est connecté.`
                     : `${selectedCaregiver?.name} n'est pas connecté pour le moment.`}
                 </div>
+
+                {notificationPermission !== "unsupported" ? (
+                  <button
+                    type="button"
+                    style={{
+                      ...styles.secondaryButton,
+                      fontSize: 16,
+                      opacity: notificationPermission === "granted" ? 0.78 : 1,
+                    }}
+                    onClick={enableMessageNotifications}
+                    disabled={notificationPermission === "granted"}
+                  >
+                    {notificationButtonLabel}
+                  </button>
+                ) : null}
               </div>
 
               <div
@@ -467,15 +602,45 @@ export default function CaregiverMessagesPage(props: any) {
                             ? ` - ${formatMessageTime(message.createdAt)}`
                             : ""}
                         </div>
-                        <div
-                          style={{
-                            whiteSpace: "pre-wrap",
-                            overflowWrap: "anywhere",
-                            lineHeight: 1.35,
-                          }}
-                        >
-                          {message.message}
-                        </div>
+                        {isAudioMessage(message) ? (
+                          <>
+                            <button
+                              type="button"
+                              style={{
+                                ...styles.secondaryButton,
+                                minHeight: 44,
+                                padding: "8px 12px",
+                                fontSize: 15,
+                              }}
+                              onClick={() => speakText?.(message.message)}
+                              disabled={!message.message}
+                            >
+                              ▶️ {isUser ? "Audio envoyé" : "Audio reçu"}
+                            </button>
+                            {message.message ? (
+                              <div
+                                style={{
+                                  whiteSpace: "pre-wrap",
+                                  overflowWrap: "anywhere",
+                                  lineHeight: 1.35,
+                                  opacity: 0.9,
+                                }}
+                              >
+                                {message.message}
+                              </div>
+                            ) : null}
+                          </>
+                        ) : (
+                          <div
+                            style={{
+                              whiteSpace: "pre-wrap",
+                              overflowWrap: "anywhere",
+                              lineHeight: 1.35,
+                            }}
+                          >
+                            {message.message}
+                          </div>
+                        )}
                       </div>
                     );
                   })
@@ -519,9 +684,10 @@ export default function CaregiverMessagesPage(props: any) {
               <button
                 type="button"
                 style={styles.secondaryButton}
-                onClick={() => speakText(text)}
+                onClick={() => sendCaregiverMessage("audio")}
+                disabled={isSending || !selectedCaregiver}
               >
-                ▶️ Écouter
+                ▶️ Envoyer l'audio
               </button>
 
               <button
@@ -530,7 +696,7 @@ export default function CaregiverMessagesPage(props: any) {
                   ...styles.primaryButton,
                   opacity: isSending ? 0.7 : 1,
                 }}
-                onClick={sendCaregiverMessage}
+                onClick={() => sendCaregiverMessage("text")}
                 disabled={isSending || !selectedCaregiver}
               >
                 {isSending ? "Envoi..." : "Envoyer"}

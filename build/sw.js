@@ -1,4 +1,4 @@
-const CACHE_NAME = "ma-voix-v4";
+const CACHE_NAME = "ma-voix-v5";
 const PRECACHE_URLS = [
   "/",
   "/index.html",
@@ -75,5 +75,33 @@ self.addEventListener("fetch", (event) => {
         return networkResponse;
       });
     })
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+
+  const targetUrl =
+    (event.notification.data && event.notification.data.url) || "/";
+
+  event.waitUntil(
+    self.clients
+      .matchAll({ type: "window", includeUncontrolled: true })
+      .then((clientList) => {
+        const appClient = clientList.find((client) =>
+          client.url.startsWith(self.location.origin)
+        );
+
+        if (appClient) {
+          if ("navigate" in appClient) {
+            appClient.navigate(targetUrl);
+          }
+          return appClient.focus();
+        }
+
+        if (self.clients.openWindow) {
+          return self.clients.openWindow(targetUrl);
+        }
+      })
   );
 });
