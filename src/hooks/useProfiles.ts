@@ -17,6 +17,10 @@ import {
   ensureProfile,
 } from "../utils/normalize";
 import { createCaregiverAlertLink } from "../utils/caregiverAlerts";
+import {
+  importAbbreviationDictionary,
+  readExportableAbbreviationDictionary,
+} from "../utils/textFormatting";
 
 export default function useProfiles() {
   const [initialSnapshot] = useState(() => {
@@ -493,6 +497,7 @@ export default function useProfiles() {
       },
       currentProfileId,
       profiles,
+      abbreviationDictionary: readExportableAbbreviationDictionary(),
     };
 
     const blob = new Blob([JSON.stringify(data, null, 2)], {
@@ -521,6 +526,11 @@ export default function useProfiles() {
         }
 
         const normalizedProfiles = parsed.profiles.map((profile) => ensureProfile(profile));
+        const abbreviationDictionary =
+          parsed.abbreviationDictionary || parsed.dictionary?.abbreviations;
+        if (abbreviationDictionary) {
+          importAbbreviationDictionary(abbreviationDictionary);
+        }
 
         setProfiles(normalizedProfiles);
 
