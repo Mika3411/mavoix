@@ -15,6 +15,7 @@ import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
+import android.media.AudioAttributes;
 import android.media.MediaPlayer;
 import android.net.Uri;
 import android.os.Build;
@@ -105,6 +106,7 @@ public class AidantActivity extends Activity {
   private LinearLayout messageListContainer;
   private Spinner messagePatientSpinner;
   private TextToSpeech textToSpeech;
+  private MediaPlayer testSoundPlayer;
   private boolean textToSpeechReady;
   private boolean isRefreshingPatientUi;
   private boolean isRefreshingSoundUi;
@@ -949,6 +951,7 @@ public class AidantActivity extends Activity {
   }
 
   private void stopAlarm() {
+    stopTestSoundPlayback();
     setTestingAlarmSound(false);
     Intent intent = new Intent(this, AlarmListenerService.class);
     intent.setAction(AlertContract.ACTION_STOP_ALARM);
@@ -964,19 +967,52 @@ public class AidantActivity extends Activity {
   }
 
   private void testAlarm() {
+    stopTestSoundPlayback();
     setTestingAlarmSound(true);
-    Intent intent = new Intent(this, AlarmListenerService.class);
-    intent.setAction(AlertContract.ACTION_TEST_ALARM);
     try {
-      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-        startForegroundService(intent);
-      } else {
-        startService(intent);
+      testSoundPlayer = new MediaPlayer();
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+        testSoundPlayer.setAudioAttributes(new AudioAttributes.Builder()
+            .setUsage(AudioAttributes.USAGE_ALARM)
+            .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+            .build());
       }
+      testSoundPlayer.setDataSource(this, AlarmSounds.selectedUri(this, prefs));
+      testSoundPlayer.setLooping(true);
+      testSoundPlayer.setOnErrorListener((player, what, extra) -> {
+        stopTestSoundPlayback();
+        setTestingAlarmSound(false);
+        toast("Impossible de tester le son.");
+        return true;
+      });
+      testSoundPlayer.prepare();
+      testSoundPlayer.start();
     } catch (Exception error) {
+      stopTestSoundPlayback();
       setTestingAlarmSound(false);
       toast("Impossible de tester le son.");
     }
+  }
+
+  private void stopTestSoundPlayback() {
+    if (testSoundPlayer == null) {
+      return;
+    }
+
+    try {
+      if (testSoundPlayer.isPlaying()) {
+        testSoundPlayer.stop();
+      }
+    } catch (Exception ignored) {
+      // The player is being released anyway.
+    }
+
+    try {
+      testSoundPlayer.release();
+    } catch (Exception ignored) {
+      // Nothing else to clean up.
+    }
+    testSoundPlayer = null;
   }
 
   private void setTestingAlarmSound(boolean testing) {
@@ -1568,6 +1604,7 @@ public class AidantActivity extends Activity {
       textToSpeech.stop();
       textToSpeech.shutdown();
     }
+    stopTestSoundPlayback();
     messageExecutor.shutdownNow();
     super.onDestroy();
   }

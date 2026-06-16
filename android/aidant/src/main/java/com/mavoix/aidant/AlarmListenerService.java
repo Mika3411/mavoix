@@ -60,8 +60,8 @@ public class AlarmListenerService extends Service {
     }
 
     if (AlertContract.ACTION_TEST_ALARM.equals(action)) {
-      ensureForeground("Test de l'alarme", "Le son d'alarme est en cours.");
-      triggerAlarm("test");
+      ensureForeground("Test du son", "Apercu du son aidant.");
+      triggerAlarm("test", false);
       return START_STICKY;
     }
 
@@ -151,12 +151,18 @@ public class AlarmListenerService extends Service {
   }
 
   private void triggerAlarm(String patientName) {
+    triggerAlarm(patientName, true);
+  }
+
+  private void triggerAlarm(String patientName, boolean showCallNotification) {
     acquireWakeLock();
     stopAlarmPlaybackOnly();
     String label = patientName == null || patientName.trim().isEmpty()
         ? "un patient"
         : patientName.trim();
-    ensureForeground("Appel aidant", "Ma Voix demande de l'aide pour " + label + ".", true, label);
+    if (showCallNotification) {
+      ensureForeground("Appel aidant", "Ma Voix demande de l'aide pour " + label + ".", true, label);
+    }
     vibrate();
 
     Uri uri = getAlarmUri();
