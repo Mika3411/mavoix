@@ -12,6 +12,8 @@ const app = express();
 
 const DEFAULT_ALLOWED_ORIGINS = [
   "https://mavoix.onrender.com",
+  "capacitor://localhost",
+  "ionic://localhost",
   "http://localhost:3000",
   "http://localhost:3001",
   "http://localhost:4173",
@@ -24,10 +26,28 @@ const allowedOrigins = (process.env.ALLOWED_ORIGINS || "")
 const corsOrigins =
   allowedOrigins.length > 0 ? allowedOrigins : DEFAULT_ALLOWED_ORIGINS;
 
+function isAllowedCorsOrigin(origin) {
+  if (!origin || corsOrigins.includes(origin)) return true;
+
+  if (origin === "capacitor://localhost" || origin === "ionic://localhost") {
+    return true;
+  }
+
+  try {
+    const url = new URL(origin);
+    return (
+      ["localhost", "127.0.0.1", "0.0.0.0", "::1", "[::1]"].includes(url.hostname) &&
+      ["http:", "https:"].includes(url.protocol)
+    );
+  } catch {
+    return false;
+  }
+}
+
 app.use(
   cors({
     origin(origin, callback) {
-      if (!origin || corsOrigins.includes(origin)) {
+      if (isAllowedCorsOrigin(origin)) {
         callback(null, true);
         return;
       }
@@ -169,6 +189,9 @@ function sanitizeAlertChannel(value) {
 }
 
 const caregiverAlertClients = new Map();
+const caregiverMessageClients = new Map();
+const caregiverMessageHistory = new Map();
+const CAREGIVER_MESSAGE_HISTORY_LIMIT = 80;
 
 function getCaregiverAlertClients(channel) {
   if (!caregiverAlertClients.has(channel)) {
@@ -206,6 +229,97 @@ function broadcastCaregiverAlert(channel, payload) {
   }
 
   return deliveredTo;
+}
+
+function getCaregiverMessageClients(channel) {
+  if (!caregiverMessageClients.has(channel)) {
+    caregiverMessageClients.set(channel, new Set());
+  }
+
+  return caregiverMessageClients.get(channel);
+}
+
+function getCaregiverMessageHistory(channel) {
+  if (!caregiverMessageHistory.has(channel)) {
+    caregiverMessageHistory.set(channel, []);
+  }
+
+  return caregiverMessageHistory.get(channel);
+}
+
+function saveCaregiverMessage(channel, payload) {
+  const history = getCaregiverMessageHistory(channel);
+  history.push(payload);
+  if (history.length > CAREGIVER_MESSAGE_HISTORY_LIMIT) {
+    history.splice(0, history.length - CAREGIVER_MESSAGE_HISTORY_LIMIT);
+  }
+}
+
+function removeCaregiverMessageClient(channel, client) {
+  const clients = caregiverMessageClients.get(channel);
+  if (!clients) return;
+
+  clients.delete(client);
+  if (clients.size === 0) {
+    caregiverMessageClients.delete(channel);
+  }
+}
+
+function countCaregiverMessageClients(channel, role) {
+  const clients = caregiverMessageClients.get(channel);
+  if (!clients) return 0;
+
+  return Array.from(clients).filter((client) => client.role === role).length;
+}
+
+function writeSseEvent(client, eventName, payload) {
+  client.res.write(`event: ${eventName}\ndata: ${JSON.stringify(payload)}\n\n`);
+}
+
+function broadcastCaregiverPresence(channel) {
+  const clients = caregiverMessageClients.get(channel);
+  if (!clients || clients.size === 0) return;
+
+  const payload = {
+    channel,
+    connectedCaregivers: countCaregiverMessageClients(channel, "caregiver"),
+  };
+
+  for (const client of Array.from(clients)) {
+    if (client.role !== "user") continue;
+
+    try {
+      writeSseEvent(client, "caregiver-presence", payload);
+    } catch (error) {
+      clearInterval(client.keepAlive);
+      removeCaregiverMessageClient(channel, client);
+    }
+  }
+}
+
+function broadcastCaregiverMessage(channel, payload, recipientRole) {
+  const clients = caregiverMessageClients.get(channel);
+  if (!clients || clients.size === 0) return 0;
+
+  let deliveredTo = 0;
+
+  for (const client of Array.from(clients)) {
+    if (recipientRole && client.role !== recipientRole) continue;
+
+    try {
+      writeSseEvent(client, "caregiver-message", payload);
+      deliveredTo += 1;
+    } catch (error) {
+      clearInterval(client.keepAlive);
+      removeCaregiverMessageClient(channel, client);
+    }
+  }
+
+  return deliveredTo;
+}
+
+function sanitizeMessageRole(value) {
+  return value === "caregiver" ? "caregiver" : "user";
 }
 
 function getCaregiverAlertPageHtml() {
@@ -987,6 +1101,53 @@ app.get("/api/caregiver-alert/stream", (req, res) => {
   });
 });
 
+app.get("/api/caregiver-messages/stream", (req, res) => {
+  const channel = sanitizeAlertChannel(req.query?.channel);
+  const role = sanitizeMessageRole(req.query?.role);
+
+  if (!channel) {
+    res.status(400).json({
+      error: "Canal invalide",
+      details: "Le lien de conversation aidant est incomplet ou invalide.",
+    });
+    return;
+  }
+
+  res.set({
+    "Cache-Control": "no-cache, no-transform",
+    "Content-Type": "text/event-stream",
+    Connection: "keep-alive",
+    "X-Accel-Buffering": "no",
+  });
+  res.flushHeaders?.();
+
+  const client = {
+    id: randomUUID(),
+    role,
+    res,
+    keepAlive: setInterval(() => {
+      res.write(": keep-alive\n\n");
+    }, 25000),
+  };
+
+  getCaregiverMessageClients(channel).add(client);
+
+  writeSseEvent(client, "connected", {
+    role,
+    connectedCaregivers: countCaregiverMessageClients(channel, "caregiver"),
+  });
+  writeSseEvent(client, "caregiver-message-history", {
+    messages: getCaregiverMessageHistory(channel),
+  });
+  broadcastCaregiverPresence(channel);
+
+  req.on("close", () => {
+    clearInterval(client.keepAlive);
+    removeCaregiverMessageClient(channel, client);
+    broadcastCaregiverPresence(channel);
+  });
+});
+
 app.post("/api/caregiver-alert", (req, res) => {
   const channel = sanitizeAlertChannel(req.body?.channel);
 
@@ -1011,6 +1172,53 @@ app.post("/api/caregiver-alert", (req, res) => {
   res.json({
     success: true,
     deliveredTo,
+  });
+});
+
+app.post("/api/caregiver-messages", (req, res) => {
+  const channel = sanitizeAlertChannel(req.body?.channel);
+
+  if (!channel) {
+    res.status(400).json({
+      error: "Canal invalide",
+      details: "Aucun aidant n'est associé à cette conversation.",
+    });
+    return;
+  }
+
+  const messageText = sanitizeText(req.body?.message, 600);
+
+  if (!messageText) {
+    res.status(400).json({
+      error: "Message vide",
+      details: "Écris un message avant l'envoi.",
+    });
+    return;
+  }
+
+  const senderRole = sanitizeMessageRole(req.body?.senderRole);
+  const payload = {
+    id: randomUUID(),
+    channel,
+    createdAt: new Date().toISOString(),
+    senderRole,
+    senderName: sanitizeText(req.body?.senderName, 80),
+    message: messageText,
+  };
+  const recipientRole = senderRole === "caregiver" ? "user" : "caregiver";
+
+  saveCaregiverMessage(channel, payload);
+  const deliveredTo = broadcastCaregiverMessage(
+    channel,
+    payload,
+    recipientRole
+  );
+
+  res.json({
+    success: true,
+    deliveredTo,
+    connectedCaregivers: countCaregiverMessageClients(channel, "caregiver"),
+    message: payload,
   });
 });
 
