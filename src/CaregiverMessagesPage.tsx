@@ -212,6 +212,7 @@ export default function CaregiverMessagesPage(props: any) {
     React.useState<MessageNotificationPermission>(() =>
       getMessageNotificationPermission()
     );
+  const messageListRef = React.useRef<HTMLDivElement | null>(null);
 
   React.useEffect(() => {
     setNotificationPermission(getMessageNotificationPermission());
@@ -329,9 +330,25 @@ export default function CaregiverMessagesPage(props: any) {
   const selectedMessages = selectedCaregiver
     ? messageStore.data[selectedCaregiver.channel] || []
     : [];
+  const lastSelectedMessageId =
+    selectedMessages[selectedMessages.length - 1]?.id || "";
   const selectedConnectedCount = selectedCaregiver
     ? connectedCaregivers[selectedCaregiver.channel] || 0
     : 0;
+
+  React.useEffect(() => {
+    const messageList = messageListRef.current;
+    if (!messageList) return;
+
+    const frameId = window.requestAnimationFrame(() => {
+      messageList.scrollTo({
+        top: messageList.scrollHeight,
+        behavior: "smooth",
+      });
+    });
+
+    return () => window.cancelAnimationFrame(frameId);
+  }, [lastSelectedMessageId, selectedCaregiver?.channel]);
 
   async function sendCaregiverMessage(messageType: "text" | "audio" = "text") {
     if (!selectedCaregiver || isSending) return;
@@ -503,6 +520,7 @@ export default function CaregiverMessagesPage(props: any) {
               </div>
 
               <div
+                ref={messageListRef}
                 style={{
                   minHeight: 260,
                   maxHeight: 420,
