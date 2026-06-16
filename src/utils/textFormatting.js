@@ -578,6 +578,26 @@ function saveStoredAbbreviationDictionary(data) {
   );
 }
 
+export function readExportableAbbreviationDictionary() {
+  return readStoredAbbreviationDictionary();
+}
+
+export function importAbbreviationDictionary(value) {
+  if (!value || typeof value !== "object") {
+    return;
+  }
+
+  const looksLikeLegacyRecord = !("custom" in value) && !("disabled" in value);
+  saveStoredAbbreviationDictionary({
+    custom: normalizeDictionaryRecord(
+      looksLikeLegacyRecord ? value : value.custom || {}
+    ),
+    disabled: Array.isArray(value.disabled)
+      ? value.disabled.map((item) => String(item || ""))
+      : [],
+  });
+}
+
 export function readActiveAbbreviationDictionary() {
   const stored = readStoredAbbreviationDictionary();
   const disabled = new Set(stored.disabled);

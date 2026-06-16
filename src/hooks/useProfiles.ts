@@ -19,6 +19,10 @@ import {
   ensureProfile,
 } from "../utils/normalize";
 import { createCaregiverAlertLink } from "../utils/caregiverAlerts";
+import {
+  importAbbreviationDictionary,
+  readExportableAbbreviationDictionary,
+} from "../utils/textFormatting";
 
 export default function useProfiles() {
   const [initialSnapshot] = useState(() => {
@@ -509,6 +513,7 @@ export default function useProfiles() {
         },
         currentProfileId,
         profiles,
+        abbreviationDictionary: readExportableAbbreviationDictionary(),
       };
 
       const fileName = `ma-voix-profils-${new Date().toISOString().slice(0, 10)}.json`;
@@ -570,6 +575,11 @@ export default function useProfiles() {
             },
           } as Profile)
         );
+        const abbreviationDictionary =
+          parsed.abbreviationDictionary || parsed.dictionary?.abbreviations;
+        if (abbreviationDictionary) {
+          importAbbreviationDictionary(abbreviationDictionary);
+        }
 
         setProfiles(normalizedProfiles);
 

@@ -504,7 +504,7 @@ export type AbbreviationEntry = {
   source: AbbreviationSource;
 };
 
-type StoredAbbreviationDictionary = {
+export type StoredAbbreviationDictionary = {
   custom: Record<string, string>;
   disabled: string[];
 };
@@ -596,6 +596,28 @@ function saveStoredAbbreviationDictionary(data: StoredAbbreviationDictionary) {
     CUSTOM_ABBREVIATION_STORAGE_KEY,
     JSON.stringify(cleanData)
   );
+}
+
+export function readExportableAbbreviationDictionary(): StoredAbbreviationDictionary {
+  return readStoredAbbreviationDictionary();
+}
+
+export function importAbbreviationDictionary(value: unknown) {
+  if (!value || typeof value !== "object") {
+    return;
+  }
+
+  const rawDictionary = value as Partial<StoredAbbreviationDictionary>;
+  const looksLikeLegacyRecord =
+    !("custom" in rawDictionary) && !("disabled" in rawDictionary);
+  saveStoredAbbreviationDictionary({
+    custom: normalizeDictionaryRecord(
+      looksLikeLegacyRecord ? rawDictionary : rawDictionary.custom || {}
+    ),
+    disabled: Array.isArray(rawDictionary.disabled)
+      ? rawDictionary.disabled.map((item) => String(item || ""))
+      : [],
+  });
 }
 
 export function readActiveAbbreviationDictionary() {
