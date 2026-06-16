@@ -29,6 +29,23 @@ jobs:
       - name: Sync iOS app
         run: npx cap sync ios
 
+      - name: Normalize iOS package paths
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path("ios/App/CapApp-SPM/Package.swift")
+          text = path.read_text()
+          text = text.replace(r"..\..\..\node_modules\@capacitor-community\text-to-speech", "../../../node_modules/@capacitor-community/text-to-speech")
+          text = text.replace(r"..\..\..\node_modules\@capacitor\filesystem", "../../../node_modules/@capacitor/filesystem")
+          text = text.replace(r"..\..\..\node_modules\@capacitor\share", "../../../node_modules/@capacitor/share")
+          path.write_text(text)
+          PY
+
+      - name: Inspect iOS project
+        run: |
+          xcodebuild -list -project ios/App/App.xcodeproj
+          xcodebuild -resolvePackageDependencies -project ios/App/App.xcodeproj -scheme App
+
       - name: Install Apple certificate and provisioning profile
         env:
           BUILD_CERTIFICATE_BASE64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
@@ -90,6 +107,7 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           PROVISIONING_PROFILE_NAME: ${{ secrets.PROVISIONING_PROFILE_NAME }}
         run: |
+          set -o pipefail
           xcodebuild archive \
             -project ios/App/App.xcodeproj \
             -scheme App \
@@ -100,14 +118,27 @@ jobs:
             PRODUCT_BUNDLE_IDENTIFIER="$APP_IDENTIFIER" \
             CODE_SIGN_STYLE=Manual \
             PROVISIONING_PROFILE_SPECIFIER="$PROVISIONING_PROFILE_NAME" \
-            CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER"
+            CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER" \
+            | tee xcodebuild-archive.log
 
       - name: Export IPA
         run: |
+          set -o pipefail
           xcodebuild -exportArchive \
             -archivePath build/MaVoix.xcarchive \
             -exportOptionsPlist ExportOptions.plist \
-            -exportPath build/ipa
+            -exportPath build/ipa \
+            | tee xcodebuild-export.log
+
+      - name: Upload Xcode logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xcodebuild-logs
+          path: |
+            xcodebuild-archive.log
+            xcodebuild-export.log
+          if-no-files-found: ignore
 
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
