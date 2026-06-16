@@ -553,11 +553,6 @@ export default function NoticePage({
                 actif dans un format plus lisible, utile pour un proche, un
                 aidant ou un professionnel de santé.
               </NoticeParagraph>
-              <NoticeParagraph>
-                L'écran principal n'affiche pas de bouton rouge d'urgence.
-                Utilisez l'onglet Infos pour ouvrir cette fiche quand elle doit
-                être montrée à quelqu'un.
-              </NoticeParagraph>
             </NoticeBlock>
 
             <NoticeBlock title="Contenu affiché">
