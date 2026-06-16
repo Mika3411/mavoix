@@ -15,8 +15,7 @@ import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
-import android.media.AudioManager;
-import android.media.ToneGenerator;
+import android.media.MediaPlayer;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -33,6 +32,7 @@ import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
@@ -61,7 +61,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class AidantActivity extends Activity {
-  private static final int REQUEST_SOUND = 41;
   private static final int REQUEST_NOTIFICATIONS = 42;
   private static final String MESSAGE_NOTIFICATION_CHANNEL_ID = "ma_voix_aidant_messages";
   private static final int COLOR_PAGE = Color.rgb(15, 23, 42);
@@ -100,12 +99,14 @@ public class AidantActivity extends Activity {
   private TextView selectedPatientText;
   private TextView statusText;
   private TextView soundText;
+  private Spinner soundSpinner;
   private TextView unreadText;
   private LinearLayout messageListContainer;
   private Spinner messagePatientSpinner;
   private TextToSpeech textToSpeech;
   private boolean textToSpeechReady;
   private boolean isRefreshingPatientUi;
+  private boolean isRefreshingSoundUi;
 
   private volatile boolean shouldListenMessages;
   private volatile boolean messagesConnected;
@@ -170,11 +171,9 @@ public class AidantActivity extends Activity {
     });
     adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
     sectionSpinner.setAdapter(adapter);
-    sectionSpinner.setPadding(dp(12), 0, dp(12), 0);
-    sectionSpinner.setBackground(roundedStroke(COLOR_CARD, COLOR_BORDER, 18, 1));
     LinearLayout.LayoutParams menuParams = new LinearLayout.LayoutParams(dp(190), LinearLayout.LayoutParams.WRAP_CONTENT);
     menuParams.setMargins(dp(12), 0, 0, 0);
-    header.addView(sectionSpinner, menuParams);
+    header.addView(spinnerBox(sectionSpinner), menuParams);
 
     root.addView(header, spacedParams(0, 0, 0, dp(18)));
 
@@ -286,9 +285,22 @@ public class AidantActivity extends Activity {
     soundText = infoText();
     panel.addView(soundText, matchWrap());
 
-    panel.addView(button("Importer un son", v -> chooseSound()), matchWrap());
+    soundSpinner = new Spinner(this);
+    soundSpinner.setAdapter(darkSpinnerAdapter(AlarmSounds.labels()));
+    soundSpinner.setSelection(AlarmSounds.selectedIndex(prefs), false);
+    soundSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+      @Override
+      public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+        selectAlarmSound(position);
+      }
+
+      @Override
+      public void onNothingSelected(AdapterView<?> parent) {
+        // Keep the current sound.
+      }
+    });
+    panel.addView(spinnerBox(soundSpinner), spacedParams(0, dp(8), 0, 0));
     panel.addView(button("Tester le son", v -> testAlarm()), matchWrap());
-    panel.addView(button("Revenir au son par defaut", v -> resetSound()), matchWrap());
   }
 
   private void buildMessagesPanel(LinearLayout panel) {
@@ -297,8 +309,6 @@ public class AidantActivity extends Activity {
 
     messagePatientSpinner = new Spinner(this);
     messagePatientSpinner.setAdapter(darkSpinnerAdapter(new String[] { "Aucun patient" }));
-    messagePatientSpinner.setPadding(dp(12), 0, dp(12), 0);
-    messagePatientSpinner.setBackground(roundedStroke(COLOR_CARD, COLOR_BORDER, 18, 1));
     messagePatientSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
       @Override
       public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
@@ -315,7 +325,7 @@ public class AidantActivity extends Activity {
         // Keep the current patient selection.
       }
     });
-    panel.addView(messagePatientSpinner, spacedParams(0, 0, 0, dp(12)));
+    panel.addView(spinnerBox(messagePatientSpinner), spacedParams(0, 0, 0, dp(12)));
 
     messageListContainer = new LinearLayout(this);
     messageListContainer.setOrientation(LinearLayout.VERTICAL);
@@ -382,7 +392,7 @@ public class AidantActivity extends Activity {
     addHelpBlock(
         panel,
         "7. Sonnerie et notifications",
-        "Dans Configurer, importe ou teste le son de l'aidant. Autorise aussi les alertes en veille, la notification plein ecran et les notifications Android."
+        "Dans Configurer, choisis ou teste le son de l'aidant. Autorise aussi les alertes en veille, la notification plein ecran et les notifications Android."
     );
   }
 
@@ -479,6 +489,40 @@ public class AidantActivity extends Activity {
     input.setTextColor(COLOR_TEXT);
     input.setHintTextColor(Color.rgb(148, 163, 184));
     input.setBackground(roundedStroke(COLOR_FIELD, COLOR_BORDER, 18, 1));
+  }
+
+  private FrameLayout spinnerBox(Spinner spinner) {
+    FrameLayout box = new FrameLayout(this);
+    box.setMinimumHeight(dp(54));
+    box.setBackground(roundedStroke(COLOR_CARD, COLOR_BORDER, 18, 1));
+    box.setOnClickListener(v -> spinner.performClick());
+
+    spinner.setBackgroundColor(Color.TRANSPARENT);
+    spinner.setPadding(dp(2), 0, dp(42), 0);
+    FrameLayout.LayoutParams spinnerParams = new FrameLayout.LayoutParams(
+        FrameLayout.LayoutParams.MATCH_PARENT,
+        FrameLayout.LayoutParams.WRAP_CONTENT,
+        Gravity.CENTER_VERTICAL
+    );
+    box.addView(spinner, spinnerParams);
+
+    TextView arrow = new TextView(this);
+    arrow.setText("\u25BE");
+    arrow.setTextColor(COLOR_TEXT);
+    arrow.setTextSize(18);
+    arrow.setGravity(Gravity.CENTER);
+    arrow.setIncludeFontPadding(false);
+    arrow.setOnClickListener(v -> spinner.performClick());
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN) {
+      arrow.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+    }
+    FrameLayout.LayoutParams arrowParams = new FrameLayout.LayoutParams(
+        dp(42),
+        FrameLayout.LayoutParams.MATCH_PARENT,
+        Gravity.RIGHT | Gravity.CENTER_VERTICAL
+    );
+    box.addView(arrow, arrowParams);
+    return box;
   }
 
   private ArrayAdapter<String> darkSpinnerAdapter(String[] values) {
@@ -917,38 +961,24 @@ public class AidantActivity extends Activity {
     }
   }
 
-  private void chooseSound() {
-    Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
-    intent.addCategory(Intent.CATEGORY_OPENABLE);
-    intent.setType("audio/*");
-    intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
-    startActivityForResult(intent, REQUEST_SOUND);
-  }
-
-  @Override
-  protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-    super.onActivityResult(requestCode, resultCode, data);
-    if (requestCode != REQUEST_SOUND || resultCode != RESULT_OK || data == null || data.getData() == null) {
+  private void selectAlarmSound(int position) {
+    if (isRefreshingSoundUi) {
       return;
     }
 
-    Uri uri = data.getData();
-    int flags = data.getFlags() & Intent.FLAG_GRANT_READ_URI_PERMISSION;
-    try {
-      getContentResolver().takePersistableUriPermission(uri, flags);
-    } catch (Exception ignored) {
-      // Some providers grant temporary access only.
+    AlarmSounds.Choice choice = AlarmSounds.choiceAt(position);
+    String currentSoundId = prefs.getString(AlertContract.KEY_SOUND_ID, AlarmSounds.DEFAULT_ID);
+    String legacySoundUri = prefs.getString(AlertContract.KEY_SOUND_URI, null);
+    if (choice.id.equals(currentSoundId) && (legacySoundUri == null || legacySoundUri.trim().isEmpty())) {
+      return;
     }
 
-    prefs.edit().putString(AlertContract.KEY_SOUND_URI, uri.toString()).apply();
+    prefs.edit()
+        .putString(AlertContract.KEY_SOUND_ID, choice.id)
+        .remove(AlertContract.KEY_SOUND_URI)
+        .apply();
     refreshUi();
-    toast("Son importe.");
-  }
-
-  private void resetSound() {
-    prefs.edit().remove(AlertContract.KEY_SOUND_URI).apply();
-    refreshUi();
-    toast("Son par defaut reactive.");
+    toast("Son choisi: " + choice.label + ".");
   }
 
   private void connectMessagesFromPrefs() {
@@ -1089,9 +1119,15 @@ public class AidantActivity extends Activity {
 
   private void playIncomingMessageSound() {
     try {
-      ToneGenerator toneGenerator = new ToneGenerator(AudioManager.STREAM_NOTIFICATION, 80);
-      toneGenerator.startTone(ToneGenerator.TONE_PROP_ACK, 180);
-      connectionButton.postDelayed(toneGenerator::release, 260);
+      MediaPlayer mediaPlayer = MediaPlayer.create(this, R.raw.message_bip);
+      if (mediaPlayer != null) {
+        mediaPlayer.setOnCompletionListener(MediaPlayer::release);
+        mediaPlayer.setOnErrorListener((player, what, extra) -> {
+          player.release();
+          return true;
+        });
+        mediaPlayer.start();
+      }
     } catch (Exception ignored) {
       // Vibration below still provides feedback if the tone cannot play.
     }
@@ -1379,7 +1415,6 @@ public class AidantActivity extends Activity {
 
   private void refreshUi() {
     reloadPatientLinks();
-    String soundUri = prefs.getString(AlertContract.KEY_SOUND_URI, null);
     renderPatientUi();
 
     PatientLinkStore.Link selected = selectedLink();
@@ -1407,9 +1442,12 @@ public class AidantActivity extends Activity {
       }
     }
 
-    soundText.setText(soundUri == null || soundUri.isEmpty()
-        ? "Son actuel: 0615.MP3 par defaut."
-        : "Son actuel: fichier importe sur ce telephone.");
+    if (soundSpinner != null) {
+      isRefreshingSoundUi = true;
+      soundSpinner.setSelection(AlarmSounds.selectedIndex(prefs), false);
+      isRefreshingSoundUi = false;
+    }
+    soundText.setText("Son actuel: " + AlarmSounds.selectedLabel(prefs) + ".");
     updateConnectionStatus();
     renderUnreadMessages();
     renderMessages();

@@ -179,12 +179,7 @@ public class AlarmListenerService extends Service {
   }
 
   private Uri getAlarmUri() {
-    String customSound = prefs.getString(AlertContract.KEY_SOUND_URI, null);
-    if (customSound != null && !customSound.trim().isEmpty()) {
-      return Uri.parse(customSound);
-    }
-
-    return Uri.parse("android.resource://" + getPackageName() + "/" + R.raw.alarm_default);
+    return AlarmSounds.selectedUri(this, prefs);
   }
 
   private Uri getSystemFallbackAlarmUri() {

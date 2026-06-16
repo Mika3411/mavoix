@@ -7,6 +7,7 @@ final class AlertContract {
   static final String KEY_CHANNEL = "channel";
   static final String KEY_CONNECTIONS = "connections";
   static final String KEY_SELECTED_CONNECTION_ID = "selectedConnectionId";
+  static final String KEY_SOUND_ID = "soundId";
   static final String KEY_SOUND_URI = "soundUri";
   static final String KEY_BATTERY_OPTIMIZATION_PROMPTED = "batteryOptimizationPrompted";
 

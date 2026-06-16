@@ -26,11 +26,7 @@ type MessageStore = {
 };
 
 const MESSAGE_HISTORY_LIMIT = 80;
-
-type AudioWindow = Window &
-  typeof globalThis & {
-    webkitAudioContext?: typeof AudioContext;
-  };
+const INCOMING_MESSAGE_SOUND_URL = "/message-bip.mp3";
 
 type MessageNotificationPermission = NotificationPermission | "unsupported";
 
@@ -44,51 +40,10 @@ function playIncomingMessageSound() {
   };
 
   try {
-    const AudioContextConstructor =
-      window.AudioContext || (window as AudioWindow).webkitAudioContext;
-    if (!AudioContextConstructor) {
-      vibrate();
-      return;
-    }
-
-    const audioContext = new AudioContextConstructor();
-    const playTone = () => {
-      const now = audioContext.currentTime;
-      const gain = audioContext.createGain();
-      const firstTone = audioContext.createOscillator();
-      const secondTone = audioContext.createOscillator();
-
-      gain.gain.setValueAtTime(0.0001, now);
-      gain.gain.exponentialRampToValueAtTime(0.16, now + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.34);
-
-      firstTone.type = "sine";
-      firstTone.frequency.setValueAtTime(740, now);
-      secondTone.type = "sine";
-      secondTone.frequency.setValueAtTime(980, now + 0.13);
-
-      firstTone.connect(gain);
-      secondTone.connect(gain);
-      gain.connect(audioContext.destination);
-      firstTone.start(now);
-      firstTone.stop(now + 0.16);
-      secondTone.start(now + 0.13);
-      secondTone.stop(now + 0.34);
-      secondTone.onended = () => {
-        firstTone.disconnect();
-        secondTone.disconnect();
-        gain.disconnect();
-        void audioContext.close?.();
-      };
-      vibrate();
-    };
-
-    if (audioContext.state === "suspended") {
-      void audioContext.resume().then(playTone).catch(vibrate);
-      return;
-    }
-
-    playTone();
+    const audio = new Audio(INCOMING_MESSAGE_SOUND_URL);
+    audio.volume = 1;
+    void audio.play().catch(vibrate);
+    vibrate();
   } catch {
     vibrate();
   }
