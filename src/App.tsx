@@ -119,6 +119,8 @@ export default function App() {
   const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
   const [isPhraseEditMode, setIsPhraseEditMode] = useState(false);
   const [caregiverAlertSending, setCaregiverAlertSending] = useState(false);
+  const [selectedCaregiverAlertTargetId, setSelectedCaregiverAlertTargetId] =
+    useState("");
   const [noticeInitialSection, setNoticeInitialSection] =
     useState<SectionKey>("sommaire");
   const [downloadDevice, setDownloadDevice] = useState<DownloadDevice>(() =>
@@ -189,6 +191,32 @@ export default function App() {
     () => caregiverAlertTargets.filter((link) => link.enabled),
     [caregiverAlertTargets]
   );
+  const selectedCaregiverAlertTarget = useMemo(
+    () =>
+      enabledCaregiverAlertTargets.find(
+        (link) => link.id === selectedCaregiverAlertTargetId
+      ) ||
+      enabledCaregiverAlertTargets[0] ||
+      null,
+    [enabledCaregiverAlertTargets, selectedCaregiverAlertTargetId]
+  );
+
+  useEffect(() => {
+    if (enabledCaregiverAlertTargets.length === 0) {
+      if (selectedCaregiverAlertTargetId) {
+        setSelectedCaregiverAlertTargetId("");
+      }
+      return;
+    }
+
+    const selectedExists = enabledCaregiverAlertTargets.some(
+      (link) => link.id === selectedCaregiverAlertTargetId
+    );
+
+    if (!selectedExists) {
+      setSelectedCaregiverAlertTargetId(enabledCaregiverAlertTargets[0].id);
+    }
+  }, [enabledCaregiverAlertTargets, selectedCaregiverAlertTargetId]);
 
   function openNoticeSection(section: SectionKey = "sommaire") {
     setNoticeInitialSection(section);
@@ -597,77 +625,43 @@ export default function App() {
     if (caregiverAlertSending) return;
 
     if (enabledCaregiverAlertTargets.length === 0) {
-      showToast("Aucun aidant relié au bouton");
+      showToast("Aucun aidant disponible pour Appel aidant");
+      return;
+    }
+
+    if (!selectedCaregiverAlertTarget) {
+      showToast("Choisis l'aidant à prévenir");
       return;
     }
 
     try {
       setCaregiverAlertSending(true);
 
-      const results = await Promise.all(
-        enabledCaregiverAlertTargets.map(async (target) => {
-          try {
-            const response = await fetch(`${API_BASE}/api/caregiver-alert`, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({
-                channel: target.channel,
-                profileName:
-                  currentProfile?.firstName || currentProfile?.name || "",
-                message: "J'ai besoin de mon auxiliaire de vie.",
-              }),
-            });
-            const data = await response.json().catch(() => ({}));
+      const response = await fetch(`${API_BASE}/api/caregiver-alert`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          channel: selectedCaregiverAlertTarget.channel,
+          profileName: currentProfile?.firstName || currentProfile?.name || "",
+          message: "J'ai besoin de mon auxiliaire de vie.",
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
 
-            if (!response.ok) {
-              return {
-                deliveredTo: 0,
-                error: getCaregiverAlertErrorMessage(response, data),
-              };
-            }
-
-            return {
-              deliveredTo: Number(data?.deliveredTo || 0),
-              error: "",
-            };
-          } catch (error) {
-            return {
-              deliveredTo: 0,
-              error:
-                error instanceof Error
-                  ? error.message
-                  : "Impossible d'envoyer l'alerte auxiliaire",
-            };
-          }
-        })
-      );
-
-      const failedResults = results.filter((result) => result.error);
-      if (failedResults.length === results.length) {
-        throw new Error(failedResults[0]?.error || "Impossible d'envoyer l'alerte.");
+      if (!response.ok) {
+        throw new Error(getCaregiverAlertErrorMessage(response, data));
       }
 
-      const deliveredTo = results.reduce(
-        (total, result) => total + result.deliveredTo,
-        0
-      );
+      const deliveredTo = Number(data?.deliveredTo || 0);
+      const caregiverName =
+        selectedCaregiverAlertTarget.name || "l'aidant sélectionné";
 
       if (deliveredTo > 0) {
-        showToast(
-          failedResults.length > 0
-            ? "Alarme envoyée, certains liens indisponibles"
-            : enabledCaregiverAlertTargets.length > 1
-              ? `Alarme envoyée à ${deliveredTo} téléphone(s) aidant(s)`
-              : "Alarme envoyée à l'aidant"
-        );
+        showToast(`Alarme envoyée à ${caregiverName}`);
       } else {
-        showToast(
-          enabledCaregiverAlertTargets.length > 1
-            ? "Aucun téléphone aidant connecté"
-            : "Téléphone aidant non connecté"
-        );
+        showToast(`${caregiverName} n'est pas connecté`);
       }
     } catch (error) {
       showToast(
@@ -1413,17 +1407,75 @@ export default function App() {
         {isFullscreen ? "Quitter" : "Plein écran"}
       </button>
 
+      {enabledCaregiverAlertTargets.length > 1 ? (
+        <div
+          style={{
+            position: "fixed",
+            right: 20,
+            bottom: 166,
+            zIndex: 9999,
+            width: "min(280px, calc(100vw - 40px))",
+            display: "grid",
+            gap: 6,
+            padding: 10,
+            borderRadius: 18,
+            background: "rgba(15, 23, 42, 0.92)",
+            border: "1px solid rgba(255,255,255,0.14)",
+            boxShadow: "0 8px 25px rgba(0,0,0,0.3)",
+          }}
+        >
+          <label
+            htmlFor="caregiver-alert-target"
+            style={{
+              color: "#e2e8f0",
+              fontSize: 12,
+              fontWeight: 800,
+            }}
+          >
+            Aidant à appeler
+          </label>
+          <select
+            id="caregiver-alert-target"
+            value={selectedCaregiverAlertTarget?.id || ""}
+            onChange={(event) =>
+              setSelectedCaregiverAlertTargetId(event.target.value)
+            }
+            style={{
+              minHeight: 44,
+              width: "100%",
+              borderRadius: 14,
+              border: "1px solid rgba(148,163,184,0.42)",
+              background: "#020617",
+              color: "#f8fafc",
+              padding: "0 12px",
+              fontSize: 16,
+              fontWeight: 800,
+            }}
+          >
+            {enabledCaregiverAlertTargets.map((target) => (
+              <option key={target.id} value={target.id}>
+                {target.name || "Aidant"}
+              </option>
+            ))}
+          </select>
+        </div>
+      ) : null}
+
       <button
         onClick={sendCaregiverAlert}
         disabled={caregiverAlertSending}
         aria-label={
           caregiverAlertSending
             ? "Envoi de l'appel aidant"
+            : selectedCaregiverAlertTarget
+            ? `Appel aidant : ${selectedCaregiverAlertTarget.name || "aidant"}`
             : "Appel aidant"
         }
         title={
           caregiverAlertSending
             ? "Envoi de l'appel aidant"
+            : selectedCaregiverAlertTarget
+            ? `Appel aidant : ${selectedCaregiverAlertTarget.name || "aidant"}`
             : "Appel aidant"
         }
         style={{

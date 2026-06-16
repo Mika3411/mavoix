@@ -604,7 +604,7 @@ export default function NoticePage({
                   "Ouvrez Profil ou Configurer.",
                   "Repérez la section Téléphone auxiliaire.",
                   "Ajoutez un aidant si plusieurs téléphones doivent avoir leur propre lien.",
-                  "Cochez Relié au bouton pour chaque aidant qui doit sonner avec Appel aidant.",
+                  "Cochez Disponible pour Appel aidant pour chaque aidant qui doit apparaître dans la liste de choix.",
                   "Copiez le lien d'alarme ou ouvrez le mode auxiliaire quand il est proposé.",
                   "Sur Android, le lien direct peut ouvrir l'application Ma Voix Auxiliaire si elle est installée.",
                 ]}
@@ -614,8 +614,9 @@ export default function NoticePage({
             <NoticeBlock title="Envoyer une alerte">
               <NoticeParagraph>
                 Le bouton Appel aidant, placé en bas de l'application,
-                envoie une alarme aux téléphones reliés au bouton. Si aucun
-                téléphone aidant n'est connecté, l'application l'indique.
+                envoie l'alarme uniquement à l'aidant sélectionné dans la
+                liste. Si son téléphone n'est pas connecté, l'application
+                l'indique.
               </NoticeParagraph>
             </NoticeBlock>
 

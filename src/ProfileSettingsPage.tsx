@@ -2363,9 +2363,10 @@ export default function ProfileSettingsPage(props: any) {
             <strong style={{ display: "block", marginBottom: 6 }}>
               À quoi ça sert ?
             </strong>
-            Crée un lien par aidant, puis coche ceux qui doivent sonner quand
-            tu appuies sur <strong>Appel aidant</strong>. Chaque lien reste lié
-            au profil actuellement sélectionné.
+            Crée un lien par aidant, puis coche ceux qui doivent être
+            disponibles dans le choix <strong>Appel aidant</strong>. Avant
+            d'appuyer sur la cloche, choisis l'aidant qui doit recevoir
+            l'alarme.
           </div>
 
           <div style={{ display: "grid", gap: 14 }}>
@@ -2409,7 +2410,7 @@ export default function ProfileSettingsPage(props: any) {
                         })
                       }
                     />
-                    Relié au bouton
+                    Disponible pour Appel aidant
                   </label>
                 </div>
 
