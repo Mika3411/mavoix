@@ -82,7 +82,8 @@ export default function CommunicationPage(props: any) {
           <div
             style={{
               ...styles.quickPhraseGrid,
-              gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+              gridTemplateColumns:
+                "repeat(auto-fit, minmax(min(150px, 42vw), 1fr))",
               gap: 10,
               alignItems: "start",
             }}
