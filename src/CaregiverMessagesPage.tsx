@@ -603,17 +603,22 @@ export default function CaregiverMessagesPage(props: any) {
               style={{
                 marginTop: 12,
                 display: "grid",
-                gridTemplateColumns:
-                  window.innerWidth > 760
-                    ? "repeat(3, minmax(0, 1fr))"
-                    : "1fr",
+                gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
                 gap: 10,
+                alignItems: "stretch",
               }}
             >
               <button
                 type="button"
                 style={{
                   ...styles.primaryButton,
+                  width: "100%",
+                  minWidth: 0,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  whiteSpace: "normal",
+                  lineHeight: 1.2,
                   opacity: isListening ? 0.6 : 1,
                 }}
                 onClick={startDictation}
@@ -624,7 +629,16 @@ export default function CaregiverMessagesPage(props: any) {
 
               <button
                 type="button"
-                style={styles.secondaryButton}
+                style={{
+                  ...styles.secondaryButton,
+                  width: "100%",
+                  minWidth: 0,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  whiteSpace: "normal",
+                  lineHeight: 1.2,
+                }}
                 onClick={() => sendCaregiverMessage("audio")}
                 disabled={isSending || !selectedCaregiver}
               >
@@ -635,6 +649,13 @@ export default function CaregiverMessagesPage(props: any) {
                 type="button"
                 style={{
                   ...styles.primaryButton,
+                  width: "100%",
+                  minWidth: 0,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  whiteSpace: "normal",
+                  lineHeight: 1.2,
                   opacity: isSending ? 0.7 : 1,
                 }}
                 onClick={() => sendCaregiverMessage("text")}
