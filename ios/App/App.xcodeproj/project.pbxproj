@@ -15,6 +15,19 @@
 		504EC30F1FED79650016851F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 504EC30E1FED79650016851F /* Assets.xcassets */; };
 		504EC3121FED79650016851F /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 504EC3101FED79650016851F /* LaunchScreen.storyboard */; };
 		50B271D11FEDC1A000F3C39B /* public in Resources */ = {isa = PBXBuildFile; fileRef = 50B271D01FEDC1A000F3C39B /* public */; };
+		0860494C1A85E729BDBCAAFD /* DocumentSaverPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA9B7DE0DDCFF92A12853EC3 /* DocumentSaverPlugin.swift */; };
+		DFF5EB35C207A18A58A3C912 /* MessageNotifierPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80F8BBB76663B586D1CE10FA /* MessageNotifierPlugin.swift */; };
+		5133D9E1BB90296F00A069F5 /* MainViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42E6118D5F52DC1F421016E0 /* MainViewController.swift */; };
+		72581AA6826BC2C654D32289 /* SpeechRecognition.swift in Sources */ = {isa = PBXBuildFile; fileRef = 277C95D9C452F4C4432F90BB /* SpeechRecognition.swift */; };
+		9BA9FE2F1789D541410049B6 /* SpeechRecognitionPlugin.m in Sources */ = {isa = PBXBuildFile; fileRef = 4B0E38B75F44ACC48A21990B /* SpeechRecognitionPlugin.m */; };
+		C63BE8F1A20F620AE7E5205B /* CurrentRecordingStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = 441894577A2D175BFE892AF7 /* CurrentRecordingStatus.swift */; };
+		5BDA85F91FADFD01E17AD084 /* CustomMediaRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1845930E02F8DB4EAD7E7D8 /* CustomMediaRecorder.swift */; };
+		20EC4036C8F7108A4CA24BEB /* Messages.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8956D07F7D987E04E24699FC /* Messages.swift */; };
+		63D3BB1DD332E9A2B1CC1926 /* RecordData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 892A0F78DFD3C5E4DE8B1613 /* RecordData.swift */; };
+		F19DD150C7F947D168DBDBB5 /* RecordOptions.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6BC3BCE2E987FC1D4DA7001 /* RecordOptions.swift */; };
+		2067B9E2DDD392E436E2DBEF /* ResponseGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61B57694A9930C359BEF6853 /* ResponseGenerator.swift */; };
+		1726C513C5B1336DFE97E9B0 /* VoiceRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB06898082E849187F475F1A /* VoiceRecorder.swift */; };
+		66AE39707B75F1DE0154EF5D /* VoiceRecorderPlugin.m in Sources */ = {isa = PBXBuildFile; fileRef = 0A0736E3CCC368D34D463E58 /* VoiceRecorderPlugin.m */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -28,6 +41,19 @@
 		504EC3131FED79650016851F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		50B271D01FEDC1A000F3C39B /* public */ = {isa = PBXFileReference; lastKnownFileType = folder; path = public; sourceTree = "<group>"; };
 		958DCC722DB07C7200EA8C5F /* debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = debug.xcconfig; path = ../debug.xcconfig; sourceTree = SOURCE_ROOT; };
+		EA9B7DE0DDCFF92A12853EC3 /* DocumentSaverPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentSaverPlugin.swift; sourceTree = "<group>"; };
+		80F8BBB76663B586D1CE10FA /* MessageNotifierPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageNotifierPlugin.swift; sourceTree = "<group>"; };
+		42E6118D5F52DC1F421016E0 /* MainViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainViewController.swift; sourceTree = "<group>"; };
+		277C95D9C452F4C4432F90BB /* SpeechRecognition.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SpeechRecognition.swift; path = "../../node_modules/@capacitor-community/speech-recognition/ios/Plugin/Plugin.swift"; sourceTree = SOURCE_ROOT; };
+		4B0E38B75F44ACC48A21990B /* SpeechRecognitionPlugin.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = SpeechRecognitionPlugin.m; path = "../../node_modules/@capacitor-community/speech-recognition/ios/Plugin/Plugin.m"; sourceTree = SOURCE_ROOT; };
+		441894577A2D175BFE892AF7 /* CurrentRecordingStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = CurrentRecordingStatus.swift; path = "../../node_modules/capacitor-voice-recorder/ios/Plugin/CurrentRecordingStatus.swift"; sourceTree = SOURCE_ROOT; };
+		D1845930E02F8DB4EAD7E7D8 /* CustomMediaRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = CustomMediaRecorder.swift; path = "../../node_modules/capacitor-voice-recorder/ios/Plugin/CustomMediaRecorder.swift"; sourceTree = SOURCE_ROOT; };
+		8956D07F7D987E04E24699FC /* Messages.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Messages.swift; path = "../../node_modules/capacitor-voice-recorder/ios/Plugin/Messages.swift"; sourceTree = SOURCE_ROOT; };
+		892A0F78DFD3C5E4DE8B1613 /* RecordData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = RecordData.swift; path = "../../node_modules/capacitor-voice-recorder/ios/Plugin/RecordData.swift"; sourceTree = SOURCE_ROOT; };
+		C6BC3BCE2E987FC1D4DA7001 /* RecordOptions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = RecordOptions.swift; path = "../../node_modules/capacitor-voice-recorder/ios/Plugin/RecordOptions.swift"; sourceTree = SOURCE_ROOT; };
+		61B57694A9930C359BEF6853 /* ResponseGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ResponseGenerator.swift; path = "../../node_modules/capacitor-voice-recorder/ios/Plugin/ResponseGenerator.swift"; sourceTree = SOURCE_ROOT; };
+		CB06898082E849187F475F1A /* VoiceRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = VoiceRecorder.swift; path = "../../node_modules/capacitor-voice-recorder/ios/Plugin/VoiceRecorder.swift"; sourceTree = SOURCE_ROOT; };
+		0A0736E3CCC368D34D463E58 /* VoiceRecorderPlugin.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = VoiceRecorderPlugin.m; path = "../../node_modules/capacitor-voice-recorder/ios/Plugin/VoiceRecorderPlugin.m"; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -64,6 +90,19 @@
 			children = (
 				50379B222058CBB4000EE86E /* capacitor.config.json */,
 				504EC3071FED79650016851F /* AppDelegate.swift */,
+				42E6118D5F52DC1F421016E0 /* MainViewController.swift */,
+				EA9B7DE0DDCFF92A12853EC3 /* DocumentSaverPlugin.swift */,
+				80F8BBB76663B586D1CE10FA /* MessageNotifierPlugin.swift */,
+				277C95D9C452F4C4432F90BB /* SpeechRecognition.swift */,
+				4B0E38B75F44ACC48A21990B /* SpeechRecognitionPlugin.m */,
+				441894577A2D175BFE892AF7 /* CurrentRecordingStatus.swift */,
+				D1845930E02F8DB4EAD7E7D8 /* CustomMediaRecorder.swift */,
+				8956D07F7D987E04E24699FC /* Messages.swift */,
+				892A0F78DFD3C5E4DE8B1613 /* RecordData.swift */,
+				C6BC3BCE2E987FC1D4DA7001 /* RecordOptions.swift */,
+				61B57694A9930C359BEF6853 /* ResponseGenerator.swift */,
+				CB06898082E849187F475F1A /* VoiceRecorder.swift */,
+				0A0736E3CCC368D34D463E58 /* VoiceRecorderPlugin.m */,
 				504EC30B1FED79650016851F /* Main.storyboard */,
 				504EC30E1FED79650016851F /* Assets.xcassets */,
 				504EC3101FED79650016851F /* LaunchScreen.storyboard */,
@@ -156,6 +195,19 @@
 			buildActionMask = 2147483647;
 			files = (
 				504EC3081FED79650016851F /* AppDelegate.swift in Sources */,
+				5133D9E1BB90296F00A069F5 /* MainViewController.swift in Sources */,
+				0860494C1A85E729BDBCAAFD /* DocumentSaverPlugin.swift in Sources */,
+				DFF5EB35C207A18A58A3C912 /* MessageNotifierPlugin.swift in Sources */,
+				72581AA6826BC2C654D32289 /* SpeechRecognition.swift in Sources */,
+				9BA9FE2F1789D541410049B6 /* SpeechRecognitionPlugin.m in Sources */,
+				C63BE8F1A20F620AE7E5205B /* CurrentRecordingStatus.swift in Sources */,
+				5BDA85F91FADFD01E17AD084 /* CustomMediaRecorder.swift in Sources */,
+				20EC4036C8F7108A4CA24BEB /* Messages.swift in Sources */,
+				63D3BB1DD332E9A2B1CC1926 /* RecordData.swift in Sources */,
+				F19DD150C7F947D168DBDBB5 /* RecordOptions.swift in Sources */,
+				2067B9E2DDD392E436E2DBEF /* ResponseGenerator.swift in Sources */,
+				1726C513C5B1336DFE97E9B0 /* VoiceRecorder.swift in Sources */,
+				66AE39707B75F1DE0154EF5D /* VoiceRecorderPlugin.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

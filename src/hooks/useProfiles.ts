@@ -519,7 +519,7 @@ export default function useProfiles() {
       const fileName = `ma-voix-profils-${new Date().toISOString().slice(0, 10)}.json`;
       const json = JSON.stringify(data, null, 2);
 
-      if (Capacitor.getPlatform() === "android" && Capacitor.isNativePlatform()) {
+      if (Capacitor.isNativePlatform()) {
         await DocumentSaver.saveJson({
           fileName,
           content: json,
