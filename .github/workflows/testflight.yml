@@ -29,6 +29,20 @@ jobs:
       - name: Sync iOS app
         run: npx cap sync ios
 
+      - name: Prepare Apple team id
+        env:
+          APPLE_TEAM_ID_SECRET: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          APPLE_TEAM_ID_CLEAN=$(printf "%s" "$APPLE_TEAM_ID_SECRET" | tr -d '[:space:]')
+          if [ -z "$APPLE_TEAM_ID_CLEAN" ]; then
+            echo "APPLE_TEAM_ID is empty after cleanup" >&2
+            exit 1
+          fi
+          if [ ${#APPLE_TEAM_ID_CLEAN} -ne 10 ]; then
+            echo "::warning::APPLE_TEAM_ID should usually contain 10 characters after cleanup."
+          fi
+          echo "APPLE_TEAM_ID=$APPLE_TEAM_ID_CLEAN" >> "$GITHUB_ENV"
+
       - name: Normalize iOS package paths
         run: |
           python3 - <<'PY'
@@ -81,8 +95,6 @@ jobs:
           security find-identity -v -p codesigning "$KEYCHAIN_PATH"
 
       - name: Create export options
-        env:
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           cat > ExportOptions.plist <<EOF
           <?xml version="1.0" encoding="UTF-8"?>
@@ -109,8 +121,6 @@ jobs:
           EOF
 
       - name: Archive iOS app
-        env:
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           set -o pipefail
           xcodebuild archive \
