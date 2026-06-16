@@ -2,8 +2,6 @@ require("dotenv").config();
 
 const express = require("express");
 const cors = require("cors");
-const OpenAI = require("openai");
-const { createClient } = require("@supabase/supabase-js");
 const { randomUUID } = require("crypto");
 const fs = require("fs");
 const path = require("path");
@@ -58,19 +56,6 @@ app.use(
 );
 app.use(express.json());
 
-const client = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
-
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
-
-const CREDITS_PER_EURO = 1000;
-const ADMIN_TOKEN = (process.env.ADMIN_TOKEN || "").trim();
-const MISSING_RPC_HINT =
-  "Les migrations Supabase RPC ne sont pas appliquées. Applique les fichiers dans supabase/migrations avant de déployer ce backend.";
 const DESKTOP_BUILD_DIR = path.join(__dirname, "build");
 const ANDROID_BUILD_DIR = process.env.ANDROID_BUILD_DIR
   ? path.resolve(process.env.ANDROID_BUILD_DIR)
@@ -80,102 +65,6 @@ const DEFAULT_ALARM_AUDIO_FILE = path.join(
   "public",
   "aidant-alarm-default.mp3"
 );
-
-async function getAppState() {
-  const { data, error } = await supabase
-    .from("app_state")
-    .select("credits, donor_wall")
-    .eq("id", "global")
-    .single();
-
-  if (error && error.code !== "PGRST116") {
-    throw error;
-  }
-
-  return {
-    credits: Number(data?.credits || 0),
-    donorWall: Array.isArray(data?.donor_wall) ? data.donor_wall : [],
-  };
-}
-
-function normalizeAppStateRow(row) {
-  return {
-    reserved: Boolean(row?.reserved),
-    credits: Number(row?.credits || 0),
-    donorWall: Array.isArray(row?.donor_wall) ? row.donor_wall : [],
-  };
-}
-
-function normalizeRpcRow(data) {
-  return normalizeAppStateRow(Array.isArray(data) ? data[0] : data);
-}
-
-async function reserveAiCredit() {
-  const { data, error } = await supabase.rpc("reserve_global_ai_credit");
-
-  if (error) {
-    throw error;
-  }
-
-  return normalizeRpcRow(data);
-}
-
-async function refundAiCredit() {
-  const { data, error } = await supabase.rpc("refund_global_ai_credit");
-
-  if (error) {
-    throw error;
-  }
-
-  return normalizeRpcRow(data);
-}
-
-async function addAiCredits(creditsToAdd, donorEntry = null) {
-  const { data, error } = await supabase.rpc("add_global_ai_credits", {
-    p_credits_to_add: creditsToAdd,
-    p_donor_entry: donorEntry,
-  });
-
-  if (error) {
-    throw error;
-  }
-
-  return normalizeRpcRow(data);
-}
-
-function getErrorMessage(error, fallback) {
-  return error?.message || fallback;
-}
-
-function isMissingSupabaseRpc(error) {
-  const code = String(error?.code || "");
-  const message = String(error?.message || error?.details || "");
-
-  return (
-    code === "42883" ||
-    /function .* does not exist/i.test(message) ||
-    /could not find the function/i.test(message)
-  );
-}
-
-function sendServerError(res, error, fallback) {
-  if (isMissingSupabaseRpc(error)) {
-    return res.status(503).json({
-      error: "Migration Supabase manquante",
-      details: MISSING_RPC_HINT,
-    });
-  }
-
-  return res.status(500).json({
-    error: "Erreur serveur",
-    details: getErrorMessage(error, fallback),
-  });
-}
-
-function parsePositiveNumber(value) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
-}
 
 function sanitizeText(value, maxLength = 140) {
   if (typeof value !== "string") return "";
@@ -365,6 +254,12 @@ function getCaregiverAlertPageHtml() {
         line-height: 1.5;
       }
 
+      label {
+        color: #cbd5e1;
+        font-size: 15px;
+        font-weight: 800;
+      }
+
       .card {
         background: rgba(255, 255, 255, 0.06);
         border: 1px solid rgba(255, 255, 255, 0.1);
@@ -421,6 +316,84 @@ function getCaregiverAlertPageHtml() {
         gap: 12px;
       }
 
+      .messages,
+      .message-form,
+      .section-menu,
+      .config-form {
+        display: grid;
+        gap: 12px;
+      }
+
+      .section-select,
+      .connection-link {
+        min-height: 58px;
+        width: 100%;
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        border-radius: 18px;
+        padding: 0 16px;
+        box-sizing: border-box;
+        background: rgba(15, 23, 42, 0.82);
+        color: #f8fafc;
+        font: inherit;
+        font-size: 18px;
+        font-weight: 800;
+      }
+
+      .section-panel[hidden] {
+        display: none;
+      }
+
+      .connection-button {
+        min-height: 132px;
+        border-radius: 26px;
+        font-size: clamp(26px, 8vw, 40px);
+        line-height: 1.05;
+        text-align: center;
+        box-shadow: 0 22px 50px rgba(0, 0, 0, 0.32);
+      }
+
+      .connection-button.connected {
+        background: linear-gradient(135deg, #16a34a, #22c55e);
+        color: #052e16;
+      }
+
+      .connection-button.disconnected {
+        background: linear-gradient(135deg, #dc2626, #ef4444);
+        color: #fff7ed;
+      }
+
+      .unread-list {
+        display: grid;
+        gap: 10px;
+      }
+
+      .unread-item {
+        padding: 12px 14px;
+        border-radius: 16px;
+        background: rgba(34, 197, 94, 0.16);
+        border: 1px solid rgba(74, 222, 128, 0.26);
+      }
+
+      .unread-meta {
+        color: #bbf7d0;
+        font-size: 12px;
+        font-weight: 800;
+        margin-bottom: 4px;
+      }
+
+      .unread-text {
+        color: #f8fafc;
+        font-size: 17px;
+        line-height: 1.35;
+        overflow-wrap: anywhere;
+      }
+
+      .unread-empty {
+        color: #cbd5e1;
+        font-size: 16px;
+        line-height: 1.45;
+      }
+
       .file-label {
         min-height: 58px;
         border-radius: 18px;
@@ -447,6 +420,83 @@ function getCaregiverAlertPageHtml() {
         line-height: 1.45;
       }
 
+      .message-list {
+        min-height: 180px;
+        max-height: 340px;
+        overflow-y: auto;
+        display: grid;
+        align-content: start;
+        gap: 10px;
+        padding: 12px;
+        border-radius: 18px;
+        background: rgba(15, 23, 42, 0.52);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+      }
+
+      .message-empty,
+      .message-status {
+        color: #cbd5e1;
+        font-size: 15px;
+        line-height: 1.45;
+      }
+
+      .message-status.error {
+        color: #fecaca;
+        font-weight: 800;
+      }
+
+      .message-bubble {
+        max-width: 86%;
+        padding: 11px 13px;
+        border-radius: 16px;
+        display: grid;
+        gap: 5px;
+        line-height: 1.35;
+      }
+
+      .message-user {
+        justify-self: start;
+        background: rgba(34, 197, 94, 0.18);
+        border: 1px solid rgba(74, 222, 128, 0.28);
+      }
+
+      .message-caregiver {
+        justify-self: end;
+        background: rgba(37, 99, 235, 0.32);
+        border: 1px solid rgba(96, 165, 250, 0.38);
+      }
+
+      .message-meta {
+        color: #cbd5e1;
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .message-text {
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        font-size: 17px;
+      }
+
+      .message-input {
+        width: 100%;
+        min-height: 110px;
+        resize: vertical;
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        border-radius: 18px;
+        padding: 14px;
+        box-sizing: border-box;
+        background: rgba(15, 23, 42, 0.72);
+        color: #f8fafc;
+        font: inherit;
+        font-size: 18px;
+      }
+
+      button:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+      }
+
       @keyframes pulse {
         from { transform: scale(1); }
         to { transform: scale(1.02); }
@@ -460,38 +510,85 @@ function getCaregiverAlertPageHtml() {
         <p>Garde cette page ouverte sur le téléphone de l'auxiliaire. Appuie une fois sur “Activer le son”. Quand Ma Voix envoie une alerte, ce téléphone sonnera.</p>
       </section>
 
-      <section id="status" class="card status">Connexion en attente...</section>
-
-      <section class="actions">
-        <button id="enableSound" class="primary" type="button">Activer le son</button>
-        <button id="stopAlarm" class="danger" type="button" disabled>Arrêter l'alarme</button>
-        <button id="reconnect" class="secondary" type="button">Reconnecter</button>
+      <section class="card section-menu">
+        <label for="sectionSelect">Menu aidant</label>
+        <select id="sectionSelect" class="section-select">
+          <option value="connexion">Connexion</option>
+          <option value="configurer">Configurer</option>
+          <option value="messages">Messages</option>
+        </select>
       </section>
 
-      <section class="card sound-settings">
-        <h2>Son d'alarme</h2>
-        <p>L'auxiliaire peut importer un son depuis son téléphone. Le fichier reste enregistré localement sur ce téléphone.</p>
-        <label class="file-label">
-          Importer un son
-          <input id="importSound" type="file" accept="audio/*" />
-        </label>
-        <div id="customSoundName" class="sound-name">Son actuel : alarme par défaut.</div>
-        <button id="testSound" class="secondary" type="button">Tester le son</button>
-        <button id="clearSound" class="secondary" type="button" disabled>Revenir au son par défaut</button>
+      <section id="connexionPanel" class="section-panel" data-section="connexion">
+        <div class="card actions">
+          <button id="connectionButton" class="connection-button disconnected" type="button">Non connecté</button>
+          <section id="status" class="status">Connexion en attente...</section>
+          <button id="stopAlarm" class="danger" type="button" disabled>Arrêter l'alarme</button>
+          <div>
+            <h2>Derniers messages non lus</h2>
+            <div id="unreadList" class="unread-list">
+              <div class="unread-empty">Aucun message non lu.</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="configurerPanel" class="section-panel" data-section="configurer" hidden>
+        <div class="card sound-settings">
+          <h2>Configurer</h2>
+          <div class="config-form">
+            <label for="connectionLink">Lien de connexion</label>
+            <input id="connectionLink" class="connection-link" type="text" readonly />
+            <button id="copyLink" class="secondary" type="button">Copier le lien</button>
+          </div>
+          <h2>Son d'alarme</h2>
+          <p>L'auxiliaire peut importer un son depuis son téléphone. Le fichier reste enregistré localement sur ce téléphone.</p>
+          <label class="file-label">
+            Importer un son
+            <input id="importSound" type="file" accept="audio/*" />
+          </label>
+          <div id="customSoundName" class="sound-name">Son actuel : alarme par défaut.</div>
+          <button id="testSound" class="secondary" type="button">Tester le son</button>
+          <button id="clearSound" class="secondary" type="button" disabled>Revenir au son par défaut</button>
+        </div>
+      </section>
+
+      <section id="messagesPanel" class="section-panel" data-section="messages" hidden>
+        <div class="card messages">
+          <h2>Messages</h2>
+          <p>Les messages envoyés depuis Ma Voix apparaissent ici. Réponds dans le champ ci-dessous pour que l'utilisateur les reçoive dans l'application.</p>
+          <div id="messageList" class="message-list">
+            <div class="message-empty">Aucun message pour le moment.</div>
+          </div>
+          <form id="messageForm" class="message-form">
+            <textarea id="messageInput" class="message-input" placeholder="Répondre à l'utilisateur..." maxlength="600"></textarea>
+            <button id="sendMessage" class="primary" type="submit">Envoyer le message</button>
+          </form>
+          <div id="messageStatus" class="message-status">Connexion aux messages en attente...</div>
+        </div>
       </section>
     </main>
 
     <script>
       const params = new URLSearchParams(window.location.search);
       const channel = params.get("channel") || "";
+      const sectionSelect = document.getElementById("sectionSelect");
+      const sectionPanels = Array.from(document.querySelectorAll("[data-section]"));
+      const connectionButton = document.getElementById("connectionButton");
       const statusElement = document.getElementById("status");
-      const enableSoundButton = document.getElementById("enableSound");
       const stopAlarmButton = document.getElementById("stopAlarm");
-      const reconnectButton = document.getElementById("reconnect");
       const importSoundInput = document.getElementById("importSound");
       const customSoundNameElement = document.getElementById("customSoundName");
       const testSoundButton = document.getElementById("testSound");
       const clearSoundButton = document.getElementById("clearSound");
+      const connectionLinkInput = document.getElementById("connectionLink");
+      const copyLinkButton = document.getElementById("copyLink");
+      const unreadListElement = document.getElementById("unreadList");
+      const messageListElement = document.getElementById("messageList");
+      const messageForm = document.getElementById("messageForm");
+      const messageInput = document.getElementById("messageInput");
+      const sendMessageButton = document.getElementById("sendMessage");
+      const messageStatusElement = document.getElementById("messageStatus");
 
       let audioContext = null;
       let alarmInterval = null;
@@ -500,15 +597,210 @@ function getCaregiverAlertPageHtml() {
       let customAlarmName = "";
       let soundEnabled = false;
       let events = null;
+      let messageEvents = null;
+      let messageItems = [];
+      let activeSection = "connexion";
+      let alertConnected = false;
+      let messagesConnected = false;
+      let unreadMessageIds = new Set();
       const alarmDbName = "maVoixCaregiverAlarm";
       const alarmStoreName = "settings";
       const customSoundKey = "customSound";
       const defaultAlarmUrl = "/aidant-alarm-default.mp3";
       const defaultAlarmName = "0615.MP3";
+      const readMessagesKey = "maVoixCaregiverReadMessages:" + (channel || "default");
 
       function setStatus(message, isAlert = false) {
         statusElement.textContent = message;
         statusElement.classList.toggle("alert", isAlert);
+      }
+
+      function setMessageStatus(message, isError = false) {
+        messageStatusElement.textContent = message;
+        messageStatusElement.classList.toggle("error", Boolean(isError));
+      }
+
+      function readStoredMessageIds() {
+        try {
+          const saved = window.localStorage.getItem(readMessagesKey);
+          const ids = saved ? JSON.parse(saved) : [];
+          return Array.isArray(ids) ? new Set(ids) : new Set();
+        } catch {
+          return new Set();
+        }
+      }
+
+      let readMessageIds = readStoredMessageIds();
+
+      function persistReadMessageIds() {
+        try {
+          window.localStorage.setItem(readMessagesKey, JSON.stringify(Array.from(readMessageIds).slice(-200)));
+        } catch {}
+      }
+
+      function updateConnectionButton() {
+        const isConnected = Boolean(alertConnected);
+        connectionButton.classList.toggle("connected", isConnected);
+        connectionButton.classList.toggle("disconnected", !isConnected);
+        connectionButton.textContent = isConnected ? "Connecté" : "Non connecté";
+      }
+
+      function setAlertConnected(nextValue) {
+        alertConnected = Boolean(nextValue);
+        updateConnectionButton();
+      }
+
+      function setMessagesConnected(nextValue) {
+        messagesConnected = Boolean(nextValue);
+        updateConnectionButton();
+      }
+
+      function renderUnreadMessages() {
+        unreadListElement.innerHTML = "";
+        const unreadMessages = messageItems
+          .filter((item) => item.senderRole !== "caregiver" && unreadMessageIds.has(item.id))
+          .slice(-3)
+          .reverse();
+
+        if (unreadMessages.length === 0) {
+          const empty = document.createElement("div");
+          empty.className = "unread-empty";
+          empty.textContent = "Aucun message non lu.";
+          unreadListElement.appendChild(empty);
+          return;
+        }
+
+        for (const item of unreadMessages) {
+          const card = document.createElement("div");
+          card.className = "unread-item";
+
+          const meta = document.createElement("div");
+          meta.className = "unread-meta";
+          const time = formatMessageTime(item.createdAt);
+          meta.textContent = time ? "Utilisateur - " + time : "Utilisateur";
+
+          const text = document.createElement("div");
+          text.className = "unread-text";
+          text.textContent = item.message || "";
+
+          card.appendChild(meta);
+          card.appendChild(text);
+          unreadListElement.appendChild(card);
+        }
+      }
+
+      function markMessagesRead() {
+        let changed = false;
+
+        for (const item of messageItems) {
+          if (item.senderRole === "caregiver" || !item.id) continue;
+          if (!readMessageIds.has(item.id)) {
+            readMessageIds.add(item.id);
+            changed = true;
+          }
+          unreadMessageIds.delete(item.id);
+        }
+
+        if (changed) persistReadMessageIds();
+        renderUnreadMessages();
+      }
+
+      function refreshUnreadMessagesFromHistory() {
+        for (const item of messageItems) {
+          if (item.senderRole === "caregiver" || !item.id) continue;
+          if (!readMessageIds.has(item.id)) {
+            unreadMessageIds.add(item.id);
+          }
+        }
+
+        if (activeSection === "messages") {
+          markMessagesRead();
+          return;
+        }
+
+        renderUnreadMessages();
+      }
+
+      function setActiveSection(nextSection) {
+        activeSection = nextSection || "connexion";
+        sectionSelect.value = activeSection;
+
+        for (const panel of sectionPanels) {
+          panel.hidden = panel.dataset.section !== activeSection;
+        }
+
+        if (activeSection === "messages") {
+          markMessagesRead();
+        } else {
+          renderUnreadMessages();
+        }
+      }
+
+      function formatMessageTime(value) {
+        try {
+          return new Intl.DateTimeFormat("fr-FR", {
+            hour: "2-digit",
+            minute: "2-digit",
+          }).format(new Date(value));
+        } catch {
+          return "";
+        }
+      }
+
+      function renderMessages() {
+        messageListElement.innerHTML = "";
+
+        if (messageItems.length === 0) {
+          const empty = document.createElement("div");
+          empty.className = "message-empty";
+          empty.textContent = "Aucun message pour le moment.";
+          messageListElement.appendChild(empty);
+          return;
+        }
+
+        for (const item of messageItems) {
+          const bubble = document.createElement("div");
+          bubble.className =
+            "message-bubble " +
+            (item.senderRole === "caregiver" ? "message-caregiver" : "message-user");
+
+          const meta = document.createElement("div");
+          meta.className = "message-meta";
+          const sender =
+            item.senderRole === "caregiver"
+              ? item.senderName || "Aidant"
+              : item.senderName || "Utilisateur";
+          const time = formatMessageTime(item.createdAt);
+          meta.textContent = time ? sender + " - " + time : sender;
+
+          const text = document.createElement("div");
+          text.className = "message-text";
+          text.textContent = item.message || "";
+
+          bubble.appendChild(meta);
+          bubble.appendChild(text);
+          messageListElement.appendChild(bubble);
+        }
+
+        messageListElement.scrollTop = messageListElement.scrollHeight;
+      }
+
+      function upsertMessage(payload) {
+        if (!payload || !payload.id) return;
+        if (messageItems.some((item) => item.id === payload.id)) return;
+        messageItems = messageItems.concat(payload).slice(-80);
+        renderMessages();
+
+        if (payload.senderRole !== "caregiver" && !readMessageIds.has(payload.id)) {
+          if (activeSection === "messages") {
+            readMessageIds.add(payload.id);
+            persistReadMessageIds();
+          } else {
+            unreadMessageIds.add(payload.id);
+          }
+        }
+
+        renderUnreadMessages();
       }
 
       async function ensureAudioContext() {
@@ -752,6 +1044,7 @@ function getCaregiverAlertPageHtml() {
 
       function connect() {
         if (!channel) {
+          setAlertConnected(false);
           setStatus("Lien incomplet : canal d'alerte manquant.");
           return;
         }
@@ -764,6 +1057,7 @@ function getCaregiverAlertPageHtml() {
         setStatus("Connexion au canal d'alerte...");
 
         events.addEventListener("connected", () => {
+          setAlertConnected(true);
           setStatus(soundEnabled ? "Prêt : le téléphone sonnera à la prochaine alerte." : "Connecté. Appuie sur “Activer le son”.");
         });
 
@@ -782,19 +1076,68 @@ function getCaregiverAlertPageHtml() {
         });
 
         events.onerror = () => {
+          setAlertConnected(false);
           setStatus("Connexion interrompue. Reconnexion en cours...");
         };
       }
 
-      enableSoundButton.addEventListener("click", async () => {
+      function connectMessages() {
+        if (!channel) {
+          setMessagesConnected(false);
+          setMessageStatus("Lien incomplet : canal de messages manquant.", true);
+          return;
+        }
+
+        if (messageEvents) {
+          messageEvents.close();
+        }
+
+        messageEvents = new EventSource(
+          "/api/caregiver-messages/stream?channel=" +
+            encodeURIComponent(channel) +
+            "&role=caregiver"
+        );
+        setMessageStatus("Connexion aux messages...");
+
+        messageEvents.addEventListener("connected", () => {
+          setMessagesConnected(true);
+          setMessageStatus("Connecté aux messages.");
+        });
+
+        messageEvents.addEventListener("caregiver-message-history", (event) => {
+          try {
+            const payload = JSON.parse(event.data || "{}");
+            messageItems = Array.isArray(payload.messages)
+              ? payload.messages.slice(-80)
+              : [];
+            renderMessages();
+            refreshUnreadMessagesFromHistory();
+          } catch {}
+        });
+
+        messageEvents.addEventListener("caregiver-message", (event) => {
+          try {
+            upsertMessage(JSON.parse(event.data || "{}"));
+            setMessageStatus("Nouveau message reçu.");
+          } catch {}
+        });
+
+        messageEvents.onerror = () => {
+          setMessagesConnected(false);
+          setMessageStatus("Connexion messages interrompue. Reconnexion en cours...", true);
+        };
+      }
+
+      connectionButton.addEventListener("click", async () => {
         try {
           soundEnabled = true;
           if (!customAlarmUrl) {
             await ensureAudioContext();
           }
           await playAlarmOnce();
+          connect();
+          connectMessages();
           setStatus("Prêt : le téléphone sonnera à la prochaine alerte.");
-          enableSoundButton.textContent = "Son activé";
         } catch (error) {
           setStatus(error && error.message ? error.message : "Impossible d'activer le son.");
         }
@@ -837,7 +1180,6 @@ function getCaregiverAlertPageHtml() {
           }
           await playAlarmOnce();
           setStatus("Test du son envoyé.");
-          enableSoundButton.textContent = "Son activé";
         } catch (error) {
           setStatus(error && error.message ? error.message : "Impossible de tester le son.");
         }
@@ -854,32 +1196,71 @@ function getCaregiverAlertPageHtml() {
         }
       });
 
-      reconnectButton.addEventListener("click", connect);
+      messageForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const message = (messageInput.value || "").trim();
+
+        if (!message) {
+          setMessageStatus("Écris un message avant l'envoi.", true);
+          return;
+        }
+
+        sendMessageButton.disabled = true;
+
+        try {
+          const response = await fetch("/api/caregiver-messages", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              channel,
+              senderRole: "caregiver",
+              senderName: "Aidant",
+              message,
+            }),
+          });
+          const data = await response.json().catch(() => ({}));
+
+          if (!response.ok) {
+            throw new Error(data.details || data.error || "Impossible d'envoyer le message.");
+          }
+
+          upsertMessage(data.message);
+          messageInput.value = "";
+          setMessageStatus("Message envoyé.");
+        } catch (error) {
+          setMessageStatus(
+            error && error.message ? error.message : "Impossible d'envoyer le message.",
+            true
+          );
+        } finally {
+          sendMessageButton.disabled = false;
+        }
+      });
+
+      sectionSelect.addEventListener("change", (event) => {
+        setActiveSection(event.target.value);
+      });
+
+      connectionLinkInput.value = window.location.href;
+      copyLinkButton.addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText(connectionLinkInput.value);
+          setStatus("Lien de connexion copié.");
+        } catch {
+          window.prompt("Lien de connexion", connectionLinkInput.value);
+        }
+      });
+
       updateCustomSoundUi();
+      updateConnectionButton();
+      renderUnreadMessages();
+      setActiveSection("connexion");
       void loadStoredSound();
       connect();
+      connectMessages();
     </script>
   </body>
 </html>`;
-}
-
-function requireAdmin(req, res) {
-  if (!ADMIN_TOKEN) {
-    res.status(503).json({
-      error: "Admin désactivé",
-      details: "La variable ADMIN_TOKEN n'est pas configurée sur le serveur.",
-    });
-    return false;
-  }
-
-  const receivedToken = String(req.headers["x-admin-token"] || "").trim();
-
-  if (!receivedToken || receivedToken !== ADMIN_TOKEN) {
-    res.status(401).json({ error: "Accès refusé" });
-    return false;
-  }
-
-  return true;
 }
 
 function isMobileRequest(req) {
@@ -931,126 +1312,6 @@ function serveClientBuild(req, res, next) {
     next();
   });
 }
-
-function buildUsagePayload(credits, donorWall) {
-  return {
-    creditsRemaining: credits,
-    globalCreditsRemaining: credits,
-    blocked: credits <= 0,
-    donorWall,
-    euroToCreditsRate: CREDITS_PER_EURO,
-    availableSource: "shared",
-  };
-}
-
-app.get("/api/app-state", async (_req, res) => {
-  try {
-    const state = await getAppState();
-    res.json({ usage: buildUsagePayload(state.credits, state.donorWall) });
-  } catch (error) {
-    res.status(500).json({
-      error: "Erreur serveur",
-      details: getErrorMessage(error, "Impossible de récupérer l'état de l'application."),
-    });
-  }
-});
-
-app.get("/api/ai/status", async (_req, res) => {
-  try {
-    const state = await getAppState();
-    res.json({ usage: buildUsagePayload(state.credits, state.donorWall) });
-  } catch (error) {
-    res.status(500).json({
-      error: "Erreur serveur",
-      details: getErrorMessage(error, "Impossible de récupérer le compteur IA."),
-    });
-  }
-});
-
-app.post("/api/admin/add-credits", async (req, res) => {
-  if (!requireAdmin(req, res)) return;
-
-  try {
-    const creditsToAdd = parsePositiveNumber(req.body?.creditsToAdd);
-    const label = sanitizeText(req.body?.label, 220);
-
-    if (!creditsToAdd) {
-      return res.status(400).json({
-        error: "Montant invalide",
-        details: "Le nombre de crédits à ajouter doit être supérieur à 0.",
-      });
-    }
-
-    const roundedCredits = Math.round(creditsToAdd);
-    const donorEntry = label
-      ? {
-          id: `manual-${randomUUID()}`,
-          donorName: "Admin",
-          amountEuro: null,
-          creditsAdded: roundedCredits,
-          message: label,
-          createdAt: new Date().toISOString(),
-        }
-      : null;
-
-    const updatedState = await addAiCredits(roundedCredits, donorEntry);
-
-    res.json({
-      success: true,
-      message: "Crédits ajoutés.",
-      usage: buildUsagePayload(updatedState.credits, updatedState.donorWall),
-    });
-  } catch (error) {
-    sendServerError(res, error, "Impossible d'ajouter les crédits.");
-  }
-});
-
-app.post("/api/admin/add-donation", async (req, res) => {
-  if (!requireAdmin(req, res)) return;
-
-  try {
-    const donorName = sanitizeText(req.body?.donorName, 80) || "Don anonyme";
-    const amountEuro = parsePositiveNumber(req.body?.amountEuro);
-    const note = sanitizeText(req.body?.note, 220);
-
-    if (!amountEuro) {
-      return res.status(400).json({
-        error: "Montant invalide",
-        details: "Le montant du don doit être supérieur à 0.",
-      });
-    }
-
-    const creditsAdded = Math.round(amountEuro * CREDITS_PER_EURO);
-    const donorEntry = {
-      id: `don-${randomUUID()}`,
-      donorName,
-      amountEuro,
-      creditsAdded,
-      message:
-        note ||
-        `Merci à ${donorName} pour son don de ${amountEuro.toLocaleString("fr-FR")}€`,
-      createdAt: new Date().toISOString(),
-    };
-
-    const updatedState = await addAiCredits(creditsAdded, donorEntry);
-
-    res.json({
-      success: true,
-      message: "Don ajouté.",
-      usage: buildUsagePayload(updatedState.credits, updatedState.donorWall),
-    });
-  } catch (error) {
-    sendServerError(res, error, "Impossible d'ajouter le don.");
-  }
-});
-
-app.post("/api/ai/purchase", (_req, res) => {
-  res.status(410).json({
-    error: "Achat direct désactivé",
-    details:
-      "Les crédits sont ajoutés dans la zone admin après réception d'un don.",
-  });
-});
 
 app.get("/aidant-alerte", (_req, res) => {
   res.type("html").send(getCaregiverAlertPageHtml());
@@ -1220,70 +1481,6 @@ app.post("/api/caregiver-messages", (req, res) => {
     connectedCaregivers: countCaregiverMessageClients(channel, "caregiver"),
     message: payload,
   });
-});
-
-app.post("/api/generate", async (req, res) => {
-  let creditReserved = false;
-
-  try {
-    const { prompt, keywords, text } = req.body || {};
-
-    const sourceText =
-      typeof text === "string" && text.trim()
-        ? text.trim()
-        : typeof keywords === "string" && keywords.trim()
-        ? keywords.trim()
-        : "";
-
-    const input =
-      typeof prompt === "string" && prompt.trim()
-        ? prompt.trim()
-        : `Corrige uniquement le texte suivant en français.
-Améliore l’orthographe, la grammaire, la ponctuation et la casse.
-Ne complète pas la phrase.
-N’ajoute aucun mot.
-N’invente pas de suite.
-Conserve exactement l’intention du texte saisi.
-Réponds uniquement avec le texte corrigé, sans guillemets.
-
-Texte : ${sourceText}`;
-
-    const creditState = await reserveAiCredit();
-    creditReserved = creditState.reserved;
-
-    if (!creditReserved) {
-      return res.status(403).json({
-        error: "Crédits épuisés",
-        details:
-          "La réserve commune de crédits IA est vide. Ajoutez des crédits pour continuer.",
-        usage: buildUsagePayload(creditState.credits, creditState.donorWall),
-      });
-    }
-
-    const response = await client.responses.create({
-      model: "gpt-4o-mini",
-      input,
-      temperature: 0,
-    });
-
-    const textOutput = (response.output_text || "").trim();
-
-    res.json({
-      text: textOutput,
-      message: textOutput,
-      usage: buildUsagePayload(creditState.credits, creditState.donorWall),
-    });
-  } catch (error) {
-    if (creditReserved) {
-      try {
-        await refundAiCredit();
-      } catch (refundError) {
-        console.error("Impossible de rembourser le crédit IA :", refundError);
-      }
-    }
-
-    sendServerError(res, error, "Erreur inconnue");
-  }
 });
 
 app.use(serveClientBuild);

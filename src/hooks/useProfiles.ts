@@ -1,7 +1,14 @@
 import type React from "react";
 import { useMemo, useState, useEffect, useCallback } from "react";
-import { DEFAULT_CATEGORIES, createProfile, generateId, readJSON } from "../data";
+import { DEFAULT_CATEGORIES, createProfile, generateId } from "../data";
 import type { Profile, UseProfilesOptions } from "../types";
+import {
+  mergePrivateProfileData,
+  persistLocalProfiles,
+  readLocalProfilesSnapshot,
+  readPrivateProfiles,
+  stripPrivateProfileData,
+} from "../utils/localPrivacy";
 import {
   createEmptyEmergencyContact,
   ensureDoctorInfo,
@@ -9,12 +16,21 @@ import {
   ensureMedicalInfo,
   ensureProfile,
 } from "../utils/normalize";
+import { createCaregiverAlertLink } from "../utils/caregiverAlerts";
 
 export default function useProfiles() {
-  const initialProfiles =
-    typeof window !== "undefined"
-      ? readJSON("maVoixProfiles", null) || [createProfile()]
-      : [createProfile()];
+  const [initialSnapshot] = useState(() => {
+    const fallbackProfiles = [ensureProfile(createProfile() as Profile)];
+    return typeof window !== "undefined"
+      ? readLocalProfilesSnapshot(fallbackProfiles)
+      : {
+          profiles: fallbackProfiles,
+          hasPrivateVault: false,
+          passwordProtected: false,
+        };
+  });
+
+  const initialProfiles = initialSnapshot.profiles;
 
   const initialCurrentProfileId =
     typeof window !== "undefined"
@@ -23,12 +39,101 @@ export default function useProfiles() {
 
   const [profiles, setProfiles] = useState<Profile[]>(initialProfiles as Profile[]);
   const [currentProfileId, setCurrentProfileId] = useState<string>(initialCurrentProfileId);
+  const [privateDataLoaded, setPrivateDataLoaded] = useState(
+    !initialSnapshot.hasPrivateVault
+  );
+  const [privacyPassword, setPrivacyPassword] = useState("");
+  const [privacyStatus, setPrivacyStatus] = useState({
+    privateDataLoaded: !initialSnapshot.hasPrivateVault,
+    protectedAtRest: initialSnapshot.hasPrivateVault,
+    passwordProtected: initialSnapshot.passwordProtected,
+    locked: initialSnapshot.passwordProtected,
+    error: "",
+  });
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      localStorage.setItem("maVoixProfiles", JSON.stringify(profiles));
+    if (
+      typeof window === "undefined" ||
+      !initialSnapshot.hasPrivateVault ||
+      initialSnapshot.passwordProtected
+    ) {
+      return;
     }
-  }, [profiles]);
+
+    let cancelled = false;
+
+    async function loadPrivateProfiles() {
+      try {
+        const privateProfiles = await readPrivateProfiles();
+        if (cancelled) return;
+
+        setProfiles((prev) => mergePrivateProfileData(prev, privateProfiles));
+        setPrivateDataLoaded(true);
+        setPrivacyStatus({
+          privateDataLoaded: true,
+          protectedAtRest: true,
+          passwordProtected: false,
+          locked: false,
+          error: "",
+        });
+      } catch (error) {
+        console.error("Impossible de déchiffrer les données privées :", error);
+        if (cancelled) return;
+
+        setPrivacyStatus({
+          privateDataLoaded: false,
+          protectedAtRest: true,
+          passwordProtected: false,
+          locked: false,
+          error:
+            "Les données médicales locales sont protégées, mais elles n'ont pas pu être chargées sur cet appareil.",
+        });
+      }
+    }
+
+    loadPrivateProfiles();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [initialSnapshot.hasPrivateVault, initialSnapshot.passwordProtected]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !privateDataLoaded) {
+      return;
+    }
+
+    let cancelled = false;
+
+    persistLocalProfiles(profiles, privacyPassword)
+      .then((protectedAtRest) => {
+        if (cancelled) return;
+        setPrivacyStatus({
+          privateDataLoaded: true,
+          protectedAtRest,
+          passwordProtected: Boolean(privacyPassword),
+          locked: false,
+          error: protectedAtRest
+            ? ""
+            : "Le navigateur ne permet pas de chiffrer le stockage local.",
+        });
+      })
+      .catch((error) => {
+        console.error("Impossible de protéger les profils locaux :", error);
+        if (cancelled) return;
+        setPrivacyStatus({
+          privateDataLoaded: true,
+          protectedAtRest: false,
+          passwordProtected: Boolean(privacyPassword),
+          locked: false,
+          error: "Impossible de chiffrer les données médicales locales.",
+        });
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [profiles, privateDataLoaded, privacyPassword]);
 
   useEffect(() => {
     if (typeof window !== "undefined" && currentProfileId) {
@@ -259,6 +364,14 @@ export default function useProfiles() {
       })
     );
 
+    const duplicatedCaregiverAlertLinks = (currentProfile?.caregiverAlertLinks || []).map(
+      (link, index) => ({
+        ...link,
+        id: generateId(),
+        channel: createCaregiverAlertLink(index).channel,
+      })
+    );
+
     const duplicatedTreatments = (currentProfile?.medicalInfo?.treatments || []).map((treatment) => ({
       ...treatment,
       id: generateId(),
@@ -280,6 +393,7 @@ export default function useProfiles() {
         duplicatedEmergencyContacts.length > 0
           ? duplicatedEmergencyContacts
           : [createEmptyEmergencyContact()],
+      caregiverAlertLinks: duplicatedCaregiverAlertLinks,
     });
 
     setProfiles((prev) => [...prev, copy]);
@@ -298,11 +412,85 @@ export default function useProfiles() {
     onAfterDelete?.(nextProfiles[0]);
   }, [profiles, currentProfileId]);
 
+  const enablePrivacyPassword = useCallback(
+    async (password: string) => {
+      const nextPassword = String(password || "");
+
+      if (nextPassword.length < 8) {
+        throw new Error("Choisis un mot de passe d'au moins 8 caractères.");
+      }
+
+      await persistLocalProfiles(profiles, nextPassword);
+      setPrivacyPassword(nextPassword);
+      setPrivateDataLoaded(true);
+      setPrivacyStatus({
+        privateDataLoaded: true,
+        protectedAtRest: true,
+        passwordProtected: true,
+        locked: false,
+        error: "",
+      });
+    },
+    [profiles]
+  );
+
+  const unlockPrivateData = useCallback(
+    async (password: string) => {
+      const privateProfiles = await readPrivateProfiles(String(password || ""));
+
+      setProfiles((prev) => mergePrivateProfileData(prev, privateProfiles));
+      setPrivacyPassword(String(password || ""));
+      setPrivateDataLoaded(true);
+      setPrivacyStatus({
+        privateDataLoaded: true,
+        protectedAtRest: true,
+        passwordProtected: true,
+        locked: false,
+        error: "",
+      });
+    },
+    []
+  );
+
+  const lockPrivateData = useCallback(() => {
+    setPrivacyPassword("");
+    setProfiles((prev) =>
+      prev.map((profile) => ensureProfile(stripPrivateProfileData(profile)))
+    );
+    setPrivateDataLoaded(false);
+    setPrivacyStatus({
+      privateDataLoaded: false,
+      protectedAtRest: true,
+      passwordProtected: true,
+      locked: true,
+      error: "",
+    });
+  }, []);
+
   const exportAllProfiles = useCallback(() => {
+    if (!privateDataLoaded) {
+      alert("Les données médicales protégées sont encore en cours de chargement.");
+      return;
+    }
+
+    if (
+      typeof window !== "undefined" &&
+      !window.confirm(
+        "L'export contient les informations médicales et personnelles en clair. Continuer ?"
+      )
+    ) {
+      return;
+    }
+
     const data = {
       appName: "Ma Voix",
       version: 1,
       exportDate: new Date().toISOString(),
+      privacy: {
+        containsSensitiveMedicalData: true,
+        localStorageProtectedAtRest: privacyStatus.protectedAtRest,
+        passwordProtected: privacyStatus.passwordProtected,
+      },
       currentProfileId,
       profiles,
     };
@@ -315,9 +503,9 @@ export default function useProfiles() {
     const link = document.createElement("a");
     link.href = url;
     link.download = "ma-voix-profils.json";
-    link.click();
-    URL.revokeObjectURL(url);
-  }, [currentProfileId, profiles]);
+      link.click();
+      URL.revokeObjectURL(url);
+  }, [currentProfileId, privacyStatus.protectedAtRest, privateDataLoaded, profiles]);
 
   const importAllProfiles = useCallback((event: React.ChangeEvent<HTMLInputElement>, { onAfterImport }: UseProfilesOptions = {}) => {
     const file = event.target.files?.[0];
@@ -368,6 +556,10 @@ export default function useProfiles() {
     defaultVoice,
     defaultVoiceSettings,
     emergencyContacts,
+    privacyStatus,
+    enablePrivacyPassword,
+    unlockPrivateData,
+    lockPrivateData,
     updateCurrentProfile,
     updateCurrentProfileField,
     updateNestedProfileField,

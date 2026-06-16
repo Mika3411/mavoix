@@ -1,18 +1,23 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 
 type NoticePageProps = {
   styles: Record<string, React.CSSProperties>;
+  initialSection?: SectionKey;
 };
 
-type SectionKey =
-  | "couverture"
+export type SectionKey =
+  | "sommaire"
   | "introduction"
+  | "navigation"
   | "communication"
+  | "saisie"
   | "voix"
-  | "generer"
+  | "dictionnaire"
   | "profil"
   | "infos"
-  | "credits";
+  | "auxiliaire"
+  | "sauvegarde"
+  | "telechargement";
 
 type Section = {
   key: SectionKey;
@@ -51,6 +56,7 @@ function NoticeBlock({
           {title}
         </h4>
       ) : null}
+
       <div
         style={{
           display: "flex",
@@ -88,39 +94,65 @@ function NoticeList({ items }: { items: string[] }) {
   );
 }
 
-export default function NoticePage({ styles }: NoticePageProps) {
-  const [section, setSection] = useState<SectionKey>("couverture");
+export default function NoticePage({
+  styles,
+  initialSection = "sommaire",
+}: NoticePageProps) {
+  const [section, setSection] = useState<SectionKey>(initialSection);
+
+  useEffect(() => {
+    setSection(initialSection);
+  }, [initialSection]);
 
   const sections = useMemo<Section[]>(
     () => [
       {
-        key: "couverture",
+        key: "sommaire",
         label: "Sommaire",
-        title: "Ma Voix",
+        title: "Ma Voix - Notice complète",
         content: (
           <>
             <NoticeBlock>
-              <NoticeParagraph>Application de communication assistée</NoticeParagraph>
               <NoticeParagraph>
-                Une application créée pour redonner une voix à ceux qui ne peuvent plus parler.
+                Ma Voix est une application de communication assistée pensée
+                pour aider une personne qui parle difficilement ou qui ne peut
+                plus parler.
               </NoticeParagraph>
               <NoticeParagraph>
-                Créée par Mickael – Papa de Roxane et Cyrielle
+                Elle permet de faire lire des phrases, d'écrire un message, de
+                gérer un profil médical et d'organiser les informations utiles
+                pour le quotidien ou les urgences.
+              </NoticeParagraph>
+              <NoticeParagraph>
+                Créée par Mickael, papa de Roxane et Cyrielle.
               </NoticeParagraph>
             </NoticeBlock>
 
-            <NoticeBlock title="Sommaire">
+            <NoticeBlock title="Rubriques">
               <NoticeList
                 items={[
-                  "1. Introduction",
-                  "2. Onglet Communication",
-                  "3. Onglet Voix",
-                  "4. Onglet Générer",
-                  "5. Onglet Profil",
-                  "6. Onglet Infos",
-                  "7. Onglet Crédits",
+                  "1. Introduction et principe général",
+                  "2. Navigation dans l'application",
+                  "3. Communication rapide",
+                  "4. Saisie libre et envoi de messages",
+                  "5. Réglages de voix",
+                  "6. Dictionnaire d'abréviations",
+                  "7. Profil, santé et contacts",
+                  "8. Infos d'urgence",
+                  "9. Téléphone auxiliaire",
+                  "10. Sauvegarde, sécurité et données locales",
+                  "11. Téléchargement et installation",
                 ]}
               />
+            </NoticeBlock>
+
+            <NoticeBlock title="Mise à jour de la notice">
+              <NoticeParagraph>
+                Cette notice décrit les fonctions actuelles de Ma Voix sur les
+                versions Windows/Web et Android. Certaines options peuvent
+                apparaître différemment selon l'appareil, mais le principe
+                reste le même.
+              </NoticeParagraph>
             </NoticeBlock>
           </>
         ),
@@ -132,47 +164,92 @@ export default function NoticePage({ styles }: NoticePageProps) {
         content: (
           <>
             <NoticeBlock>
-              <NoticeParagraph>Ma Voix – Communication assistée</NoticeParagraph>
               <NoticeParagraph>
-                Une application créée par un patient, pour aider d’autres personnes à communiquer.
+                Ma Voix a été créée par un patient pour aider d'autres
+                personnes à communiquer plus facilement.
               </NoticeParagraph>
               <NoticeParagraph>
-                Je m’appelle Mickael, j’ai 39 ans et je suis le papa de deux filles : Roxane et Cyrielle.
+                Je m'appelle Mickael, j'ai 39 ans et je suis le papa de deux
+                filles : Roxane et Cyrielle. Suite à la maladie de Charcot, j'ai
+                progressivement perdu la voix ainsi que la mobilité.
               </NoticeParagraph>
               <NoticeParagraph>
-                Suite à la maladie de Charcot, j’ai progressivement perdu la voix ainsi que la mobilité.
+                Communiquer avec mes proches est devenu de plus en plus
+                difficile. J'ai donc créé cette application pour pouvoir
+                continuer à échanger avec mes filles, ma famille, mes proches et
+                le personnel soignant qui m'accompagne au quotidien.
               </NoticeParagraph>
               <NoticeParagraph>
-                Communiquer avec mes proches est devenu de plus en plus difficile.
-              </NoticeParagraph>
-              <NoticeParagraph>
-                J’ai donc créé cette application pour pouvoir continuer à échanger avec mes filles, ma
-                famille, mes proches, mais aussi avec le personnel soignant qui m’accompagne au
-                quotidien.
-              </NoticeParagraph>
-              <NoticeParagraph>
-                L’objectif de Ma Voix est simple : permettre à une personne ayant des difficultés à parler
-                de s’exprimer facilement, rapidement et dignement.
-              </NoticeParagraph>
-              <NoticeParagraph>
-                Aujourd’hui, j’espère que cette application pourra aider d’autres personnes dans la même
-                situation que moi, et leur redonner un moyen de communiquer avec le monde qui les
-                entoure.
+                L'objectif est simple : permettre à une personne ayant des
+                difficultés à parler de s'exprimer facilement, rapidement et
+                dignement.
               </NoticeParagraph>
             </NoticeBlock>
 
-            <NoticeBlock title="Fonctionnement général">
+            <NoticeBlock title="Ce que permet Ma Voix">
+              <NoticeList
+                items={[
+                  "Lire à voix haute des phrases déjà prêtes.",
+                  "Écrire un message libre et le faire prononcer.",
+                  "Enregistrer des phrases dans des catégories personnalisées.",
+                  "Adapter la voix, la vitesse, la hauteur et le volume.",
+                  "Utiliser une vraie voix enregistrée pour certaines phrases.",
+                  "Conserver des informations de profil, de santé et de contact.",
+                  "Préparer une fiche Infos utilisable en situation d'urgence.",
+                ]}
+              />
+            </NoticeBlock>
+
+            <NoticeBlock title="Données locales">
               <NoticeParagraph>
-                L’application est organisée en plusieurs onglets simples : Communication, Voix, Générer,
-                Profil, Infos et Crédits. Chaque onglet permet d’accéder à une fonctionnalité spécifique
-                pour faciliter la communication.
+                Les profils, phrases, catégories, enregistrements et réglages
+                sont conservés localement sur l'appareil utilisé. Les données ne
+                sont pas envoyées ailleurs, sauf action volontaire comme l'envoi
+                d'un message, l'appel d'un contact, l'ouverture d'un lien ou
+                l'export d'une sauvegarde.
               </NoticeParagraph>
+            </NoticeBlock>
+          </>
+        ),
+      },
+      {
+        key: "navigation",
+        label: "Navigation",
+        title: "Navigation dans l'application",
+        content: (
+          <>
+            <NoticeBlock title="Version Windows/Web">
+              <NoticeList
+                items={[
+                  "Communication : accès aux boutons de phrases rapides.",
+                  "Parler : saisie libre, dictée, lecture vocale et envoi de messages.",
+                  "Infos : fiche récapitulative d'identité, santé, traitements et contacts d'urgence.",
+                  "Menu : accès à Voix, Configurer, Aidants, Dictionnaire, Téléchargement, Notice et Soutenez-moi.",
+                  "Le bouton Plein écran permet d'agrandir l'application pour une utilisation plus confortable.",
+                ]}
+              />
+            </NoticeBlock>
+
+            <NoticeBlock title="Version Android">
+              <NoticeList
+                items={[
+                  "Le menu Communication regroupe Rapide et Libre.",
+                  "Rapide ouvre les boutons de phrases.",
+                  "Libre ouvre la zone de saisie et d'envoi de messages.",
+                  "Le menu Profil regroupe Infos et Profil.",
+                  "Le menu secondaire donne accès à Voix, Dictionnaire, Notice et Soutenez-moi.",
+                  "Si un code PIN est activé, il peut être demandé avant d'ouvrir Infos ou Profil.",
+                ]}
+              />
+            </NoticeBlock>
+
+            <NoticeBlock title="Changer de rubrique">
               <NoticeParagraph>
-                Les phrases peuvent être lues à voix haute, personnalisées, enregistrées, ou même
-                remplacées par la vraie voix de la personne.
-              </NoticeParagraph>
-              <NoticeParagraph>
-                L’ensemble a été conçu pour être simple, rapide et adapté aux besoins réels du quotidien.
+                Chaque bouton de navigation ouvre une partie de l'application.
+                Les informations saisies sont rattachées au profil actif.
+                Lorsque plusieurs profils existent, vérifiez le profil choisi
+                avant de modifier les phrases, les contacts ou les données de
+                santé.
               </NoticeParagraph>
             </NoticeBlock>
           </>
@@ -181,56 +258,112 @@ export default function NoticePage({ styles }: NoticePageProps) {
       {
         key: "communication",
         label: "Communication",
-        title: "Notice – Onglet Communication (Ma Voix)",
+        title: "Communication rapide",
         content: (
           <>
             <NoticeBlock>
               <NoticeParagraph>
-                L’onglet Communication est l’écran principal de l’application. Il permet d’exprimer des
-                phrases rapidement en appuyant sur des boutons.
+                La page Communication est l'écran principal pour parler vite.
+                Chaque bouton correspond à une phrase. Un appui sur le bouton
+                lit immédiatement la phrase à voix haute.
               </NoticeParagraph>
             </NoticeBlock>
 
             <NoticeBlock title="Catégories">
+              <NoticeList
+                items={[
+                  "Les phrases sont classées par catégories pour retrouver rapidement le bon message.",
+                  "La catégorie Toutes affiche l'ensemble des phrases du profil.",
+                  "La catégorie Favoris regroupe les phrases marquées avec l'étoile.",
+                  "Les catégories personnalisées créées dans la saisie libre apparaissent aussi ici.",
+                ]}
+              />
+            </NoticeBlock>
+
+            <NoticeBlock title="Favoris et ordre des phrases">
+              <NoticeList
+                items={[
+                  "L'étoile ajoute ou retire une phrase des favoris.",
+                  "Le mode Modifier ou Éditer affiche les actions de gestion.",
+                  "Les flèches haut et bas déplacent une phrase dans la liste.",
+                  "Le bouton Supprimer retire définitivement la phrase du profil actif.",
+                ]}
+              />
+            </NoticeBlock>
+
+            <NoticeBlock title="Voix utilisée">
               <NoticeParagraph>
-                Les phrases sont organisées en catégories pour faciliter la navigation.
+                Une phrase peut utiliser la voix du profil, des réglages de voix
+                spécifiques ou un enregistrement réel. Si un audio a été
+                enregistré pour cette phrase, il est utilisé en priorité.
               </NoticeParagraph>
+            </NoticeBlock>
+          </>
+        ),
+      },
+      {
+        key: "saisie",
+        label: "Saisie libre",
+        title: "Saisie libre et messages",
+        content: (
+          <>
+            <NoticeBlock>
               <NoticeParagraph>
-                Exemples : Toutes, Favoris, Général, Besoins, Santé, Émotions, Urgence.
-              </NoticeParagraph>
-              <NoticeParagraph>
-                Appuyez sur une catégorie pour afficher les phrases correspondantes.
+                La saisie libre sert à écrire un message qui n'est pas encore
+                enregistré. Elle permet aussi de créer de nouvelles phrases pour
+                la page Communication.
               </NoticeParagraph>
             </NoticeBlock>
 
-            <NoticeBlock title="Utiliser une phrase">
-              <NoticeParagraph>Chaque bouton correspond à une phrase.</NoticeParagraph>
+            <NoticeBlock title="Écrire et faire parler">
+              <NoticeList
+                items={[
+                  "Écrivez le texte à prononcer dans la zone de saisie.",
+                  "Le bouton Écouter lit le texte avec la voix du profil.",
+                  "Le bouton Stop voix interrompt une lecture en cours.",
+                  "La dictée vocale peut remplir le texte quand le navigateur ou l'appareil la prend en charge.",
+                  "Sur Windows/Web, le clavier virtuel peut aider à écrire sans clavier physique.",
+                ]}
+              />
+            </NoticeBlock>
+
+            <NoticeBlock title="Mise en forme automatique">
               <NoticeParagraph>
-                Appuyez sur un bouton pour faire prononcer la phrase à voix haute.
+                Le texte est nettoyé automatiquement pendant la saisie :
+                espaces, ponctuation, majuscules et certaines abréviations
+                courantes sont corrigés pour obtenir une phrase plus lisible.
               </NoticeParagraph>
             </NoticeBlock>
 
-            <NoticeBlock title="Favoris">
-              <NoticeParagraph>
-                Appuyez sur l’icône étoile pour ajouter une phrase aux favoris.
-              </NoticeParagraph>
-              <NoticeParagraph>
-                Les favoris permettent un accès rapide aux phrases les plus utilisées.
-              </NoticeParagraph>
+            <NoticeBlock title="Enregistrer une phrase">
+              <NoticeList
+                items={[
+                  "Saisissez le texte de la phrase.",
+                  "Ajoutez un libellé si vous voulez un nom de bouton différent.",
+                  "Choisissez la catégorie de rangement.",
+                  "Enregistrez la phrase pour la retrouver ensuite dans Communication.",
+                ]}
+              />
             </NoticeBlock>
 
-            <NoticeBlock title="Modifier l’ordre des phrases">
-              <NoticeParagraph>
-                Utilisez les flèches (haut et bas) sous chaque bouton.
-              </NoticeParagraph>
-              <NoticeParagraph>
-                Cela permet de réorganiser les phrases selon leur importance.
-              </NoticeParagraph>
+            <NoticeBlock title="Envoyer un message">
+              <NoticeList
+                items={[
+                  "Choisissez un contact dans Envoyer à.",
+                  "Sélectionnez le mode d'envoi proposé par l'appareil, par exemple SMS ou WhatsApp.",
+                  "Le bouton d'envoi prépare le message avec le texte saisi.",
+                  "Les contacts disponibles viennent de la rubrique Profil.",
+                ]}
+              />
             </NoticeBlock>
 
-            <NoticeBlock title="Supprimer une phrase">
-              <NoticeParagraph>Appuyez sur le bouton “Supprimer”.</NoticeParagraph>
-              <NoticeParagraph>Attention : cette action est définitive.</NoticeParagraph>
+            <NoticeBlock title="Catégories personnalisées">
+              <NoticeParagraph>
+                Vous pouvez créer une catégorie avec un nom et une icône. Les
+                catégories personnalisées servent à organiser les phrases selon
+                les besoins réels : repas, douleur, soins, famille, rendez-vous
+                ou toute autre situation utile.
+              </NoticeParagraph>
             </NoticeBlock>
           </>
         ),
@@ -238,69 +371,55 @@ export default function NoticePage({ styles }: NoticePageProps) {
       {
         key: "voix",
         label: "Voix",
-        title: "Notice – Onglet Voix (Ma Voix)",
+        title: "Réglages de voix",
         content: (
           <>
             <NoticeBlock>
               <NoticeParagraph>
-                L’onglet Voix permet de configurer la manière dont les phrases sont prononcées et
-                d’enregistrer une vraie voix pour personnaliser l’expérience.
+                La page Voix règle la manière dont l'application parle. Les
+                réglages sont propres au profil actif.
               </NoticeParagraph>
             </NoticeBlock>
 
-            <NoticeBlock title="Choix de la voix">
-              <NoticeParagraph>
-                Sélectionnez une voix (ex : Microsoft Rémy Multilingue).
-              </NoticeParagraph>
-              <NoticeParagraph>
-                Permet de définir la voix utilisée pour la synthèse vocale.
-              </NoticeParagraph>
-            </NoticeBlock>
-
-            <NoticeBlock title="Réglages de la voix">
+            <NoticeBlock title="Voix du profil">
               <NoticeList
                 items={[
-                  "Vitesse : ajuste la rapidité de lecture.",
-                  "Hauteur : modifie le ton (grave ou aigu).",
-                  "Volume : règle le niveau sonore.",
+                  "Sur Windows/Web, vous pouvez choisir une voix française parmi celles proposées par le navigateur ou le système.",
+                  "Sur Android, la voix dépend des voix disponibles sur l'appareil.",
+                  "Le bouton de test permet d'écouter le rendu avant de garder le réglage.",
+                  "Les voix détectées comme instables peuvent être masquées ou remplacées automatiquement.",
                 ]}
               />
             </NoticeBlock>
 
-            <NoticeBlock title="Tester la voix">
-              <NoticeParagraph>
-                Utilisez le bouton « Tester cette voix » pour écouter le rendu.
-              </NoticeParagraph>
-              <NoticeParagraph>Permet de valider les réglages.</NoticeParagraph>
-            </NoticeBlock>
-
-            <NoticeBlock title="Voix réelle enregistrée">
-              <NoticeParagraph>
-                Il est possible d’enregistrer la vraie voix de la personne pour chaque phrase.
-              </NoticeParagraph>
-              <NoticeParagraph>
-                Appuyez sur « Enregistrer ma voix » pour enregistrer un message.
-              </NoticeParagraph>
-              <NoticeParagraph>
-                Utilisez « Écouter l'audio actuel » pour vérifier l’enregistrement.
-              </NoticeParagraph>
-              <NoticeParagraph>
-                Cette voix sera utilisée à la place de la voix synthétique pour la phrase.
-              </NoticeParagraph>
+            <NoticeBlock title="Vitesse, hauteur et volume">
+              <NoticeList
+                items={[
+                  "Vitesse : ajuste la rapidité de lecture.",
+                  "Hauteur : rend la voix plus grave ou plus aiguë.",
+                  "Volume : règle le niveau sonore de lecture.",
+                  "Réinitialiser les réglages revient aux valeurs de base.",
+                ]}
+              />
             </NoticeBlock>
 
             <NoticeBlock title="Réglages par phrase">
               <NoticeParagraph>
-                Chaque phrase peut utiliser les réglages du profil ou des réglages spécifiques.
+                Une phrase peut utiliser les réglages du profil ou avoir ses
+                propres réglages de vitesse, hauteur et volume. C'est utile pour
+                rendre certaines phrases plus calmes, plus fortes ou plus
+                rapides.
               </NoticeParagraph>
             </NoticeBlock>
 
-            <NoticeBlock title="Conseils d’utilisation">
+            <NoticeBlock title="Voix réelle enregistrée">
               <NoticeList
                 items={[
-                  "Privilégier une voix claire et compréhensible.",
-                  "Utiliser la voix réelle pour les phrases importantes ou personnelles.",
-                  "Tester avec l’utilisateur final.",
+                  "Sélectionnez une phrase dans Voix personnalisées.",
+                  "Utilisez Enregistrer ma voix pour capturer une voix réelle.",
+                  "Écouter l'audio actuel permet de vérifier le résultat.",
+                  "Supprimer audio retire l'enregistrement de la phrase.",
+                  "Quand un enregistrement existe, il remplace la voix synthétique pour cette phrase.",
                 ]}
               />
             </NoticeBlock>
@@ -308,117 +427,47 @@ export default function NoticePage({ styles }: NoticePageProps) {
         ),
       },
       {
-        key: "generer",
-        label: "Générer",
-        title: "Notice – Onglet Générer (Ma Voix)",
+        key: "dictionnaire",
+        label: "Dictionnaire",
+        title: "Dictionnaire d'abréviations",
         content: (
           <>
             <NoticeBlock>
               <NoticeParagraph>
-                L’onglet Générer permet d’écrire, corriger, écouter, enregistrer et envoyer des phrases
-                personnalisées. Il sert aussi à créer des catégories pour organiser les boutons de
-                communication.
+                Le dictionnaire permet de transformer des abréviations en mots
+                ou expressions complètes pendant l'écriture. Il aide à écrire
+                plus vite, surtout avec la saisie libre.
               </NoticeParagraph>
             </NoticeBlock>
 
-            <NoticeBlock title="Zone de génération">
-              <NoticeParagraph>
-                La zone en haut affiche la correction et la suite proposées par l’IA.
-              </NoticeParagraph>
-              <NoticeParagraph>
-                Le premier bouton « Écouter » permet d’écouter la phrase générée par l’IA.
-              </NoticeParagraph>
-              <NoticeParagraph>
-                Le bouton « Remplacer » remplace le texte en cours par la phrase générée.
-              </NoticeParagraph>
-            </NoticeBlock>
-
-            <NoticeBlock title="Texte à dire">
-              <NoticeParagraph>
-                Le champ « Texte à dire » permet d’écrire la phrase à prononcer.
-              </NoticeParagraph>
-              <NoticeParagraph>
-                Vous pouvez saisir le texte manuellement ou utiliser la dictée vocale selon l’interface
-                affichée.
-              </NoticeParagraph>
-            </NoticeBlock>
-
-            <NoticeBlock title="Clavier virtuel">
-              <NoticeParagraph>
-                Le bouton « Clavier virtuel » affiche un clavier directement dans l’application.
-              </NoticeParagraph>
-              <NoticeParagraph>
-                Il permet de taper une phrase sans clavier physique.
-              </NoticeParagraph>
-              <NoticeParagraph>
-                Un appui long sur une touche permet d’afficher des variantes de caractères.
-              </NoticeParagraph>
-              <NoticeParagraph>
-                Exemple : la touche « a » peut proposer « à », « â », « @ », « ä », etc.
-              </NoticeParagraph>
-            </NoticeBlock>
-
-            <NoticeBlock title="Écoute et lecture">
-              <NoticeParagraph>
-                Le bouton « Écouter » situé sous la zone de texte permet de lire la phrase actuellement
-                saisie.
-              </NoticeParagraph>
-              <NoticeParagraph>
-                Le bouton « Stop voix » interrompt la lecture en cours.
-              </NoticeParagraph>
-            </NoticeBlock>
-
-            <NoticeBlock title="Génération par IA">
-              <NoticeParagraph>
-                Le bouton « Générer par IA » propose une reformulation ou une suite de phrase.
-              </NoticeParagraph>
-              <NoticeParagraph>
-                Vous pouvez adapter le ton et le contexte grâce aux options comme « Ton » et « À qui je
-                parle ».
-              </NoticeParagraph>
-            </NoticeBlock>
-
-            <NoticeBlock title="Enregistrer une phrase">
-              <NoticeParagraph>Saisissez un libellé de bouton.</NoticeParagraph>
-              <NoticeParagraph>Choisissez une catégorie.</NoticeParagraph>
-              <NoticeParagraph>
-                Cliquez sur « Enregistrer la phrase » pour ajouter la phrase dans l’onglet Communication.
-              </NoticeParagraph>
-            </NoticeBlock>
-
-            <NoticeBlock title="Envoi de messages">
-              <NoticeParagraph>
-                Vous pouvez choisir un destinataire dans « Envoyer à ».
-              </NoticeParagraph>
-              <NoticeParagraph>
-                Le mode d’envoi permet de sélectionner le canal utilisé, par exemple SMS.
-              </NoticeParagraph>
-              <NoticeParagraph>
-                Le bouton d’envoi transmet la phrase au contact sélectionné.
-              </NoticeParagraph>
-            </NoticeBlock>
-
-            <NoticeBlock title="Gestion des catégories">
-              <NoticeParagraph>
-                Il est possible d’ajouter une nouvelle catégorie personnalisée.
-              </NoticeParagraph>
-              <NoticeParagraph>
-                Chaque catégorie peut avoir un nom et une icône.
-              </NoticeParagraph>
-              <NoticeParagraph>
-                Les catégories servent à mieux organiser les phrases enregistrées.
-              </NoticeParagraph>
-              <NoticeParagraph>
-                Une catégorie existante peut aussi être supprimée.
-              </NoticeParagraph>
-            </NoticeBlock>
-
-            <NoticeBlock title="Conseils d’utilisation">
+            <NoticeBlock title="Entrées du dictionnaire">
               <NoticeList
                 items={[
-                  "Testez la phrase avant de l’enregistrer ou de l’envoyer.",
-                  "Créez des catégories simples et utiles au quotidien.",
-                  "Utilisez le clavier virtuel et les variantes de lettres pour faciliter l’écriture.",
+                  "Base : abréviations fournies avec l'application.",
+                  "Personnel : abréviations ajoutées par l'utilisateur.",
+                  "Modifié : abréviations de base dont le texte a été changé.",
+                ]}
+              />
+            </NoticeBlock>
+
+            <NoticeBlock title="Ajouter ou modifier">
+              <NoticeList
+                items={[
+                  "Renseignez l'abréviation, par exemple smplmt.",
+                  "Renseignez le texte complet, par exemple simplement.",
+                  "Enregistrez pour ajouter l'entrée au dictionnaire.",
+                  "Le bouton Modifier d'une entrée la charge dans le formulaire.",
+                ]}
+              />
+            </NoticeBlock>
+
+            <NoticeBlock title="Recherche et nettoyage">
+              <NoticeList
+                items={[
+                  "La recherche filtre par abréviation, texte ou source.",
+                  "Supprimer retire une entrée personnelle ou désactive une entrée de base.",
+                  "Réinitialiser restaure une entrée de base modifiée.",
+                  "Un message de confirmation apparaît avant une suppression.",
                 ]}
               />
             </NoticeBlock>
@@ -428,92 +477,59 @@ export default function NoticePage({ styles }: NoticePageProps) {
       {
         key: "profil",
         label: "Profil",
-        title: "Notice – Onglet Profil (Ma Voix)",
+        title: "Profil, santé et contacts",
         content: (
           <>
             <NoticeBlock>
               <NoticeParagraph>
-                L’onglet Profil permet de gérer les informations personnelles, médicales et les contacts
-                importants de l’utilisateur.
+                La rubrique Profil centralise les informations de la personne,
+                les réglages visuels, les données de santé et les contacts.
+                Toutes ces informations sont liées au profil actif.
               </NoticeParagraph>
             </NoticeBlock>
 
-            <NoticeBlock title="Profil utilisateur">
+            <NoticeBlock title="Identité et préférences">
               <NoticeList
                 items={[
-                  "Ajouter ou modifier une photo de profil.",
-                  "Renseigner les informations personnelles : prénom, nom, date de naissance.",
-                  "Indiquer l’adresse et le numéro de sécurité sociale.",
+                  "Photo de profil.",
+                  "Prénom, nom, date de naissance et adresse.",
+                  "Numéro de sécurité sociale si vous choisissez de le renseigner.",
+                  "Langue du profil.",
+                  "Besoins principaux de la personne.",
+                  "Thème d'affichage de l'application.",
                 ]}
               />
-            </NoticeBlock>
-
-            <NoticeBlock title="Informations générales">
-              <NoticeList
-                items={[
-                  "Choisir la langue du profil.",
-                  "Indiquer les besoins principaux de la personne.",
-                ]}
-              />
-            </NoticeBlock>
-
-            <NoticeBlock title="Thème visuel">
-              <NoticeParagraph>
-                Choisir l’apparence de l’application : sombre, clair, coloré ou personnalisé.
-              </NoticeParagraph>
             </NoticeBlock>
 
             <NoticeBlock title="Santé">
               <NoticeList
                 items={[
-                  "Renseigner le groupe sanguin et les allergies.",
-                  "Ajouter des antécédents médicaux importants.",
-                  "Préciser un handicap ou une condition particulière.",
+                  "Groupe sanguin.",
+                  "Allergies.",
+                  "Conditions médicales ou handicap.",
+                  "Antécédents médicaux.",
+                  "Traitements avec nom, dosage et fréquence.",
+                  "Médecin traitant avec téléphone.",
                 ]}
               />
-            </NoticeBlock>
-
-            <NoticeBlock title="Traitements en cours">
-              <NoticeList
-                items={[
-                  "Ajouter un traitement avec son nom, dosage et fréquence.",
-                  "Possibilité de supprimer un traitement.",
-                ]}
-              />
-            </NoticeBlock>
-
-            <NoticeBlock title="Médecin traitant">
-              <NoticeParagraph>
-                Renseigner le nom et le téléphone du médecin principal.
-              </NoticeParagraph>
             </NoticeBlock>
 
             <NoticeBlock title="Contacts">
-              <NoticeList
-                items={[
-                  "Ajouter des contacts importants (famille, aidants…).",
-                  "Indiquer leur numéro de téléphone et leur rôle.",
-                  "Possibilité de supprimer un contact.",
-                ]}
-              />
+              <NoticeParagraph>
+                Les contacts peuvent servir aux urgences, aux messages ou aux
+                deux. Renseignez leur nom, leur téléphone, leur lien ou leur
+                rôle. Les contacts marqués urgence apparaissent dans la page
+                Infos.
+              </NoticeParagraph>
             </NoticeBlock>
 
-            <NoticeBlock title="Sauvegarde">
+            <NoticeBlock title="Profils multiples">
               <NoticeList
                 items={[
-                  "Exporter : permet de sauvegarder toutes les données du profil.",
-                  "Importer : permet de restaurer un profil sauvegardé.",
-                  "Utile pour changer d’appareil ou conserver une copie de sécurité.",
-                ]}
-              />
-            </NoticeBlock>
-
-            <NoticeBlock title="Conseils d’utilisation">
-              <NoticeList
-                items={[
-                  "Maintenir les informations à jour.",
-                  "Renseigner les données essentielles pour les situations d’urgence.",
-                  "Sauvegarder régulièrement le profil.",
+                  "Choisir un profil permet de basculer vers une autre personne ou un autre jeu de données.",
+                  "Ajouter un profil crée un espace séparé.",
+                  "Dupliquer le profil reprend la base existante pour gagner du temps.",
+                  "Supprimer un profil efface définitivement ses informations locales.",
                 ]}
               />
             </NoticeBlock>
@@ -523,62 +539,130 @@ export default function NoticePage({ styles }: NoticePageProps) {
       {
         key: "infos",
         label: "Infos",
-        title: "Notice – Onglet Infos (Ma Voix)",
+        title: "Infos d'urgence",
         content: (
           <>
             <NoticeBlock>
               <NoticeParagraph>
-                L’onglet Infos regroupe toutes les informations renseignées dans l’onglet Profil. Il permet
-                un accès rapide et simplifié aux données importantes, notamment en situation d’urgence.
+                La page Infos présente les informations importantes du profil
+                actif dans un format plus lisible, utile pour un proche, un
+                aidant ou un professionnel de santé.
               </NoticeParagraph>
             </NoticeBlock>
 
-            <NoticeBlock title="Affichage des informations">
-              <NoticeParagraph>
-                Toutes les informations proviennent de l’onglet Profil.
-              </NoticeParagraph>
-              <NoticeParagraph>
-                Elles sont affichées sous forme de cartes : identité, santé, traitements et contacts
-                d’urgence.
-              </NoticeParagraph>
-            </NoticeBlock>
-
-            <NoticeBlock title="Lecture vocale">
-              <NoticeParagraph>
-                Quatre boutons permettent de lire les informations à voix haute :
-              </NoticeParagraph>
+            <NoticeBlock title="Contenu affiché">
               <NoticeList
                 items={[
-                  "Identité : lit les informations personnelles.",
-                  "Traitements : lit les traitements en cours.",
-                  "Santé : lit les informations médicales.",
-                  "Contact d’urgence : lit les contacts importants.",
+                  "Aide rapide avec boutons de lecture vocale.",
+                  "Identité utile.",
+                  "Données administratives sensibles quand elles existent.",
+                  "Santé, allergies, conditions et antécédents.",
+                  "Traitements en cours.",
+                  "Médecin traitant.",
+                  "Contacts d'urgence.",
                 ]}
               />
             </NoticeBlock>
 
-            <NoticeBlock title="Contacts affichés">
+            <NoticeBlock title="Lecture vocale">
               <NoticeParagraph>
-                Seuls les contacts définis comme « urgent » ou « les deux » dans l’onglet Profil
-                apparaissent ici.
-              </NoticeParagraph>
-              <NoticeParagraph>
-                Permet un accès rapide aux personnes à contacter en cas de besoin.
-              </NoticeParagraph>
-            </NoticeBlock>
-
-            <NoticeBlock title="Appel rapide">
-              <NoticeParagraph>
-                Un bouton « Appeler » permet de contacter directement un contact d’urgence.
+                Les boutons Identité, Traitements, Santé et Contact d'urgence
+                lisent à voix haute les informations correspondantes. Cela peut
+                aider lorsque la personne ne peut pas expliquer elle-même sa
+                situation.
               </NoticeParagraph>
             </NoticeBlock>
 
-            <NoticeBlock title="Conseils d’utilisation">
+            <NoticeBlock title="Appels rapides">
+              <NoticeParagraph>
+                Lorsqu'un numéro est renseigné, un bouton d'appel peut ouvrir
+                directement l'appel vers le médecin ou un contact d'urgence.
+                Seuls les contacts déclarés urgence ou les deux sont affichés
+                dans cette page.
+              </NoticeParagraph>
+            </NoticeBlock>
+          </>
+        ),
+      },
+      {
+        key: "auxiliaire",
+        label: "Auxiliaire",
+        title: "Téléphone auxiliaire",
+        content: (
+          <>
+            <NoticeBlock>
+              <NoticeParagraph>
+                La fonction Téléphone auxiliaire permet de préparer plusieurs
+                liens d'alarme associés au profil actif. Chaque lien est à
+                ouvrir sur le téléphone d'une auxiliaire ou d'un aidant.
+              </NoticeParagraph>
+            </NoticeBlock>
+
+            <NoticeBlock title="Configurer les liens">
               <NoticeList
                 items={[
-                  "Vérifier régulièrement que les informations sont à jour dans l’onglet Profil.",
-                  "Utiliser la lecture vocale pour faciliter la communication avec les professionnels ou aidants.",
-                  "S’assurer que les contacts d’urgence sont correctement définis.",
+                  "Ouvrez Profil ou Configurer.",
+                  "Repérez la section Téléphone auxiliaire.",
+                  "Ajoutez un aidant si plusieurs téléphones doivent avoir leur propre lien.",
+                  "Cochez Relié au bouton pour chaque aidant qui doit sonner avec Appel aidant.",
+                  "Copiez le lien d'alarme ou ouvrez le mode auxiliaire quand il est proposé.",
+                  "Sur Android, le lien direct peut ouvrir l'application Ma Voix Auxiliaire si elle est installée.",
+                ]}
+              />
+            </NoticeBlock>
+
+            <NoticeBlock title="Envoyer une alerte">
+              <NoticeParagraph>
+                Le bouton Appel aidant, placé en bas de l'application,
+                envoie une alarme aux téléphones reliés au bouton. Si aucun
+                téléphone aidant n'est connecté, l'application l'indique.
+              </NoticeParagraph>
+            </NoticeBlock>
+
+            <NoticeBlock title="Sonnerie auxiliaire">
+              <NoticeParagraph>
+                L'application auxiliaire peut garder l'alarme connectée et
+                importer son propre son d'alarme sur le téléphone de l'aidant.
+              </NoticeParagraph>
+            </NoticeBlock>
+          </>
+        ),
+      },
+      {
+        key: "sauvegarde",
+        label: "Sauvegarde",
+        title: "Sauvegarde, sécurité et données locales",
+        content: (
+          <>
+            <NoticeBlock title="Exporter et importer">
+              <NoticeList
+                items={[
+                  "Exporter crée une sauvegarde locale des profils et réglages.",
+                  "Importer restaure une sauvegarde existante.",
+                  "La sauvegarde peut contenir des informations personnelles et médicales en clair.",
+                  "Conservez le fichier exporté dans un endroit de confiance.",
+                ]}
+              />
+            </NoticeBlock>
+
+            <NoticeBlock title="Protection locale">
+              <NoticeList
+                items={[
+                  "Sur Android, un code PIN peut protéger l'accès aux pages Infos et Profil.",
+                  "Sur Windows/Web, un mot de passe local peut protéger les informations médicales et d'identité.",
+                  "Le mot de passe local n'est pas stocké : si vous le perdez, les données protégées ne pourront pas être récupérées.",
+                  "La protection concerne l'appareil et le profil utilisés.",
+                ]}
+              />
+            </NoticeBlock>
+
+            <NoticeBlock title="Bonnes pratiques">
+              <NoticeList
+                items={[
+                  "Mettez à jour les contacts et traitements dès qu'ils changent.",
+                  "Testez régulièrement les phrases importantes.",
+                  "Gardez une sauvegarde récente après une grosse modification.",
+                  "Évitez de partager une exportation si elle contient des données sensibles.",
                 ]}
               />
             </NoticeBlock>
@@ -586,76 +670,44 @@ export default function NoticePage({ styles }: NoticePageProps) {
         ),
       },
       {
-        key: "credits",
-        label: "Crédits",
-        title: "Notice – Onglet Crédits (Ma Voix)",
+        key: "telechargement",
+        label: "Téléchargement",
+        title: "Téléchargement et installation",
         content: (
           <>
             <NoticeBlock>
               <NoticeParagraph>
-                L’onglet Crédits explique le fonctionnement du système de crédits et permet de soutenir le
-                projet.
+                La page Téléchargement est disponible dans la version
+                Windows/Web. Elle propose la version adaptée à l'appareil
+                détecté.
               </NoticeParagraph>
             </NoticeBlock>
 
-            <NoticeBlock title="Principe des crédits">
-              <NoticeParagraph>
-                L’application utilise une réserve commune de crédits.
-              </NoticeParagraph>
-              <NoticeParagraph>
-                Ces crédits permettent d’utiliser certaines fonctionnalités comme la génération par IA.
-              </NoticeParagraph>
-              <NoticeParagraph>1 génération IA = 1 crédit utilisé.</NoticeParagraph>
+            <NoticeBlock title="Ordinateur">
+              <NoticeList
+                items={[
+                  "Sur ordinateur, l'application peut être installée comme PWA quand le navigateur le permet.",
+                  "L'installation PWA fonctionne sur Windows, Mac ou Linux selon le navigateur.",
+                  "Le bouton d'installation apparaît seulement quand l'appareil et le navigateur sont compatibles.",
+                ]}
+              />
             </NoticeBlock>
 
-            <NoticeBlock title="Conversion">
-              <NoticeParagraph>1€ = 1000 crédits.</NoticeParagraph>
-              <NoticeParagraph>
-                Les crédits sont partagés pour que tous les utilisateurs puissent en bénéficier.
-              </NoticeParagraph>
+            <NoticeBlock title="Android">
+              <NoticeList
+                items={[
+                  "Sur Android, la page peut proposer le téléchargement de l'application.",
+                  "Le fichier téléchargé permet d'installer Ma Voix sur smartphone ou tablette Android.",
+                  "Le bouton de téléchargement Android est affiché uniquement depuis un appareil Android.",
+                ]}
+              />
             </NoticeBlock>
 
-            <NoticeBlock title="Utilisation">
+            <NoticeBlock title="Autres appareils">
               <NoticeParagraph>
-                Chaque appui sur « Générer par IA » consomme 1 crédit.
-              </NoticeParagraph>
-              <NoticeParagraph>
-                La consommation est déduite de la réserve commune.
-              </NoticeParagraph>
-            </NoticeBlock>
-
-            <NoticeBlock title="Crédits disponibles">
-              <NoticeParagraph>
-                Le nombre de crédits restants est affiché en temps réel.
-              </NoticeParagraph>
-              <NoticeParagraph>
-                Permet de savoir si la fonctionnalité IA est encore disponible.
-              </NoticeParagraph>
-            </NoticeBlock>
-
-            <NoticeBlock title="Dons et soutien">
-              <NoticeParagraph>
-                Les utilisateurs peuvent faire un don pour soutenir le projet.
-              </NoticeParagraph>
-              <NoticeParagraph>
-                Les dons augmentent le nombre de crédits disponibles pour tous.
-              </NoticeParagraph>
-              <NoticeParagraph>
-                Chaque contribution aide à maintenir l’application accessible.
-              </NoticeParagraph>
-            </NoticeBlock>
-
-            <NoticeBlock title="Remerciements">
-              <NoticeParagraph>
-                Une section affiche les dons reçus (si disponibles).
-              </NoticeParagraph>
-              <NoticeParagraph>Permet de remercier les contributeurs.</NoticeParagraph>
-            </NoticeBlock>
-
-            <NoticeBlock title="Objectif">
-              <NoticeParagraph>Maintenir une application accessible à tous.</NoticeParagraph>
-              <NoticeParagraph>
-                Permettre aux personnes ayant perdu la voix de continuer à communiquer.
+                Si l'appareil n'est pas reconnu comme ordinateur compatible ou
+                Android, les boutons de téléchargement peuvent être masqués.
+                Ouvrez alors la page depuis l'appareil voulu.
               </NoticeParagraph>
             </NoticeBlock>
           </>
@@ -665,7 +717,8 @@ export default function NoticePage({ styles }: NoticePageProps) {
     []
   );
 
-  const currentSection = sections.find((item) => item.key === section) ?? sections[0];
+  const currentSection =
+    sections.find((item) => item.key === section) ?? sections[0];
 
   const getButtonStyle = (key: SectionKey): React.CSSProperties => ({
     ...(section === key ? styles.primaryButton : styles.secondaryButton),
@@ -694,12 +747,15 @@ export default function NoticePage({ styles }: NoticePageProps) {
           gap: 10,
         }}
       >
-        <div style={{ fontSize: 16, opacity: 0.8 }}>Notice de l’application</div>
+        <div style={{ fontSize: 16, opacity: 0.8 }}>
+          Notice de l'application
+        </div>
         <h2 style={{ margin: 0, fontSize: 34, lineHeight: 1.15 }}>
-          Ma Voix – Notice complète
+          Ma Voix - Notice complète
         </h2>
         <p style={{ margin: 0, lineHeight: 1.6, fontSize: 18 }}>
-          Cette page reprend le contenu de la notice de l’application, onglet par onglet.
+          Retrouvez ici les explications de toutes les rubriques actuelles de
+          l'application.
         </p>
       </div>
 

@@ -38,6 +38,13 @@ export type EmergencyContact = {
   usage?: "urgence" | "both" | "contact" | string;
 };
 
+export type CaregiverAlertLink = {
+  id: string;
+  name: string;
+  channel: string;
+  enabled: boolean;
+};
+
 export type DoctorInfo = {
   name: string;
   phone: string;
@@ -72,15 +79,7 @@ export type Profile = {
   medicalInfo?: MedicalInfo;
   doctorInfo?: DoctorInfo;
   emergencyContacts?: EmergencyContact[];
-};
-
-export type AIUsage = {
-  creditsRemaining: number;
-  globalCreditsRemaining: number;
-  blocked: boolean;
-  donorWall: Array<{ name?: string; donorName?: string; amountEuro?: number; note?: string }>;
-  euroToCreditsRate: number;
-  availableSource: string;
+  caregiverAlertLinks?: CaregiverAlertLink[];
 };
 
 export type VoiceEditor = {

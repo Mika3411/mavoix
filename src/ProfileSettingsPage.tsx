@@ -1,8 +1,16 @@
 import type { CSSProperties } from "react";
 
 import React from "react";
-import { formatTextSmart, normalizeTextFormatting } from "./utils/textFormatting";
+import { formatTextSmart } from "./utils/textFormatting";
 import { createCompactCardStyle } from "./utils/profileCardStyles";
+
+const CONFIG_SECTIONS = [
+  { id: "identite", label: "Identité" },
+  { id: "sante", label: "Santé" },
+  { id: "contacts", label: "Contacts" },
+  { id: "phrases", label: "Phrases" },
+  { id: "securite", label: "Sécurité" },
+];
 
 
 function VirtualKeyboard({
@@ -1186,6 +1194,16 @@ export default function ProfileSettingsPage(props: any) {
     exportAllProfiles,
     importAllProfiles,
     fileInputRef,
+    privacyStatus,
+    enablePrivacyPassword,
+    unlockPrivateData,
+    lockPrivateData,
+    caregiverAlertLinks = [],
+    addCaregiverAlertLink,
+    updateCaregiverAlertLink,
+    deleteCaregiverAlertLink,
+    copyCaregiverAlertLink,
+    openNoticeSection,
     text,
     setText,
     isListening,
@@ -1210,32 +1228,63 @@ export default function ProfileSettingsPage(props: any) {
     addEmergencyContact,
     updateEmergencyContact,
     deleteEmergencyContact,
-    aiGeneratedText,
-    aiLoading,
-    aiError,
-    aiUsage,
-    aiStatusLoading,
-    generateTextWithAI,
-    setAiGeneratedText,
-    goToCreditsPage,
-    selectedSmsContactId,
-    setSelectedSmsContactId,
   } = props;
   const [showDeleteConfirm, setShowDeleteConfirm] = React.useState(false);
+  const [configSection, setConfigSection] = React.useState("identite");
   const [inputMode, setInputMode] = React.useState("standard");
-  const [autoAiEnabled, setAutoAiEnabled] = React.useState(true);
-  const [tone, setTone] = React.useState("naturel");
-  const [audience, setAudience] = React.useState("général");
-  const [isPhraseBrowserOpen, setIsPhraseBrowserOpen] = React.useState(false);
-  const [phraseBrowserCategory, setPhraseBrowserCategory] = React.useState("");
-  const phraseBrowserRef = React.useRef(null);
   const standardTextAreaRef = React.useRef<HTMLTextAreaElement | null>(null);
-  const lastAutoAiPromptRef = React.useRef("");
 
   const [sendMode, setSendMode] = React.useState("sms");
   const [selectedSendContactId, setSelectedSendContactId] = React.useState(
     emergencyContacts?.[0]?.id || ""
   );
+  const [privacyPassword, setPrivacyPassword] = React.useState("");
+  const [privacyPasswordConfirm, setPrivacyPasswordConfirm] = React.useState("");
+  const [privacyUnlockPassword, setPrivacyUnlockPassword] = React.useState("");
+  const [privacyActionMessage, setPrivacyActionMessage] = React.useState("");
+  const [privacyActionLoading, setPrivacyActionLoading] = React.useState(false);
+
+  async function handleEnablePrivacyPassword() {
+    try {
+      setPrivacyActionLoading(true);
+      setPrivacyActionMessage("");
+
+      if (privacyPassword !== privacyPasswordConfirm) {
+        throw new Error("Les deux mots de passe ne correspondent pas.");
+      }
+
+      await enablePrivacyPassword?.(privacyPassword);
+      setPrivacyPassword("");
+      setPrivacyPasswordConfirm("");
+      setPrivacyActionMessage("Verrou par mot de passe activé.");
+    } catch (error) {
+      setPrivacyActionMessage(
+        error instanceof Error
+          ? error.message
+          : "Impossible d'activer le verrou."
+      );
+    } finally {
+      setPrivacyActionLoading(false);
+    }
+  }
+
+  async function handleUnlockPrivateData() {
+    try {
+      setPrivacyActionLoading(true);
+      setPrivacyActionMessage("");
+      await unlockPrivateData?.(privacyUnlockPassword);
+      setPrivacyUnlockPassword("");
+      setPrivacyActionMessage("Données médicales déverrouillées.");
+    } catch (error) {
+      setPrivacyActionMessage(
+        error instanceof Error
+          ? "Mot de passe incorrect ou coffre illisible."
+          : "Impossible de déverrouiller les données."
+      );
+    } finally {
+      setPrivacyActionLoading(false);
+    }
+  }
 
   function getContactUsage(contact) {
     return contact?.usage || "contact";
@@ -1330,145 +1379,6 @@ export default function ProfileSettingsPage(props: any) {
   }
 
   React.useEffect(() => {
-    const timeout = window.setTimeout(async () => {
-      if (!autoAiEnabled) return;
-      if (aiUsage?.blocked) return;
-      if (!text.trim()) return;
-      if (aiLoading) return;
-
-      const result = await generateTextWithAI();
-      if (result && result !== text) {
-        setText(formatTextSmart(result));
-      }
-    }, 300);
-
-    return () => window.clearTimeout(timeout);
-  }, [text, autoAiEnabled, aiUsage?.blocked, aiLoading, generateTextWithAI, setText]);
-
-  const aiAssist = React.useMemo(() => {
-    const currentValue = normalizeTextFormatting(String(text || "")).trim();
-    const generatedValue = normalizeTextFormatting(String(aiGeneratedText || "")).trim();
-
-    if (!generatedValue) {
-      return {
-        correction: "",
-        completion: "",
-        hasDifferentCorrection: false,
-      };
-    }
-
-    const lowerCurrent = currentValue.toLowerCase();
-    const lowerGenerated = generatedValue.toLowerCase();
-    const completion =
-      lowerCurrent && lowerGenerated.startsWith(lowerCurrent)
-        ? generatedValue.slice(currentValue.length).trimStart()
-        : "";
-
-    return {
-      correction: generatedValue,
-      completion,
-      hasDifferentCorrection: generatedValue !== currentValue,
-    };
-  }, [text, aiGeneratedText]);
-
-  const activeProfile = React.useMemo(() => {
-    return (
-      (profiles || []).find((profile) => profile.id === currentProfileId) ||
-      currentProfile ||
-      {}
-    );
-  }, [profiles, currentProfileId, currentProfile]);
-
-  const savedPhrases = React.useMemo(() => {
-    const candidates =
-      activeProfile?.phrases ||
-      activeProfile?.buttons ||
-      activeProfile?.phraseButtons ||
-      activeProfile?.quickPhrases ||
-      activeProfile?.messages ||
-      [];
-
-    if (!Array.isArray(candidates)) return [];
-
-    return candidates
-      .map((item, index) => {
-        if (typeof item === "string") {
-          return {
-            id: `phrase-${index}`,
-            label: item,
-            text: item,
-            category: "Général",
-          };
-        }
-
-        const phraseText =
-          item?.text ||
-          item?.phrase ||
-          item?.message ||
-          item?.content ||
-          item?.value ||
-          item?.label ||
-          "";
-
-        const phraseLabel = item?.label || phraseText || `Phrase ${index + 1}`;
-        const phraseCategory = item?.category || item?.group || "Général";
-
-        if (!phraseText && !phraseLabel) return null;
-
-        return {
-          id: item?.id || `phrase-${index}`,
-          label: phraseLabel,
-          text: phraseText || phraseLabel,
-          category: phraseCategory,
-        };
-      })
-      .filter(Boolean);
-  }, [activeProfile]);
-
-  const phraseBrowserCategories = React.useMemo(() => {
-    return Array.from(
-      new Set(savedPhrases.map((phrase) => phrase.category).filter(Boolean))
-    );
-  }, [savedPhrases]);
-
-  const filteredSavedPhrases = React.useMemo(() => {
-    if (!phraseBrowserCategory) return [];
-    return savedPhrases.filter(
-      (phrase) => String(phrase.category || "") === phraseBrowserCategory
-    );
-  }, [savedPhrases, phraseBrowserCategory]);
-
-  React.useEffect(() => {
-    if (
-      phraseBrowserCategory &&
-      !phraseBrowserCategories.includes(phraseBrowserCategory)
-    ) {
-      setPhraseBrowserCategory("");
-    }
-  }, [phraseBrowserCategories, phraseBrowserCategory]);
-
-  React.useEffect(() => {
-    function handlePointerDown(event) {
-      if (!isPhraseBrowserOpen) return;
-      const target = event.target;
-      if (
-        phraseBrowserRef.current &&
-        target instanceof Node &&
-        phraseBrowserRef.current.contains(target)
-      ) {
-        return;
-      }
-      setIsPhraseBrowserOpen(false);
-      setPhraseBrowserCategory("");
-    }
-
-    window.addEventListener("pointerdown", handlePointerDown);
-    return () => {
-      window.removeEventListener("pointerdown", handlePointerDown);
-    };
-  }, [isPhraseBrowserOpen]);
-
-  React.useEffect(() => {
     if (!sendableContacts.length) {
       setSelectedSendContactId("");
       return;
@@ -1526,11 +1436,11 @@ export default function ProfileSettingsPage(props: any) {
       sendableContacts[0];
 
     if (!selectedContact?.phone) {
-      window.alert("Ajoute d'abord un numéro de contact dans Profil.");
+      window.alert("Ajoute d'abord un numéro de contact dans Configurer.");
       return;
     }
 
-    const message = (aiGeneratedText || text || "").trim();
+    const message = (text || "").trim();
 
     if (!message) {
       window.alert("Aucun message à envoyer.");
@@ -1573,16 +1483,108 @@ export default function ProfileSettingsPage(props: any) {
   if (page === "profil") {
     const compactCard = createCompactCardStyle(styles.card, {
       marginBottom: 20,
+      minWidth: 0,
     });
+    const configContentGrid: CSSProperties = {
+      display: "grid",
+      gridTemplateColumns: "repeat(auto-fit, minmax(min(390px, 100%), 1fr))",
+      gap: 20,
+      alignItems: "start",
+      width: "100%",
+    };
+
+    if (privacyStatus?.passwordProtected && privacyStatus?.locked) {
+      return (
+        <div style={styles.gridSingle}>
+          <div style={styles.card}>
+            <h2 style={styles.sectionTitle}>Données médicales verrouillées</h2>
+
+            <div style={{ ...styles.infoBox, marginBottom: 14, lineHeight: 1.55 }}>
+              Les informations médicales et d'identité de ce profil sont protégées
+              par un mot de passe local. Le mot de passe n'est pas stocké.
+            </div>
+
+            <div style={{ display: "grid", gap: 12, maxWidth: 520 }}>
+              <label style={styles.label}>Mot de passe local</label>
+              <input
+                type="password"
+                value={privacyUnlockPassword}
+                onChange={(e) => setPrivacyUnlockPassword(e.target.value)}
+                style={styles.input}
+                placeholder="Déverrouiller les données médicales"
+              />
+
+              <button
+                type="button"
+                style={styles.primaryButton}
+                onClick={handleUnlockPrivateData}
+                disabled={privacyActionLoading || !privacyUnlockPassword}
+              >
+                {privacyActionLoading ? "Déverrouillage..." : "Déverrouiller"}
+              </button>
+
+              {privacyActionMessage ? (
+                <div
+                  style={{
+                    ...styles.infoBox,
+                    color:
+                      privacyActionMessage.toLowerCase().includes("incorrect") ||
+                      privacyActionMessage.toLowerCase().includes("impossible")
+                        ? "#fecaca"
+                        : undefined,
+                  }}
+                >
+                  {privacyActionMessage}
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      );
+    }
 
     return (
       <>
         <div
+          role="tablist"
+          aria-label="Sections de configuration"
           style={{
-            columnCount: window.innerWidth > 1240 ? 3 : window.innerWidth > 820 ? 2 : 1,
-            columnGap: 20,
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(128px, 1fr))",
+            gap: 10,
+            marginBottom: 16,
           }}
         >
+          {CONFIG_SECTIONS.map((section) => {
+            const isActive = configSection === section.id;
+
+            return (
+              <button
+                key={section.id}
+                type="button"
+                role="tab"
+                aria-selected={isActive}
+                onClick={() => setConfigSection(section.id)}
+                style={{
+                  ...(isActive ? styles.primaryButton : styles.secondaryButton),
+                  minWidth: 0,
+                  padding: "10px 12px",
+                  whiteSpace: "normal",
+                }}
+              >
+                {section.label}
+              </button>
+            );
+          })}
+        </div>
+
+        <div
+          style={{
+            ...configContentGrid,
+          }}
+        >
+        {configSection === "identite" ? (
+          <>
         <div style={compactCard}>
           <h2 style={styles.sectionTitle}>Profil utilisateur</h2>
 
@@ -1687,21 +1689,6 @@ export default function ProfileSettingsPage(props: any) {
               }
               style={styles.smallTextarea}
               placeholder="Adresse complète"
-            />
-          </div>
-
-          <div style={styles.formGroup}>
-            <label style={styles.label}>Numéro de sécurité sociale</label>
-            <input
-              value={currentProfile.socialSecurityNumber || ""}
-              onChange={(e) =>
-                updateCurrentProfileField(
-                  "socialSecurityNumber",
-                  e.target.value
-                )
-              }
-              style={styles.input}
-              placeholder="Ex : 1 86 05 75 123 456 78"
             />
           </div>
 
@@ -1950,6 +1937,11 @@ export default function ProfileSettingsPage(props: any) {
           ) : null}
         </div>
 
+        </>
+        ) : null}
+
+        {configSection === "sante" ? (
+          <>
         <div style={compactCard}>
           <h2 style={styles.sectionTitle}>Santé</h2>
 
@@ -2109,6 +2101,11 @@ export default function ProfileSettingsPage(props: any) {
           </div>
         </div>
 
+        </>
+        ) : null}
+
+        {configSection === "contacts" ? (
+          <>
         <div style={compactCard}>
           <h2 style={styles.sectionTitle}>Contacts</h2>
 
@@ -2218,6 +2215,307 @@ export default function ProfileSettingsPage(props: any) {
           </div>
         </div>
 
+        </>
+        ) : null}
+
+        {configSection === "phrases" ? (
+          <>
+        <div style={compactCard}>
+          <h2 style={styles.sectionTitle}>Phrases rapides</h2>
+
+          <div style={styles.formGroup}>
+            <label style={styles.label}>Texte de la phrase</label>
+            <textarea
+              value={text}
+              onChange={(e) => setText(formatTextSmart(e.target.value))}
+              style={styles.smallTextarea}
+              placeholder="Ex : J'ai besoin d'eau"
+            />
+          </div>
+
+          <div style={styles.formRow}>
+            <div style={styles.formGroup}>
+              <label style={styles.label}>Libellé du bouton</label>
+              <input
+                value={label}
+                onChange={(e) => setLabel(e.target.value)}
+                style={styles.input}
+                placeholder="Ex : Besoin d'eau"
+              />
+            </div>
+
+            <div style={styles.formGroup}>
+              <label style={styles.label}>Catégorie</label>
+              <select
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                style={styles.input}
+              >
+                {(categories || []).map((item) => (
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <button
+            style={styles.primaryButton}
+            onClick={savePhrase}
+            disabled={!String(text || "").trim()}
+          >
+            Enregistrer la phrase
+          </button>
+        </div>
+
+        <div style={compactCard}>
+          <h2 style={styles.sectionTitle}>Catégories personnalisées</h2>
+
+          <div style={styles.categoryManagerBox}>
+            <h3 style={styles.managerTitle}>Ajouter une catégorie</h3>
+
+            <div style={styles.formGroup}>
+              <label style={styles.label}>Nom de la catégorie</label>
+              <input
+                value={newCategoryName}
+                onChange={(e) => setNewCategoryName(e.target.value)}
+                style={styles.input}
+                placeholder="Ex : Loisirs, Travail, Douleur"
+              />
+            </div>
+
+            <div style={styles.formGroup}>
+              <label style={styles.label}>Choisir une icône</label>
+              <div style={styles.iconPickerGrid}>
+                {(AVAILABLE_ICONS || []).map((icon) => (
+                  <button
+                    key={icon}
+                    type="button"
+                    onClick={() => setNewCategoryIcon(icon)}
+                    style={
+                      newCategoryIcon === icon
+                        ? {
+                            ...styles.iconButton,
+                            ...styles.iconButtonActive,
+                          }
+                        : styles.iconButton
+                    }
+                  >
+                    {icon}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <button style={styles.primaryButton} onClick={addCategory}>
+              Ajouter la catégorie
+            </button>
+
+            <div style={styles.customCategoryList}>
+              {(customCategories || []).map((cat) => (
+                <div key={cat.name} style={styles.customCategoryItem}>
+                  <div style={styles.customCategoryInfo}>
+                    <span style={styles.customCategoryIcon}>{cat.icon}</span>
+                    <span style={styles.customCategoryName}>{cat.name}</span>
+                  </div>
+
+                  <button
+                    style={styles.deleteButton}
+                    onClick={() => deleteCategory(cat.name)}
+                  >
+                    Supprimer
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        </>
+        ) : null}
+
+        {configSection === "securite" ? (
+          <>
+        <div style={compactCard}>
+          <h2 style={styles.sectionTitle}>Données administratives sensibles</h2>
+
+          <div style={styles.formGroup}>
+            <label style={styles.label}>Numéro de sécurité sociale</label>
+            <input
+              value={currentProfile.socialSecurityNumber || ""}
+              onChange={(e) =>
+                updateCurrentProfileField(
+                  "socialSecurityNumber",
+                  e.target.value
+                )
+              }
+              style={styles.input}
+              placeholder="Ex : 1 86 05 75 123 456 78"
+            />
+          </div>
+        </div>
+
+        <div style={compactCard}>
+          <h2 style={styles.sectionTitle}>Téléphone auxiliaire</h2>
+
+          <div style={{ ...styles.infoBox, marginBottom: 14, lineHeight: 1.55 }}>
+            <strong style={{ display: "block", marginBottom: 6 }}>
+              À quoi ça sert ?
+            </strong>
+            Crée un lien par aidant, puis coche ceux qui doivent sonner quand
+            tu appuies sur <strong>Appel aidant</strong>. Chaque lien reste lié
+            au profil actuellement sélectionné.
+          </div>
+
+          <div style={{ display: "grid", gap: 14 }}>
+            {caregiverAlertLinks.map((link, index) => (
+              <div
+                key={link.id}
+                style={{
+                  borderTop:
+                    index === 0 ? "none" : "1px solid rgba(148, 163, 184, 0.25)",
+                  paddingTop: index === 0 ? 0 : 14,
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 10,
+                    flexWrap: "wrap",
+                    marginBottom: 10,
+                  }}
+                >
+                  <label style={{ ...styles.label, margin: 0 }}>
+                    Aidant {index + 1}
+                  </label>
+
+                  <label
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 8,
+                      fontWeight: 700,
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={Boolean(link.enabled)}
+                      onChange={(e) =>
+                        updateCaregiverAlertLink?.(link.id, {
+                          enabled: e.target.checked,
+                        })
+                      }
+                    />
+                    Relié au bouton
+                  </label>
+                </div>
+
+                <div style={styles.formGroup}>
+                  <label style={styles.label}>Nom de l'aidant</label>
+                  <input
+                    value={link.name || ""}
+                    onChange={(e) =>
+                      updateCaregiverAlertLink?.(link.id, {
+                        name: e.target.value,
+                      })
+                    }
+                    style={styles.input}
+                    placeholder={`Aidant ${index + 1}`}
+                  />
+                </div>
+
+                <div style={styles.formGroup}>
+                  <label style={styles.label}>Lien d'alarme</label>
+                  <input
+                    readOnly
+                    value={link.alertLink || ""}
+                    style={styles.input}
+                  />
+                </div>
+
+                <div style={styles.inlineButtons}>
+                  <button
+                    type="button"
+                    style={styles.secondaryButton}
+                    onClick={() => copyCaregiverAlertLink?.(link.id)}
+                  >
+                    Copier le lien
+                  </button>
+
+                  {link.alertLink ? (
+                    <a
+                      href={link.alertLink}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{
+                        ...styles.secondaryButton,
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        textDecoration: "none",
+                      }}
+                    >
+                      Ouvrir le mode aidant
+                    </a>
+                  ) : null}
+
+                  {link.appLink ? (
+                    <a
+                      href={link.appLink}
+                      style={{
+                        ...styles.secondaryButton,
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        textDecoration: "none",
+                      }}
+                    >
+                      Ouvrir l'application aidant
+                    </a>
+                  ) : null}
+
+                  <button
+                    type="button"
+                    style={{
+                      ...styles.secondaryButton,
+                      opacity: caregiverAlertLinks.length <= 1 ? 0.55 : 1,
+                      cursor:
+                        caregiverAlertLinks.length <= 1
+                          ? "not-allowed"
+                          : "pointer",
+                    }}
+                    disabled={caregiverAlertLinks.length <= 1}
+                    onClick={() => deleteCaregiverAlertLink?.(link.id)}
+                  >
+                    Supprimer
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ ...styles.inlineButtons, marginTop: 14 }}>
+            <button
+              type="button"
+              style={styles.primaryButton}
+              onClick={addCaregiverAlertLink}
+            >
+              Ajouter un aidant
+            </button>
+
+            <button
+              type="button"
+              style={styles.secondaryButton}
+              onClick={() => openNoticeSection?.("auxiliaire")}
+            >
+              Aide
+            </button>
+          </div>
+        </div>
+
         <div style={compactCard}>
           <h2 style={styles.sectionTitle}>Profils</h2>
 
@@ -2265,6 +2563,122 @@ export default function ProfileSettingsPage(props: any) {
           <div style={styles.categoryManagerBox}>
             <h3 style={styles.managerTitle}>Sauvegarde</h3>
 
+            <div
+              style={{
+                ...styles.infoBox,
+                marginBottom: 14,
+                lineHeight: 1.55,
+              }}
+            >
+              <strong>Confidentialité locale</strong>
+              <br />
+              {!privacyStatus?.privateDataLoaded
+                ? "Chargement des données médicales protégées..."
+                : privacyStatus?.passwordProtected
+                ? "Les données médicales sont verrouillées par un mot de passe local non stocké."
+                : privacyStatus?.protectedAtRest
+                ? "Les données médicales et d'identité sont chiffrées dans le stockage local de cet appareil."
+                : "Les données sont enregistrées localement, mais le chiffrement du navigateur n'est pas disponible."}
+              {privacyStatus?.error ? (
+                <div style={{ marginTop: 8, color: "#fecaca", fontWeight: 700 }}>
+                  {privacyStatus.error}
+                </div>
+              ) : null}
+              <div style={{ marginTop: 8, opacity: 0.78 }}>
+                Les exports JSON restent lisibles et doivent être partagés avec prudence.
+              </div>
+              {privacyStatus?.passwordProtected ? (
+                <div style={{ marginTop: 8, opacity: 0.78 }}>
+                  Si le mot de passe est perdu, les données médicales locales ne pourront pas être récupérées.
+                </div>
+              ) : null}
+            </div>
+
+            {privacyStatus?.passwordProtected && privacyStatus?.locked ? (
+              <div style={{ display: "grid", gap: 10, marginBottom: 14 }}>
+                <label style={styles.label}>Mot de passe local</label>
+                <input
+                  type="password"
+                  value={privacyUnlockPassword}
+                  onChange={(e) => setPrivacyUnlockPassword(e.target.value)}
+                  style={styles.input}
+                  placeholder="Déverrouiller les données médicales"
+                />
+                <button
+                  type="button"
+                  style={styles.primaryButton}
+                  onClick={handleUnlockPrivateData}
+                  disabled={privacyActionLoading || !privacyUnlockPassword}
+                >
+                  {privacyActionLoading ? "Déverrouillage..." : "Déverrouiller"}
+                </button>
+              </div>
+            ) : null}
+
+            {!privacyStatus?.passwordProtected && privacyStatus?.privateDataLoaded ? (
+              <div style={{ display: "grid", gap: 10, marginBottom: 14 }}>
+                <label style={styles.label}>Ajouter un mot de passe local</label>
+                <input
+                  type="password"
+                  value={privacyPassword}
+                  onChange={(e) => setPrivacyPassword(e.target.value)}
+                  style={styles.input}
+                  placeholder="Minimum 8 caractères"
+                />
+                <input
+                  type="password"
+                  value={privacyPasswordConfirm}
+                  onChange={(e) => setPrivacyPasswordConfirm(e.target.value)}
+                  style={styles.input}
+                  placeholder="Confirmer le mot de passe"
+                />
+                <button
+                  type="button"
+                  style={styles.primaryButton}
+                  onClick={handleEnablePrivacyPassword}
+                  disabled={
+                    privacyActionLoading ||
+                    !privacyPassword ||
+                    !privacyPasswordConfirm
+                  }
+                >
+                  {privacyActionLoading ? "Activation..." : "Activer le verrou"}
+                </button>
+              </div>
+            ) : null}
+
+            {privacyStatus?.passwordProtected && privacyStatus?.privateDataLoaded ? (
+              <div style={{ marginBottom: 14 }}>
+                <button
+                  type="button"
+                  style={styles.secondaryButton}
+                  onClick={() => {
+                    lockPrivateData?.();
+                    setPrivacyActionMessage("Données médicales verrouillées.");
+                  }}
+                >
+                  Verrouiller maintenant
+                </button>
+              </div>
+            ) : null}
+
+            {privacyActionMessage ? (
+              <div
+                style={{
+                  ...styles.infoBox,
+                  marginBottom: 14,
+                  color:
+                    privacyActionMessage.toLowerCase().includes("impossible") ||
+                    privacyActionMessage.toLowerCase().includes("incorrect") ||
+                    privacyActionMessage.toLowerCase().includes("correspondent")
+                      ? "#fecaca"
+                      : undefined,
+                }}
+              >
+                {privacyActionMessage}
+              </div>
+            ) : null}
+
             <div style={styles.inlineButtons}>
               <button
                 style={styles.secondaryButton}
@@ -2286,6 +2700,9 @@ export default function ProfileSettingsPage(props: any) {
             </div>
           </div>
         </div>
+
+        </>
+        ) : null}
 
         {showDeleteConfirm ? (
           <div
@@ -2334,7 +2751,7 @@ export default function ProfileSettingsPage(props: any) {
                   marginBottom: 20,
                 }}
               >
-                Cette action est irréversible. Les informations de ce profil seront supprimées, mais les crédits solidaires resteront disponibles pour les autres profils.
+                Cette action est irréversible. Les informations de ce profil seront supprimées.
               </p>
 
               <div
@@ -2369,112 +2786,23 @@ export default function ProfileSettingsPage(props: any) {
     );
   }
 
-  
-if (page === "reglages") {
+  if (page === "reglages") {
     return (
       <div style={styles.gridSingle}>
         <div style={styles.card}>
+          <h2 style={styles.sectionTitle}>Parler maintenant</h2>
+
           <div style={styles.formGroup}>
             <div
               style={{
                 display: "flex",
-                justifyContent: "space-between",
+                justifyContent: "flex-end",
                 alignItems: "center",
                 gap: 12,
                 flexWrap: "wrap",
                 marginBottom: 12,
               }}
             >
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns:
-                    window.innerWidth > 980 ? "minmax(0, 1fr)" : "1fr",
-                  gap: 12,
-                  minWidth: 0,
-                  flex: 1,
-                }}
-              >
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns:
-                      window.innerWidth > 980 ? "minmax(0, 1fr) auto" : "1fr",
-                    gridTemplateRows:
-                      window.innerWidth > 980 ? "auto auto" : "auto auto auto",
-                    alignItems: "stretch",
-                    gap: 12,
-                    minWidth: 0,
-                  }}
-                >
-                  {aiError ? (
-                    <div
-                      style={{
-                        background: "rgba(239, 68, 68, 0.16)",
-                        border: "1px solid rgba(239, 68, 68, 0.35)",
-                        color: "#fecaca",
-                        borderRadius: 16,
-                        padding: 14,
-                        fontSize: 18,
-                        lineHeight: 1.5,
-                        minWidth: 0,
-                        gridColumn: 1,
-                        gridRow: window.innerWidth > 980 ? "1 / span 2" : "auto",
-                      }}
-                    >
-                      {aiError}
-                    </div>
-                  ) : (
-                    <div
-                      style={{
-                        minHeight: 72,
-                        padding: 14,
-                        borderRadius: 16,
-                        background: "rgba(255,255,255,0.05)",
-                        border: "1px solid rgba(255,255,255,0.08)",
-                        fontSize: 20,
-                        lineHeight: 1.5,
-                        display: "flex",
-                        alignItems: "center",
-                        minWidth: 0,
-                        gridColumn: 1,
-                        gridRow: window.innerWidth > 980 ? "1 / span 2" : "auto",
-                      }}
-                    >
-                      {aiGeneratedText || "La correction et la suite proposées par l’IA apparaîtront ici."}
-                    </div>
-                  )}
-
-                  <button
-                    type="button"
-                    style={{
-                      ...styles.secondaryButton,
-                      width: window.innerWidth > 980 ? "auto" : "100%",
-                    }}
-                    onClick={() => speakText(aiGeneratedText)}
-                    disabled={!aiGeneratedText}
-                  >
-                    ▶️ Écouter
-                  </button>
-
-                  <button
-                    type="button"
-                    style={{
-                      ...styles.primaryButton,
-                      width: window.innerWidth > 980 ? "auto" : "100%",
-                    }}
-                    onClick={() => {
-                      if (!aiGeneratedText) return;
-                      lastAutoAiPromptRef.current = "";
-                      setText(formatTextSmart(aiGeneratedText));
-                    }}
-                    disabled={!aiGeneratedText}
-                  >
-                    Remplacer
-                  </button>
-                </div>
-              </div>
-
               <div
                 style={{
                   display: "flex",
@@ -2531,7 +2859,6 @@ if (page === "reglages") {
                       value={text}
                       onChange={(e) => {
                         const nextValue = e.target.value;
-                        lastAutoAiPromptRef.current = "";
                         setText(formatTextSmart(nextValue));
 
                         if (/\s$/.test(nextValue)) {
@@ -2605,156 +2932,6 @@ if (page === "reglages") {
                 }}
               >
                 <div
-                  ref={phraseBrowserRef}
-                  style={{ display: "grid", gap: 10, position: "relative", justifySelf: "end" }}
-                >
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsPhraseBrowserOpen((prev) => !prev);
-                    if (isPhraseBrowserOpen) {
-                      setPhraseBrowserCategory("");
-                    }
-                  }}
-                  style={
-                    isPhraseBrowserOpen
-                      ? styles.primaryButton
-                      : styles.secondaryButton
-                  }
-                >
-                  Phrases enregistrées
-                </button>
-
-                {isPhraseBrowserOpen ? (
-                  <div
-                    style={{
-                      position: "absolute",
-                      top: "100%",
-                      right: 0,
-                      marginTop: 8,
-                      display: "flex",
-                      alignItems: "flex-start",
-                      zIndex: 40,
-                    }}
-                  >
-                    <div
-                      style={{
-                        ...styles.card,
-                        padding: 10,
-                        minWidth: 220,
-                        maxHeight: 320,
-                        overflowY: "auto",
-                        display: "grid",
-                        gap: 8,
-                        borderTopRightRadius: phraseBrowserCategory ? 8 : 22,
-                        borderBottomRightRadius: phraseBrowserCategory ? 8 : 22,
-                      }}
-                    >
-                      {phraseBrowserCategories.length > 0 ? (
-                        phraseBrowserCategories.map((cat) => (
-                          <button
-                            key={cat}
-                            type="button"
-                            onMouseEnter={() => setPhraseBrowserCategory(cat)}
-                            onClick={() => setPhraseBrowserCategory(cat)}
-                            style={
-                              phraseBrowserCategory === cat
-                                ? {
-                                    ...styles.primaryButton,
-                                    textAlign: "left",
-                                    padding: "10px 12px",
-                                    justifyContent: "space-between",
-                                  }
-                                : {
-                                    ...styles.secondaryButton,
-                                    textAlign: "left",
-                                    padding: "10px 12px",
-                                    justifyContent: "space-between",
-                                  }
-                            }
-                          >
-                            <span>{cat}</span>
-                            <span style={{ opacity: 0.72 }}>›</span>
-                          </button>
-                        ))
-                      ) : (
-                        <div style={{ ...styles.text, opacity: 0.72, fontSize: 14 }}>
-                          Aucune catégorie enregistrée.
-                        </div>
-                      )}
-                    </div>
-
-                    {phraseBrowserCategory ? (
-                      <div
-                        style={{
-                          ...styles.card,
-                          marginLeft: 6,
-                          padding: 10,
-                          minWidth: 260,
-                          maxWidth: 320,
-                          maxHeight: 320,
-                          overflowY: "auto",
-                          display: "grid",
-                          gap: 8,
-                          borderTopLeftRadius: 8,
-                          borderBottomLeftRadius: 8,
-                        }}
-                      >
-                        {filteredSavedPhrases.length > 0 ? (
-                          filteredSavedPhrases.map((phrase) => (
-                            <button
-                              key={phrase.id}
-                              type="button"
-                              onClick={() => {
-                                const phraseValue = String(phrase.text || phrase.label || "");
-                                setText((prev) => {
-                                  const current = String(prev || "");
-                                  if (!current.trim()) {
-                                    return formatTextSmart(phraseValue);
-                                  }
-                                  const result = /\s$/.test(current)
-                                    ? `${current}${phraseValue}`
-                                    : `${current} ${phraseValue}`;
-                                  return formatTextSmart(result);
-                                });
-                                setLabel(String(phrase.label || phrase.text || ""));
-                                setCategory(String(phrase.category || "Général"));
-                                setIsPhraseBrowserOpen(false);
-                              }}
-                              style={{
-                                ...styles.secondaryButton,
-                                textAlign: "left",
-                                padding: "10px 12px",
-                                display: "grid",
-                                gap: 4,
-                              }}
-                            >
-                              <span style={{ fontWeight: 800 }}>
-                                {phrase.label || phrase.text}
-                              </span>
-                              <span
-                                style={{
-                                  fontSize: 12,
-                                  opacity: 0.78,
-                                  fontWeight: 500,
-                                }}
-                              >
-                                {phrase.category || "Général"}
-                              </span>
-                            </button>
-                          ))
-                        ) : (
-                          <div style={{ ...styles.text, opacity: 0.72, fontSize: 14 }}>
-                            Aucune phrase dans cette catégorie.
-                          </div>
-                        )}
-                      </div>
-                    ) : null}
-                  </div>
-                ) : null}
-                </div>
-
-                <div
                   style={{
                     ...styles.card,
                     padding: 14,
@@ -2810,218 +2987,6 @@ if (page === "reglages") {
             </div>
           </div>
 
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns:
-                window.innerWidth > 1400
-                  ? "minmax(0, 1fr) minmax(0, 1fr)"
-                  : "1fr",
-              gap: 14,
-              marginTop: 12,
-              alignItems: "stretch",
-            }}
-          >
-            <div
-              style={{
-                ...styles.card,
-                padding: 14,
-                display: "grid",
-                gridTemplateColumns:
-                  window.innerWidth > 1400
-                    ? "minmax(240px, 1.25fr) minmax(180px, 0.8fr) minmax(180px, 0.8fr)"
-                    : "1fr",
-                gap: 14,
-                alignItems: "end",
-                boxSizing: "border-box",
-                overflow: "hidden",
-              }}
-            >
-              <button
-                type="button"
-                style={{
-                  ...styles.primaryButton,
-                  width: "100%",
-                  minWidth: 0,
-                  boxSizing: "border-box",
-                }}
-                onClick={generateTextWithAI}
-                disabled={aiLoading || !text.trim()}
-              >
-                {aiLoading
-                  ? "Génération..."
-                  : aiUsage?.blocked
-                  ? "✨ Acheter des crédits pour continuer"
-                  : "✨ Générer par IA"}
-              </button>
-
-              <div style={{ ...styles.formGroup, minWidth: 0 }}>
-                <label style={styles.label}>Ton</label>
-                <select
-                  value={tone}
-                  onChange={(e) => setTone(e.target.value)}
-                  style={{
-                    ...styles.input,
-                    width: "100%",
-                    minWidth: 0,
-                    boxSizing: "border-box",
-                  }}
-                >
-                  <option value="naturel">Naturel</option>
-                  <option value="professionnel">Professionnel</option>
-                  <option value="humour">Humour</option>
-                  <option value="direct">Direct</option>
-                </select>
-              </div>
-
-              <div style={{ ...styles.formGroup, minWidth: 0 }}>
-                <label style={styles.label}>À qui je parle</label>
-                <select
-                  value={audience}
-                  onChange={(e) => setAudience(e.target.value)}
-                  style={{
-                    ...styles.input,
-                    width: "100%",
-                    minWidth: 0,
-                    boxSizing: "border-box",
-                  }}
-                >
-                  <option value="général">Général</option>
-                  <option value="ami">Ami</option>
-                  <option value="famille">Famille</option>
-                  <option value="soignant">Soignant</option>
-                  <option value="aidant">Aidant</option>
-                </select>
-              </div>
-            </div>
-
-            <div
-              style={{
-                ...styles.card,
-                padding: 14,
-                display: "grid",
-                gridTemplateColumns:
-                  window.innerWidth > 1400
-                    ? "minmax(220px, 1.1fr) minmax(170px, 0.8fr) minmax(220px, 0.9fr)"
-                    : "1fr",
-                gap: 14,
-                alignItems: "end",
-                boxSizing: "border-box",
-                overflow: "hidden",
-              }}
-            >
-              <div style={{ ...styles.formGroup, minWidth: 0 }}>
-                <label style={styles.label}>Libellé du bouton</label>
-                <input
-                  value={label}
-                  onChange={(e) => setLabel(e.target.value)}
-                  style={{
-                    ...styles.input,
-                    width: "100%",
-                    minWidth: 0,
-                    boxSizing: "border-box",
-                  }}
-                  placeholder="Ex : Besoin d'eau"
-                />
-              </div>
-
-              <div style={{ ...styles.formGroup, minWidth: 0 }}>
-                <label style={styles.label}>Catégorie</label>
-                <select
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value)}
-                  style={{
-                    ...styles.input,
-                    width: "100%",
-                    minWidth: 0,
-                    boxSizing: "border-box",
-                  }}
-                >
-                  {(categories || []).map((item) => (
-                    <option key={item} value={item}>
-                      {item}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <button
-                style={{
-                  ...styles.primaryButton,
-                  width: "100%",
-                  minWidth: 0,
-                  boxSizing: "border-box",
-                }}
-                onClick={savePhrase}
-              >
-                Enregistrer la phrase
-              </button>
-            </div>
-          </div>
-
-        </div>
-
-        <div style={styles.card}>
-          <h2 style={styles.sectionTitle}>Catégories personnalisées</h2>
-
-          <div style={styles.categoryManagerBox}>
-            <h3 style={styles.managerTitle}>Ajouter une catégorie</h3>
-
-            <div style={styles.formGroup}>
-              <label style={styles.label}>Nom de la catégorie</label>
-              <input
-                value={newCategoryName}
-                onChange={(e) => setNewCategoryName(e.target.value)}
-                style={styles.input}
-                placeholder="Ex : Loisirs, Travail, Douleur"
-              />
-            </div>
-
-            <div style={styles.formGroup}>
-              <label style={styles.label}>Choisir une icône</label>
-              <div style={styles.iconPickerGrid}>
-                {(AVAILABLE_ICONS || []).map((icon) => (
-                  <button
-                    key={icon}
-                    type="button"
-                    onClick={() => setNewCategoryIcon(icon)}
-                    style={
-                      newCategoryIcon === icon
-                        ? {
-                            ...styles.iconButton,
-                            ...styles.iconButtonActive,
-                          }
-                        : styles.iconButton
-                    }
-                  >
-                    {icon}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <button style={styles.primaryButton} onClick={addCategory}>
-              Ajouter la catégorie
-            </button>
-
-            <div style={styles.customCategoryList}>
-              {(customCategories || []).map((cat) => (
-                <div key={cat.name} style={styles.customCategoryItem}>
-                  <div style={styles.customCategoryInfo}>
-                    <span style={styles.customCategoryIcon}>{cat.icon}</span>
-                    <span style={styles.customCategoryName}>{cat.name}</span>
-                  </div>
-
-                  <button
-                    style={styles.deleteButton}
-                    onClick={() => deleteCategory(cat.name)}
-                  >
-                    Supprimer
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
         </div>
       </div>
     );

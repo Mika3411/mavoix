@@ -2,18 +2,89 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import useAudioRecording from "./hooks/useAudioRecording";
 import useSpeech from "./hooks/useSpeech";
 import CommunicationPage from "./CommunicationPage";
+import CaregiverMessagesPage from "./CaregiverMessagesPage";
 import VoicePage from "./VoicePage";
 import ProfileSettingsPage from "./ProfileSettingsPage";
 import ProfileInfoPage from "./ProfileInfoPage";
-import CreditsPage from "./CreditsPage";
 import InstallButton from "./InstallButton";
-import NoticePage from "./NoticePage";
+import NoticePage, { type SectionKey } from "./NoticePage";
+import DictionaryPage from "./DictionaryPage";
 import { AVAILABLE_ICONS, generateId, getCategoryBackground } from "./data";
 import { createStyles, getActiveTheme } from "./themes";
 import useProfiles from "./hooks/useProfiles";
-import useAI from "./hooks/useAI";
 import { normalizePhoneForSms } from "./utils/phone";
-import type { VoiceEditor } from "./types";
+import {
+  ANDROID_APP_URL,
+  API_BASE,
+  getCaregiverNetworkErrorMessage,
+} from "./services/config";
+import {
+  createCaregiverAlertLink,
+  ensureCaregiverAlertLinks,
+} from "./utils/caregiverAlerts";
+import type { CaregiverAlertLink, VoiceEditor } from "./types";
+
+type DownloadDevice = "desktop" | "android" | "other";
+type CaregiverAlertTarget = CaregiverAlertLink & {
+  alertLink: string;
+  appLink: string;
+};
+
+const APK_DOWNLOAD_URL = "/ma-voix.apk";
+const AIDANT_APK_DOWNLOAD_URL = "/ma-voix-aidant.apk";
+
+function buildCaregiverAlertWebLink(channel: string) {
+  const url = new URL("/aidant-alerte", API_BASE);
+  url.searchParams.set("channel", channel);
+  return url.href;
+}
+
+function buildCaregiverAlertAppLink(channel: string) {
+  const url = new URL("mavoix-aidant://open");
+  url.searchParams.set("apiBase", API_BASE);
+  url.searchParams.set("channel", channel);
+  return url.href;
+}
+
+function getCaregiverAlertErrorMessage(
+  response: Response,
+  data: { details?: string; error?: string }
+) {
+  if (response.status === 404) {
+    return "Serveur d'alerte non déployé sur Render. Redéploie le backend, puis réessaie.";
+  }
+
+  return data?.details || data?.error || "Impossible d'envoyer l'alerte.";
+}
+
+function detectDownloadDevice(): DownloadDevice {
+  if (typeof window === "undefined") return "desktop";
+
+  const ua = window.navigator.userAgent || "";
+  const isAndroid = /Android/i.test(ua);
+  const isIpadOSDesktopUa =
+    /Macintosh/i.test(ua) && window.navigator.maxTouchPoints > 1;
+  const isMobileOrTablet =
+    /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua) ||
+    isIpadOSDesktopUa;
+
+  if (isAndroid) return "android";
+  if (!isMobileOrTablet) return "desktop";
+  return "other";
+}
+
+function areVoiceEditorsEqual(a: VoiceEditor, b: VoiceEditor) {
+  return (
+    a.label === b.label &&
+    a.text === b.text &&
+    a.category === b.category &&
+    a.assignedVoice === b.assignedVoice &&
+    a.useProfileVoiceSettings === b.useProfileVoiceSettings &&
+    a.voiceSettings.rate === b.voiceSettings.rate &&
+    a.voiceSettings.pitch === b.voiceSettings.pitch &&
+    a.voiceSettings.volume === b.voiceSettings.volume
+  );
+}
 
 export default function App() {
   const [page, setPage] = useState("communication");
@@ -22,7 +93,6 @@ export default function App() {
   const [category, setCategory] = useState("Général");
   const [filter, setFilter] = useState("Toutes");
 
-  const realtimeAiMode = "realtime_correction_and_prediction";
   const [selectedSmsContactId, setSelectedSmsContactId] = useState("");
 
 
@@ -46,6 +116,14 @@ export default function App() {
   const [toastMessage, setToastMessage] = useState("");
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isNavHidden, setIsNavHidden] = useState(false);
+  const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
+  const [isPhraseEditMode, setIsPhraseEditMode] = useState(false);
+  const [caregiverAlertSending, setCaregiverAlertSending] = useState(false);
+  const [noticeInitialSection, setNoticeInitialSection] =
+    useState<SectionKey>("sommaire");
+  const [downloadDevice, setDownloadDevice] = useState<DownloadDevice>(() =>
+    detectDownloadDevice()
+  );
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -60,6 +138,10 @@ export default function App() {
     defaultVoice,
     defaultVoiceSettings,
     emergencyContacts,
+    privacyStatus,
+    enablePrivacyPassword,
+    unlockPrivateData,
+    lockPrivateData,
     updateCurrentProfile,
     updateCurrentProfileField,
     updateNestedProfileField,
@@ -78,31 +160,41 @@ export default function App() {
     importAllProfiles,
   } = useProfiles();
 
-  const availableSmsContacts = emergencyContacts.filter(
-    (contact) => contact.name?.trim() && contact.phone?.trim()
+  const availableSmsContacts = useMemo(
+    () =>
+      emergencyContacts.filter(
+        (contact) => contact.name?.trim() && contact.phone?.trim()
+      ),
+    [emergencyContacts]
   );
 
   const activeTheme = getActiveTheme(currentProfile);
   const styles = createStyles(activeTheme);
+  const caregiverAlertTargets = useMemo<CaregiverAlertTarget[]>(
+    () =>
+      ensureCaregiverAlertLinks(
+        currentProfile?.caregiverAlertLinks,
+        currentProfileId
+      ).map((link) => ({
+        ...link,
+        alertLink: buildCaregiverAlertWebLink(link.channel),
+        appLink:
+          downloadDevice === "android"
+            ? buildCaregiverAlertAppLink(link.channel)
+            : "",
+      })),
+    [currentProfile?.caregiverAlertLinks, currentProfileId, downloadDevice]
+  );
+  const enabledCaregiverAlertTargets = useMemo(
+    () => caregiverAlertTargets.filter((link) => link.enabled),
+    [caregiverAlertTargets]
+  );
 
-  const {
-    aiGeneratedText,
-    setAiGeneratedText,
-    aiLoading,
-    aiError,
-    setAiError,
-    aiUsage,
-    aiStatusLoading,
-    creditsPurchaseLoading,
-    creditsMessage,
-    handleGenerateButtonClick,
-    purchaseCredits,
-  } = useAI({
-    currentProfileId,
-    text,
-    mode: realtimeAiMode,
-    onBlocked: () => setPage("credits"),
-  });
+  function openNoticeSection(section: SectionKey = "sommaire") {
+    setNoticeInitialSection(section);
+    setPage("notice");
+    setIsMoreMenuOpen(false);
+  }
 
   const {
     voices,
@@ -132,7 +224,9 @@ export default function App() {
 
   useEffect(() => {
     if (availableSmsContacts.length === 0) {
-      setSelectedSmsContactId("");
+      if (selectedSmsContactId) {
+        setSelectedSmsContactId("");
+      }
       return;
     }
 
@@ -145,7 +239,10 @@ export default function App() {
     }
   }, [availableSmsContacts, selectedSmsContactId]);
 
-  const categories = customCategories.map((item) => item.name);
+  const categories = useMemo(
+    () => customCategories.map((item) => item.name),
+    [customCategories]
+  );
 
   useEffect(() => {
     if (!categories.includes(category) && categories.length > 0) {
@@ -153,11 +250,14 @@ export default function App() {
     }
   }, [categories, category]);
 
-  const categoryOptions = [
-    { name: "Toutes", icon: "🗂️" },
-    { name: "Favoris", icon: "⭐" },
-    ...customCategories,
-  ];
+  const categoryOptions = useMemo(
+    () => [
+      { name: "Toutes", icon: "🗂️" },
+      { name: "Favoris", icon: "⭐" },
+      ...customCategories,
+    ],
+    [customCategories]
+  );
 
   const filteredPhrases = useMemo(() => {
     if (filter === "Toutes") return savedPhrases;
@@ -167,8 +267,10 @@ export default function App() {
     return savedPhrases.filter((item) => item.category === filter);
   }, [savedPhrases, filter]);
 
-  const selectedPhrase =
-    savedPhrases.find((item) => item.id === selectedPhraseId) || null;
+  const selectedPhrase = useMemo(
+    () => savedPhrases.find((item) => item.id === selectedPhraseId) || null,
+    [savedPhrases, selectedPhraseId]
+  );
 
   useEffect(() => {
     if (savedPhrases.length === 0) {
@@ -182,34 +284,69 @@ export default function App() {
     }
   }, [savedPhrases, selectedPhraseId]);
 
+
   useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const detectedDevice = detectDownloadDevice();
+    setDownloadDevice(detectedDevice);
+
+    if (detectedDevice !== "desktop") {
+      const targetUrl = new URL(ANDROID_APP_URL, window.location.href);
+      const currentUrl = new URL(window.location.href);
+      const isCurrentAndroidTarget =
+        targetUrl.origin === currentUrl.origin &&
+        targetUrl.pathname.replace(/\/+$/, "") ===
+          currentUrl.pathname.replace(/\/+$/, "");
+
+      if (!isCurrentAndroidTarget) {
+        window.location.replace(targetUrl.href);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    const fallbackCategory = categories[0] || "Général";
+    let nextVoiceEditor: VoiceEditor;
+
     if (!selectedPhrase) {
-      setVoiceEditor({
+      nextVoiceEditor = {
         label: "",
         text: "",
-        category: categories[0] || "Général",
+        category: fallbackCategory,
         assignedVoice: "default",
         useProfileVoiceSettings: true,
         voiceSettings: {
           ...defaultVoiceSettings,
         },
-      });
-      return;
+      };
+    } else {
+      nextVoiceEditor = {
+        label: selectedPhrase.label || "",
+        text: selectedPhrase.text || "",
+        category: selectedPhrase.category || fallbackCategory,
+        assignedVoice: selectedPhrase.assignedVoice || "default",
+        useProfileVoiceSettings: !selectedPhrase.voiceSettings,
+        voiceSettings: {
+          rate: selectedPhrase.voiceSettings?.rate ?? defaultVoiceSettings.rate,
+          pitch: selectedPhrase.voiceSettings?.pitch ?? defaultVoiceSettings.pitch,
+          volume:
+            selectedPhrase.voiceSettings?.volume ?? defaultVoiceSettings.volume,
+        },
+      };
     }
 
-    setVoiceEditor({
-      label: selectedPhrase.label || "",
-      text: selectedPhrase.text || "",
-      category: selectedPhrase.category || categories[0] || "Général",
-      assignedVoice: selectedPhrase.assignedVoice || "default",
-      useProfileVoiceSettings: !selectedPhrase.voiceSettings,
-      voiceSettings: {
-        rate: selectedPhrase.voiceSettings?.rate ?? defaultVoiceSettings.rate,
-        pitch: selectedPhrase.voiceSettings?.pitch ?? defaultVoiceSettings.pitch,
-        volume: selectedPhrase.voiceSettings?.volume ?? defaultVoiceSettings.volume,
-      },
-    });
+    setVoiceEditor((current) =>
+      areVoiceEditorsEqual(current, nextVoiceEditor) ? current : nextVoiceEditor
+    );
   }, [selectedPhrase, categories, defaultVoiceSettings.rate, defaultVoiceSettings.pitch, defaultVoiceSettings.volume]);
+  function showToast(message: string) {
+    setToastMessage(message);
+    window.setTimeout(() => {
+      setToastMessage("");
+    }, 3000);
+  }
+
   function savePhrase() {
     if (!text.trim()) return;
 
@@ -231,16 +368,11 @@ export default function App() {
     setText("");
     setLabel("");
 
-    setToastMessage("Phrase enregistrée");
-
-    setTimeout(() => {
-      setToastMessage("");
-    }, 3000);
+    showToast("Phrase enregistrée");
   }
 
   function getSmsTextToSend() {
-    const preferredText = aiGeneratedText.trim() || text.trim();
-    return preferredText;
+    return text.trim();
   }
 
   function sendTextMessage() {
@@ -249,15 +381,13 @@ export default function App() {
     );
 
     if (!selectedContact?.phone?.trim()) {
-      setToastMessage("Ajoute d'abord un contact avec un numéro.");
-      setTimeout(() => setToastMessage(""), 3000);
+      showToast("Ajoute d'abord un contact avec un numéro.");
       return;
     }
 
     const message = getSmsTextToSend();
     if (!message) {
-      setToastMessage("Écris un message avant l'envoi.");
-      setTimeout(() => setToastMessage(""), 3000);
+      showToast("Écris un message avant l'envoi.");
       return;
     }
 
@@ -303,6 +433,16 @@ export default function App() {
   }
 
   function deletePhrase(id) {
+    const phraseToDelete = savedPhrases.find((item) => item.id === id);
+    const phraseLabel = phraseToDelete?.label || phraseToDelete?.text || "cette phrase";
+
+    if (
+      typeof window !== "undefined" &&
+      !window.confirm(`Supprimer "${phraseLabel}" ?`)
+    ) {
+      return;
+    }
+
     updateCurrentProfile((profile) => {
       const nextAudioMap = { ...profile.audioMap };
       delete nextAudioMap[id];
@@ -387,6 +527,160 @@ export default function App() {
     speakText("J'ai besoin d'aide immédiatement", "default");
   }
 
+  function updateCaregiverAlertLink(
+    linkId: string,
+    patch: Partial<Pick<CaregiverAlertLink, "name" | "enabled">>
+  ) {
+    updateCurrentProfile((profile) => {
+      const links = ensureCaregiverAlertLinks(
+        profile.caregiverAlertLinks,
+        profile.id
+      );
+
+      return {
+        ...profile,
+        caregiverAlertLinks: links.map((link) =>
+          link.id === linkId ? { ...link, ...patch } : link
+        ),
+      };
+    });
+  }
+
+  function addCaregiverAlertLink() {
+    updateCurrentProfile((profile) => {
+      const links = ensureCaregiverAlertLinks(
+        profile.caregiverAlertLinks,
+        profile.id
+      );
+
+      return {
+        ...profile,
+        caregiverAlertLinks: [
+          ...links,
+          createCaregiverAlertLink(links.length, profile.id),
+        ],
+      };
+    });
+  }
+
+  function deleteCaregiverAlertLink(linkId: string) {
+    updateCurrentProfile((profile) => {
+      const links = ensureCaregiverAlertLinks(
+        profile.caregiverAlertLinks,
+        profile.id
+      );
+
+      if (links.length <= 1) {
+        return profile;
+      }
+
+      return {
+        ...profile,
+        caregiverAlertLinks: links.filter((link) => link.id !== linkId),
+      };
+    });
+  }
+
+  async function copyCaregiverAlertLink(linkId: string) {
+    const target = caregiverAlertTargets.find((link) => link.id === linkId);
+    if (!target) return;
+
+    try {
+      await window.navigator.clipboard.writeText(target.alertLink);
+      showToast(`Lien ${target.name || "aidant"} copié`);
+    } catch {
+      window.prompt("Lien du téléphone auxiliaire", target.alertLink);
+    }
+  }
+
+  async function sendCaregiverAlert() {
+    if (caregiverAlertSending) return;
+
+    if (enabledCaregiverAlertTargets.length === 0) {
+      showToast("Aucun aidant relié au bouton");
+      return;
+    }
+
+    try {
+      setCaregiverAlertSending(true);
+
+      const results = await Promise.all(
+        enabledCaregiverAlertTargets.map(async (target) => {
+          try {
+            const response = await fetch(`${API_BASE}/api/caregiver-alert`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                channel: target.channel,
+                profileName:
+                  currentProfile?.firstName || currentProfile?.name || "",
+                message: "J'ai besoin de mon auxiliaire de vie.",
+              }),
+            });
+            const data = await response.json().catch(() => ({}));
+
+            if (!response.ok) {
+              return {
+                deliveredTo: 0,
+                error: getCaregiverAlertErrorMessage(response, data),
+              };
+            }
+
+            return {
+              deliveredTo: Number(data?.deliveredTo || 0),
+              error: "",
+            };
+          } catch (error) {
+            return {
+              deliveredTo: 0,
+              error:
+                error instanceof Error
+                  ? error.message
+                  : "Impossible d'envoyer l'alerte auxiliaire",
+            };
+          }
+        })
+      );
+
+      const failedResults = results.filter((result) => result.error);
+      if (failedResults.length === results.length) {
+        throw new Error(failedResults[0]?.error || "Impossible d'envoyer l'alerte.");
+      }
+
+      const deliveredTo = results.reduce(
+        (total, result) => total + result.deliveredTo,
+        0
+      );
+
+      if (deliveredTo > 0) {
+        showToast(
+          failedResults.length > 0
+            ? "Alarme envoyée, certains liens indisponibles"
+            : enabledCaregiverAlertTargets.length > 1
+              ? `Alarme envoyée à ${deliveredTo} téléphone(s) aidant(s)`
+              : "Alarme envoyée à l'aidant"
+        );
+      } else {
+        showToast(
+          enabledCaregiverAlertTargets.length > 1
+            ? "Aucun téléphone aidant connecté"
+            : "Téléphone aidant non connecté"
+        );
+      }
+    } catch (error) {
+      showToast(
+        getCaregiverNetworkErrorMessage(
+          error,
+          "Impossible d'envoyer l'alerte auxiliaire"
+        )
+      );
+    } finally {
+      setCaregiverAlertSending(false);
+    }
+  }
+
   useEffect(() => {
     const syncFullscreenState = () => {
       setIsFullscreen(Boolean(document.fullscreenElement));
@@ -399,6 +693,13 @@ export default function App() {
       document.removeEventListener("fullscreenchange", syncFullscreenState);
     };
   }, []);
+
+  useEffect(() => {
+    setIsMoreMenuOpen(false);
+    if (page !== "communication") {
+      setIsPhraseEditMode(false);
+    }
+  }, [page, isNavHidden]);
 
   useEffect(() => {
     const styleId = "global-button-interactions";
@@ -461,6 +762,7 @@ export default function App() {
         ...styles.page,
         minHeight: "100vh",
         height: "100dvh",
+        boxSizing: "border-box",
         overflow: "hidden",
       }}
     >
@@ -505,7 +807,7 @@ export default function App() {
             </div>
           </div>
 
-          <div style={styles.topButtons}>
+          <div style={{ ...styles.topButtons, position: "relative", gap: 10, flexWrap: "wrap" }}>
             <button
               style={{
                 ...(page === "communication"
@@ -521,11 +823,13 @@ export default function App() {
 
             <button
               style={
-                page === "voix" ? styles.primaryButton : styles.secondaryButton
+                page === "reglages"
+                  ? styles.primaryButton
+                  : styles.secondaryButton
               }
-              onClick={() => setPage("voix")}
+              onClick={() => setPage("reglages")}
             >
-              Voix
+              Parler
             </button>
 
             <button
@@ -537,68 +841,123 @@ export default function App() {
               Infos
             </button>
 
-            <button
-              style={
-                page === "profil"
-                  ? styles.primaryButton
-                  : styles.secondaryButton
-              }
-              onClick={() => setPage("profil")}
-            >
-              Profil
-            </button>
+            <div style={{ position: "relative" }}>
+              <button
+                type="button"
+                aria-haspopup="menu"
+                aria-expanded={isMoreMenuOpen}
+                onClick={() => setIsMoreMenuOpen((prev) => !prev)}
+                style={{
+                  ...styles.secondaryButton,
+                  padding: "6px 18px",
+                  fontSize: "15px",
+                }}
+              >
+                Menu ▾
+              </button>
 
-            <button
-              style={
-                page === "reglages"
-                  ? styles.primaryButton
-                  : styles.secondaryButton
-              }
-              onClick={() => setPage("reglages")}
-            >
-              Générer
-            </button>
+              {isMoreMenuOpen && (
+                <div
+                  role="menu"
+                  style={{
+                    position: "absolute",
+                    top: "calc(100% + 10px)",
+                    right: 0,
+                    minWidth: 220,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 8,
+                    padding: 10,
+                    borderRadius: 18,
+                    background: activeTheme?.cardBackground || "#1e293b",
+                    boxShadow: "0 16px 40px rgba(0,0,0,0.28)",
+                    border: "1px solid rgba(255,255,255,0.08)",
+                    backdropFilter: "blur(8px)",
+                    zIndex: 50,
+                  }}
+                >
+                  <button
+                    style={page === "voix" ? styles.primaryButton : styles.secondaryButton}
+                    onClick={() => {
+                      setPage("voix");
+                      setIsMoreMenuOpen(false);
+                    }}
+                  >
+                    Voix
+                  </button>
 
-            <button
-              style={
-                page === "credits" ? styles.primaryButton : styles.secondaryButton
-              }
-              onClick={() => setPage("credits")}
-            >
-              Crédits {aiUsage.creditsRemaining > 0 ? `(${aiUsage.creditsRemaining})` : ""}
-            </button>
+                  <button
+                    style={page === "profil" ? styles.primaryButton : styles.secondaryButton}
+                    onClick={() => {
+                      setPage("profil");
+                      setIsMoreMenuOpen(false);
+                    }}
+                  >
+                    Configurer
+                  </button>
 
-            <button
-              style={
-                page === "notice" ? styles.primaryButton : styles.secondaryButton
-              }
-              onClick={() => setPage("notice")}
-            >
-              Notice
-            </button>
+                  <button
+                    style={page === "aidants" ? styles.primaryButton : styles.secondaryButton}
+                    onClick={() => {
+                      setPage("aidants");
+                      setIsMoreMenuOpen(false);
+                    }}
+                  >
+                    Aidants
+                  </button>
 
+                  <button
+                    style={page === "dictionnaire" ? styles.primaryButton : styles.secondaryButton}
+                    onClick={() => {
+                      setPage("dictionnaire");
+                      setIsMoreMenuOpen(false);
+                    }}
+                  >
+                    Dictionnaire
+                  </button>
 
-            <button
-              onClick={() =>
-                window.open(
-                  "https://paypal.me/anime1120",
-                  "_blank",
-                  "noopener,noreferrer"
-                )
-              }
-              style={{
-                padding: "6px 18px",
-                fontSize: "15px",
-                borderRadius: "18px",
-                background: "#22c55e",
-                color: "white",
-                border: "none",
-                fontWeight: "600",
-                cursor: "pointer",
-              }}
-            >
-              Soutenez-moi ❤️
-            </button>
+                  <button
+                    style={page === "telechargement" ? styles.primaryButton : styles.secondaryButton}
+                    onClick={() => {
+                      setPage("telechargement");
+                      setIsMoreMenuOpen(false);
+                    }}
+                  >
+                    Téléchargement
+                  </button>
+
+                  <button
+                    style={page === "notice" ? styles.primaryButton : styles.secondaryButton}
+                    onClick={() => openNoticeSection()}
+                  >
+                    Notice
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setIsMoreMenuOpen(false);
+                      window.open(
+                        "https://paypal.me/anime1120",
+                        "_blank",
+                        "noopener,noreferrer"
+                      );
+                    }}
+                    style={{
+                      padding: "6px 18px",
+                      fontSize: "15px",
+                      borderRadius: "18px",
+                      background: "#22c55e",
+                      color: "white",
+                      border: "none",
+                      fontWeight: "600",
+                      cursor: "pointer",
+                    }}
+                  >
+                    Soutenez-moi ❤️
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -639,8 +998,6 @@ export default function App() {
             overflow: "hidden",
           }}
         >
-          <InstallButton styles={styles} />
-
           <div
             style={{
               flex: 1,
@@ -664,6 +1021,8 @@ export default function App() {
             movePhrase={movePhrase}
             updatePhrase={updatePhrase}
             deletePhrase={deletePhrase}
+            isEditMode={isPhraseEditMode}
+            setIsEditMode={setIsPhraseEditMode}
           />
         ) : page === "voix" ? (
           <VoicePage
@@ -696,18 +1055,277 @@ export default function App() {
             currentProfile={currentProfile}
             onSpeak={(message) => speakText(message, "default")}
           />
-        ) : page === "credits" ? (
-          <CreditsPage
-            styles={styles}
-            aiUsage={aiUsage}
-            aiStatusLoading={aiStatusLoading}
-            creditsPurchaseLoading={creditsPurchaseLoading}
-            creditsMessage={creditsMessage}
-            onPurchase={purchaseCredits}
-            onBackToEditor={() => setPage("reglages")}
-          />
+        ) : page === "telechargement" ? (
+          <div
+            style={{
+              padding: 20,
+              display: "flex",
+              flexDirection: "column",
+              gap: 20,
+            }}
+          >
+            <div
+              style={{
+                background: "linear-gradient(135deg, rgba(37,99,235,0.22), rgba(15,23,42,0.88))",
+                border: "1px solid rgba(255,255,255,0.1)",
+                borderRadius: 28,
+                padding: 28,
+                boxShadow: "0 18px 45px rgba(0,0,0,0.22)",
+                overflow: "hidden",
+                position: "relative",
+              }}
+            >
+              <div
+                style={{
+                  position: "absolute",
+                  top: -40,
+                  right: -10,
+                  fontSize: 120,
+                  opacity: 0.08,
+                  pointerEvents: "none",
+                }}
+              >
+                ⬇️
+              </div>
+
+              <div style={{ fontSize: 14, fontWeight: 700, letterSpacing: 1.2, opacity: 0.75, textTransform: "uppercase", marginBottom: 10 }}>
+                Centre de téléchargement
+              </div>
+              <div style={{ fontSize: 32, fontWeight: 800, marginBottom: 10, lineHeight: 1.15 }}>
+                Installe Ma Voix sur le bon appareil
+              </div>
+              <div style={{ fontSize: 18, opacity: 0.9, lineHeight: 1.6, maxWidth: 820 }}>
+                Choisis la version adaptée à ton appareil. Sur ordinateur, tu peux installer l'application depuis le navigateur. Sur Android, tu peux télécharger l'application pour smartphone ou tablette.
+              </div>
+
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: 10,
+                  marginTop: 18,
+                }}
+              >
+                <div
+                  style={{
+                    padding: "8px 14px",
+                    borderRadius: 999,
+                    background: downloadDevice === "desktop" ? "rgba(34,197,94,0.18)" : "rgba(255,255,255,0.08)",
+                    border: "1px solid rgba(255,255,255,0.08)",
+                    fontSize: 14,
+                    fontWeight: 600,
+                  }}
+                >
+                  {downloadDevice === "desktop" ? "✅ Appareil détecté : PC" : "💻 Version PC disponible"}
+                </div>
+                <div
+                  style={{
+                    padding: "8px 14px",
+                    borderRadius: 999,
+                    background: downloadDevice === "android" ? "rgba(34,197,94,0.18)" : "rgba(255,255,255,0.08)",
+                    border: "1px solid rgba(255,255,255,0.08)",
+                    fontSize: 14,
+                    fontWeight: 600,
+                  }}
+                >
+                  {downloadDevice === "android" ? "✅ Appareil détecté : Android" : "📱 Version Android disponible"}
+                </div>
+              </div>
+            </div>
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
+                gap: 20,
+                alignItems: "stretch",
+              }}
+            >
+              <div
+                style={{
+                  background: activeTheme?.cardBackground || "#0f172a",
+                  border: downloadDevice === "desktop" ? "1px solid rgba(34,197,94,0.45)" : "1px solid rgba(255,255,255,0.08)",
+                  borderRadius: 28,
+                  padding: 24,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 16,
+                  boxShadow: "0 16px 35px rgba(0,0,0,0.18)",
+                  position: "relative",
+                  overflow: "hidden",
+                }}
+              >
+                <div
+                  style={{
+                    position: "absolute",
+                    top: 18,
+                    right: 18,
+                    padding: "6px 10px",
+                    borderRadius: 999,
+                    fontSize: 12,
+                    fontWeight: 700,
+                    background: downloadDevice === "desktop" ? "rgba(34,197,94,0.18)" : "rgba(255,255,255,0.08)",
+                    border: "1px solid rgba(255,255,255,0.08)",
+                  }}
+                >
+                  {downloadDevice === "desktop" ? "Recommandé ici" : "PC uniquement"}
+                </div>
+
+                <div style={{ fontSize: 44, lineHeight: 1 }}>💻</div>
+                <div>
+                  <div style={{ fontSize: 26, fontWeight: 800, marginBottom: 8 }}>Version PC</div>
+                  <div style={{ fontSize: 17, opacity: 0.88, lineHeight: 1.6 }}>
+                    Installe l'application directement depuis le navigateur sur ordinateur. Idéal pour un accès rapide comme une vraie appli.
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", flexDirection: "column", gap: 10, fontSize: 15, opacity: 0.82 }}>
+                  <div>• Installation rapide sur Windows, Mac ou Linux</div>
+                  <div>• Lance l'application depuis le bureau ou le menu démarrer</div>
+                  <div>• Mise à jour simple depuis le site</div>
+                </div>
+
+                <div style={{ marginTop: "auto", display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 10 }}>
+                  {downloadDevice === "desktop" ? (
+                    <InstallButton styles={styles} />
+                  ) : (
+                    <button
+                      disabled
+                      style={{
+                        ...styles.secondaryButton,
+                        opacity: 0.5,
+                        cursor: "not-allowed",
+                      }}
+                    >
+                      Bouton visible sur PC
+                    </button>
+                  )}
+                  <div style={{ fontSize: 13, opacity: 0.65 }}>
+                    Le bouton d'installation PWA s'affiche uniquement sur ordinateur.
+                  </div>
+                </div>
+              </div>
+
+              <div
+                style={{
+                  background: activeTheme?.cardBackground || "#0f172a",
+                  border: downloadDevice === "android" ? "1px solid rgba(34,197,94,0.45)" : "1px solid rgba(255,255,255,0.08)",
+                  borderRadius: 28,
+                  padding: 24,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 16,
+                  boxShadow: "0 16px 35px rgba(0,0,0,0.18)",
+                  position: "relative",
+                  overflow: "hidden",
+                }}
+              >
+                <div
+                  style={{
+                    position: "absolute",
+                    top: 18,
+                    right: 18,
+                    padding: "6px 10px",
+                    borderRadius: 999,
+                    fontSize: 12,
+                    fontWeight: 700,
+                    background: downloadDevice === "android" ? "rgba(34,197,94,0.18)" : "rgba(255,255,255,0.08)",
+                    border: "1px solid rgba(255,255,255,0.08)",
+                  }}
+                >
+                  {downloadDevice === "android" ? "Recommandé ici" : "Android uniquement"}
+                </div>
+
+                <div style={{ fontSize: 44, lineHeight: 1 }}>📱</div>
+                <div>
+                  <div style={{ fontSize: 26, fontWeight: 800, marginBottom: 8 }}>Version Android</div>
+                  <div style={{ fontSize: 17, opacity: 0.88, lineHeight: 1.6 }}>
+                    Télécharge l'application pour installer Ma Voix sur smartphone ou tablette Android.
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", flexDirection: "column", gap: 10, fontSize: 15, opacity: 0.82 }}>
+                  <div>• Compatible téléphones et tablettes Android</div>
+                  <div>• Installation depuis le fichier téléchargé</div>
+                  <div>• À ouvrir directement sur le téléphone ou la tablette</div>
+                </div>
+
+                <div style={{ marginTop: "auto", display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 10 }}>
+                  <a
+                    href={APK_DOWNLOAD_URL}
+                    download
+                    style={{
+                      ...styles.primaryButton,
+                      textDecoration: "none",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: "18px",
+                      padding: "12px 22px",
+                    }}
+                  >
+                    Télécharger l'application
+                  </a>
+                  <a
+                    href={AIDANT_APK_DOWNLOAD_URL}
+                    download
+                    style={{
+                      ...styles.secondaryButton,
+                      textDecoration: "none",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: "16px",
+                      padding: "10px 18px",
+                    }}
+                  >
+                    Télécharger l'application aidant
+                  </a>
+                  <div style={{ fontSize: 13, opacity: 0.65 }}>
+                    {downloadDevice === "android"
+                      ? "Télécharge Ma Voix pour l'utilisateur, ou l'application aidant pour le téléphone auxiliaire."
+                      : "Depuis un PC, télécharge les fichiers puis transfère le bon APK sur chaque téléphone Android."}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {downloadDevice === "other" && (
+              <div
+                style={{
+                  background: "rgba(255,255,255,0.04)",
+                  border: "1px solid rgba(255,255,255,0.08)",
+                  borderRadius: 22,
+                  padding: 18,
+                  fontSize: 16,
+                  lineHeight: 1.6,
+                  opacity: 0.86,
+                }}
+              >
+                Sur cet appareil, les boutons de téléchargement sont masqués. Ouvre cette page depuis un PC pour l'installation ordinateur, ou depuis un appareil Android pour l'application Android.
+              </div>
+            )}
+          </div>
         ) : page === "notice" ? (
-          <NoticePage styles={styles} />
+          <NoticePage
+            styles={styles}
+            initialSection={noticeInitialSection}
+          />
+        ) : page === "dictionnaire" ? (
+          <DictionaryPage styles={styles} />
+        ) : page === "aidants" ? (
+          <CaregiverMessagesPage
+            styles={styles}
+            caregiverAlertLinks={caregiverAlertTargets}
+            currentProfile={currentProfile}
+            currentProfileId={currentProfileId}
+            text={text}
+            setText={setText}
+            isListening={isListening}
+            startDictation={startDictation}
+            speakText={speakText}
+            showToast={showToast}
+          />
         ) : (
           <ProfileSettingsPage
             styles={styles}
@@ -730,6 +1348,16 @@ export default function App() {
             exportAllProfiles={exportAllProfiles}
             importAllProfiles={(event) => importAllProfiles(event, { onAfterImport: () => { setFilter("Toutes"); setCategory("Général"); } })}
             fileInputRef={fileInputRef}
+            privacyStatus={privacyStatus}
+            enablePrivacyPassword={enablePrivacyPassword}
+            unlockPrivateData={unlockPrivateData}
+            lockPrivateData={lockPrivateData}
+            caregiverAlertLinks={caregiverAlertTargets}
+            addCaregiverAlertLink={addCaregiverAlertLink}
+            updateCaregiverAlertLink={updateCaregiverAlertLink}
+            deleteCaregiverAlertLink={deleteCaregiverAlertLink}
+            copyCaregiverAlertLink={copyCaregiverAlertLink}
+            openNoticeSection={openNoticeSection}
             text={text}
             setText={setText}
             isListening={isListening}
@@ -758,14 +1386,6 @@ export default function App() {
             selectedSmsContactId={selectedSmsContactId}
             setSelectedSmsContactId={setSelectedSmsContactId}
             onSendSms={sendTextMessage}
-            aiGeneratedText={aiGeneratedText}
-            aiLoading={aiLoading}
-            aiError={aiError}
-            aiUsage={aiUsage}
-            aiStatusLoading={aiStatusLoading}
-            generateTextWithAI={handleGenerateButtonClick}
-            setAiGeneratedText={setAiGeneratedText}
-            goToCreditsPage={() => setPage("credits")}
           />
         )}
           </div>
@@ -791,6 +1411,44 @@ export default function App() {
         }}
       >
         {isFullscreen ? "Quitter" : "Plein écran"}
+      </button>
+
+      <button
+        onClick={sendCaregiverAlert}
+        disabled={caregiverAlertSending}
+        aria-label={
+          caregiverAlertSending
+            ? "Envoi de l'appel aidant"
+            : "Appel aidant"
+        }
+        title={
+          caregiverAlertSending
+            ? "Envoi de l'appel aidant"
+            : "Appel aidant"
+        }
+        style={{
+          position: "fixed",
+          right: 20,
+          bottom: 96,
+          zIndex: 9999,
+          width: 62,
+          height: 62,
+          padding: 0,
+          borderRadius: "18px",
+          background: caregiverAlertSending ? "#92400e" : "#f59e0b",
+          color: "#111827",
+          border: "none",
+          fontSize: "24px",
+          fontWeight: 800,
+          cursor: caregiverAlertSending ? "wait" : "pointer",
+          boxShadow: "0 8px 25px rgba(0,0,0,0.3)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          lineHeight: 1,
+        }}
+      >
+        🔔
       </button>
 
       <button

@@ -12,11 +12,45 @@ export default function CommunicationPage(props: any) {
     movePhrase,
     updatePhrase,
     deletePhrase,
+    isEditMode,
+    setIsEditMode,
   } = props;
+
+  const editToggleStyle = isEditMode
+    ? styles.primaryButton
+    : styles.secondaryButton;
+
   return (
     <div style={styles.gridSingle}>
       <div style={styles.card}>
-        <h2 style={styles.sectionTitle}>Communication rapide</h2>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 12,
+            flexWrap: "wrap",
+            marginBottom: 12,
+          }}
+        >
+          <h2 style={{ ...styles.sectionTitle, marginBottom: 0 }}>
+            Communication rapide
+          </h2>
+
+          <button
+            type="button"
+            onClick={() => setIsEditMode(!isEditMode)}
+            aria-pressed={isEditMode}
+            style={{
+              ...editToggleStyle,
+              minHeight: 44,
+              padding: "8px 16px",
+              fontSize: 15,
+            }}
+          >
+            {isEditMode ? "Terminer" : "Modifier"}
+          </button>
+        </div>
 
         <div style={{ marginBottom: 16 }}>
           <p style={styles.filterTitle}>Catégories</p>
@@ -48,8 +82,8 @@ export default function CommunicationPage(props: any) {
           <div
             style={{
               ...styles.quickPhraseGrid,
-              gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
-              gap: 8,
+              gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+              gap: 10,
               alignItems: "start",
             }}
           >
@@ -58,8 +92,8 @@ export default function CommunicationPage(props: any) {
                 key={item.id}
                 style={{
                   ...styles.quickPhraseCard,
-                  padding: 8,
-                  gap: 6,
+                  padding: 10,
+                  gap: 8,
                   borderRadius: 14,
                 }}
               >
@@ -67,9 +101,9 @@ export default function CommunicationPage(props: any) {
                   style={{
                     ...styles.quickPhraseButton,
                     background: getCategoryBackground(item.category),
-                    minHeight: 64,
-                    fontSize: 15,
-                    padding: "10px 12px",
+                    minHeight: 72,
+                    fontSize: 16,
+                    padding: "12px 14px",
                     borderRadius: 14,
                     width: "100%",
                   }}
@@ -84,37 +118,43 @@ export default function CommunicationPage(props: any) {
                   style={{
                     ...styles.quickPhraseActions,
                     gap: 6,
-                    justifyContent: "space-between",
-                    flexWrap: "nowrap",
+                    justifyContent: isEditMode ? "space-between" : "flex-end",
+                    flexWrap: "wrap",
                   }}
                 >
-                  <button
-                    onClick={() => movePhrase(item.id, "up")}
-                    style={{
-                      ...styles.smallActionButton,
-                      minWidth: 36,
-                      height: 36,
-                      fontSize: 14,
-                      padding: "4px 6px",
-                    }}
-                    title="Monter"
-                  >
-                    ⬆
-                  </button>
+                  {isEditMode && (
+                    <>
+                      <button
+                        onClick={() => movePhrase(item.id, "up")}
+                        style={{
+                          ...styles.smallActionButton,
+                          minWidth: 44,
+                          height: 44,
+                          fontSize: 16,
+                          padding: "4px 6px",
+                        }}
+                        title="Monter"
+                        aria-label={`Monter ${item.label || item.text}`}
+                      >
+                        ⬆
+                      </button>
 
-                  <button
-                    onClick={() => movePhrase(item.id, "down")}
-                    style={{
-                      ...styles.smallActionButton,
-                      minWidth: 36,
-                      height: 36,
-                      fontSize: 14,
-                      padding: "4px 6px",
-                    }}
-                    title="Descendre"
-                  >
-                    ⬇
-                  </button>
+                      <button
+                        onClick={() => movePhrase(item.id, "down")}
+                        style={{
+                          ...styles.smallActionButton,
+                          minWidth: 44,
+                          height: 44,
+                          fontSize: 16,
+                          padding: "4px 6px",
+                        }}
+                        title="Descendre"
+                        aria-label={`Descendre ${item.label || item.text}`}
+                      >
+                        ⬇
+                      </button>
+                    </>
+                  )}
 
                   <button
                     onClick={() =>
@@ -122,32 +162,39 @@ export default function CommunicationPage(props: any) {
                     }
                     style={{
                       ...styles.favoriteButton,
-                      width: 36,
-                      minWidth: 36,
-                      height: 36,
-                      fontSize: 16,
+                      width: 44,
+                      minWidth: 44,
+                      height: 44,
+                      fontSize: 18,
                     }}
                     title={
                       item.favorite
                         ? "Retirer des favoris"
                         : "Ajouter aux favoris"
                     }
+                    aria-label={
+                      item.favorite
+                        ? `Retirer ${item.label || item.text} des favoris`
+                        : `Ajouter ${item.label || item.text} aux favoris`
+                    }
                   >
                     {item.favorite ? "⭐" : "☆"}
                   </button>
 
-                  <button
-                    onClick={() => deletePhrase(item.id)}
-                    style={{
-                      ...styles.deleteButton,
-                      minWidth: 72,
-                      height: 36,
-                      fontSize: 12,
-                      padding: "4px 8px",
-                    }}
-                  >
-                    Supprimer
-                  </button>
+                  {isEditMode && (
+                    <button
+                      onClick={() => deletePhrase(item.id)}
+                      style={{
+                        ...styles.deleteButton,
+                        minWidth: 92,
+                        height: 44,
+                        fontSize: 13,
+                        padding: "4px 10px",
+                      }}
+                    >
+                      Supprimer
+                    </button>
+                  )}
                 </div>
               </div>
             ))}

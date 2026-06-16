@@ -1,4 +1,5 @@
 import { createProfile, generateId } from "../data";
+import { ensureCaregiverAlertLinks } from "./caregiverAlerts";
 import type {
   DoctorInfo,
   EmergencyContact,
@@ -57,10 +58,12 @@ export function createEmptyEmergencyContact(): EmergencyContact {
 
 export function ensureProfile(profile?: Partial<Profile>): Profile {
   const base = createProfile(profile?.name || "Profil importé") as Profile;
+  const profileId = profile?.id ?? base.id;
 
   return {
     ...base,
     ...profile,
+    id: profileId,
     name: profile?.name ?? base.name,
     firstName: profile?.firstName ?? "",
     lastName: profile?.lastName ?? "",
@@ -101,5 +104,9 @@ export function ensureProfile(profile?: Partial<Profile>): Profile {
         : profile && "emergencyContact" in profile && typeof (profile as any).emergencyContact === "string"
           ? [ensureEmergencyContact({ name: (profile as any).emergencyContact })]
           : [createEmptyEmergencyContact()],
+    caregiverAlertLinks: ensureCaregiverAlertLinks(
+      profile?.caregiverAlertLinks,
+      profileId
+    ),
   };
 }

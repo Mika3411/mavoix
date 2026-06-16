@@ -59,6 +59,8 @@ type ProfileInfoPageProps = {
 export default function ProfileInfoPage(props: ProfileInfoPageProps) {
   const profile = props.profile || props.currentProfile;
   const onSpeak = props.onSpeak;
+  const [showSensitiveAdminData, setShowSensitiveAdminData] =
+    React.useState(false);
 
   if (!profile) return null;
 
@@ -157,13 +159,11 @@ export default function ProfileInfoPage(props: ProfileInfoPageProps) {
               onSpeak?.(
                 `Je m'appelle ${fullName || "non renseigné"}, je suis né le ${
                   profile.birthDate || "non renseigné"
-                }, j'habite à ${profile.address || "non renseigné"} et mon numéro de sécurité sociale est ${
-                  profile.socialSecurityNumber || "non renseigné"
-                }.`
+                }, j'habite à ${profile.address || "non renseigné"}.`
               )
             }
           >
-            🪪 Identité
+            🪪 Identité utile
           </button>
 
           <button
@@ -220,7 +220,7 @@ export default function ProfileInfoPage(props: ProfileInfoPageProps) {
       </div>
 
       <div style={compactCard}>
-        <h2 style={compactSectionTitle}>Identité</h2>
+        <h2 style={compactSectionTitle}>Identité utile</h2>
 
         <div
           style={{
@@ -270,17 +270,10 @@ export default function ProfileInfoPage(props: ProfileInfoPageProps) {
             }}
           >
             <div style={styles.formGroup}>
-              <label style={styles.label}>Numéro de sécurité sociale</label>
-              <div style={styles.readOnlyBox}>
-                {profile.socialSecurityNumber || "Non renseigné"}
-              </div>
+              <label style={styles.label}>Nom complet</label>
+              <div style={styles.readOnlyBox}>{fullName || "Non renseigné"}</div>
             </div>
           </div>
-        </div>
-
-        <div style={styles.formGroup}>
-          <label style={styles.label}>Nom complet</label>
-          <div style={styles.readOnlyBox}>{fullName || "Non renseigné"}</div>
         </div>
 
         <div style={styles.formGroup}>
@@ -303,6 +296,31 @@ export default function ProfileInfoPage(props: ProfileInfoPageProps) {
             {profile.language || "Non renseignée"}
           </div>
         </div>
+      </div>
+
+      <div style={compactCard}>
+        <h2 style={compactSectionTitle}>Données administratives sensibles</h2>
+
+        <div style={styles.formGroup}>
+          <label style={styles.label}>Numéro de sécurité sociale</label>
+          <div style={styles.readOnlyBox}>
+            {showSensitiveAdminData
+              ? profile.socialSecurityNumber || "Non renseigné"
+              : profile.socialSecurityNumber
+              ? "•••••••••••••••"
+              : "Non renseigné"}
+          </div>
+        </div>
+
+        {profile.socialSecurityNumber ? (
+          <button
+            type="button"
+            style={compactSecondaryButton}
+            onClick={() => setShowSensitiveAdminData((visible) => !visible)}
+          >
+            {showSensitiveAdminData ? "Masquer" : "Afficher"}
+          </button>
+        ) : null}
       </div>
 
       <div style={compactCard}>
