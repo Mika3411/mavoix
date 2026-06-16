@@ -8,7 +8,7 @@ env:
 
 jobs:
   testflight:
-    runs-on: macos-15
+    runs-on: macos-26
 
     steps:
       - name: Checkout
@@ -57,6 +57,7 @@ jobs:
 
       - name: Inspect iOS project
         run: |
+          xcodebuild -version
           xcodebuild -list -project ios/App/App.xcodeproj
           xcodebuild -resolvePackageDependencies -project ios/App/App.xcodeproj -scheme App
 
