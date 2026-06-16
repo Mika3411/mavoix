@@ -80,6 +80,7 @@ export type Profile = {
   doctorInfo?: DoctorInfo;
   emergencyContacts?: EmergencyContact[];
   caregiverAlertLinks?: CaregiverAlertLink[];
+  selectedCaregiverAlertLinkId?: string;
 };
 
 export type VoiceEditor = {

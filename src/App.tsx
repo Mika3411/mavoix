@@ -119,8 +119,6 @@ export default function App() {
   const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
   const [isPhraseEditMode, setIsPhraseEditMode] = useState(false);
   const [caregiverAlertSending, setCaregiverAlertSending] = useState(false);
-  const [selectedCaregiverAlertTargetId, setSelectedCaregiverAlertTargetId] =
-    useState("");
   const [noticeInitialSection, setNoticeInitialSection] =
     useState<SectionKey>("sommaire");
   const [downloadDevice, setDownloadDevice] = useState<DownloadDevice>(() =>
@@ -191,6 +189,8 @@ export default function App() {
     () => caregiverAlertTargets.filter((link) => link.enabled),
     [caregiverAlertTargets]
   );
+  const selectedCaregiverAlertTargetId =
+    currentProfile?.selectedCaregiverAlertLinkId || "";
   const selectedCaregiverAlertTarget = useMemo(
     () =>
       enabledCaregiverAlertTargets.find(
@@ -203,9 +203,6 @@ export default function App() {
 
   useEffect(() => {
     if (enabledCaregiverAlertTargets.length === 0) {
-      if (selectedCaregiverAlertTargetId) {
-        setSelectedCaregiverAlertTargetId("");
-      }
       return;
     }
 
@@ -214,9 +211,23 @@ export default function App() {
     );
 
     if (!selectedExists) {
-      setSelectedCaregiverAlertTargetId(enabledCaregiverAlertTargets[0].id);
+      updateCurrentProfile((profile) => ({
+        ...profile,
+        selectedCaregiverAlertLinkId: enabledCaregiverAlertTargets[0].id,
+      }));
     }
-  }, [enabledCaregiverAlertTargets, selectedCaregiverAlertTargetId]);
+  }, [
+    enabledCaregiverAlertTargets,
+    selectedCaregiverAlertTargetId,
+    updateCurrentProfile,
+  ]);
+
+  function selectCaregiverAlertTarget(linkId: string) {
+    updateCurrentProfile((profile) => ({
+      ...profile,
+      selectedCaregiverAlertLinkId: linkId,
+    }));
+  }
 
   function openNoticeSection(section: SectionKey = "sommaire") {
     setNoticeInitialSection(section);
@@ -1351,6 +1362,8 @@ export default function App() {
             updateCaregiverAlertLink={updateCaregiverAlertLink}
             deleteCaregiverAlertLink={deleteCaregiverAlertLink}
             copyCaregiverAlertLink={copyCaregiverAlertLink}
+            selectedCaregiverAlertLinkId={selectedCaregiverAlertTargetId}
+            selectCaregiverAlertTarget={selectCaregiverAlertTarget}
             openNoticeSection={openNoticeSection}
             text={text}
             setText={setText}
@@ -1406,60 +1419,6 @@ export default function App() {
       >
         {isFullscreen ? "Quitter" : "Plein écran"}
       </button>
-
-      {enabledCaregiverAlertTargets.length > 1 ? (
-        <div
-          style={{
-            position: "fixed",
-            right: 20,
-            bottom: 166,
-            zIndex: 9999,
-            width: "min(280px, calc(100vw - 40px))",
-            display: "grid",
-            gap: 6,
-            padding: 10,
-            borderRadius: 18,
-            background: "rgba(15, 23, 42, 0.92)",
-            border: "1px solid rgba(255,255,255,0.14)",
-            boxShadow: "0 8px 25px rgba(0,0,0,0.3)",
-          }}
-        >
-          <label
-            htmlFor="caregiver-alert-target"
-            style={{
-              color: "#e2e8f0",
-              fontSize: 12,
-              fontWeight: 800,
-            }}
-          >
-            Aidant à appeler
-          </label>
-          <select
-            id="caregiver-alert-target"
-            value={selectedCaregiverAlertTarget?.id || ""}
-            onChange={(event) =>
-              setSelectedCaregiverAlertTargetId(event.target.value)
-            }
-            style={{
-              minHeight: 44,
-              width: "100%",
-              borderRadius: 14,
-              border: "1px solid rgba(148,163,184,0.42)",
-              background: "#020617",
-              color: "#f8fafc",
-              padding: "0 12px",
-              fontSize: 16,
-              fontWeight: 800,
-            }}
-          >
-            {enabledCaregiverAlertTargets.map((target) => (
-              <option key={target.id} value={target.id}>
-                {target.name || "Aidant"}
-              </option>
-            ))}
-          </select>
-        </div>
-      ) : null}
 
       <button
         onClick={sendCaregiverAlert}

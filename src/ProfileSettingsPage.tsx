@@ -1203,6 +1203,8 @@ export default function ProfileSettingsPage(props: any) {
     updateCaregiverAlertLink,
     deleteCaregiverAlertLink,
     copyCaregiverAlertLink,
+    selectedCaregiverAlertLinkId = "",
+    selectCaregiverAlertTarget,
     openNoticeSection,
     text,
     setText,
@@ -1243,6 +1245,16 @@ export default function ProfileSettingsPage(props: any) {
   const [privacyUnlockPassword, setPrivacyUnlockPassword] = React.useState("");
   const [privacyActionMessage, setPrivacyActionMessage] = React.useState("");
   const [privacyActionLoading, setPrivacyActionLoading] = React.useState(false);
+  const availableCaregiverAlertLinks = React.useMemo(
+    () => (caregiverAlertLinks || []).filter((link) => link.enabled),
+    [caregiverAlertLinks]
+  );
+  const selectedCaregiverAlertLink =
+    availableCaregiverAlertLinks.find(
+      (link) => link.id === selectedCaregiverAlertLinkId
+    ) ||
+    availableCaregiverAlertLinks[0] ||
+    null;
 
   async function handleEnablePrivacyPassword() {
     try {
@@ -2368,6 +2380,37 @@ export default function ProfileSettingsPage(props: any) {
             d'appuyer sur la cloche, choisis l'aidant qui doit recevoir
             l'alarme.
           </div>
+
+          {availableCaregiverAlertLinks.length > 0 ? (
+            <div style={{ ...styles.formGroup, marginBottom: 14 }}>
+              <label style={styles.label}>Aidant appelé par la cloche</label>
+              <select
+                value={selectedCaregiverAlertLink?.id || ""}
+                onChange={(event) =>
+                  selectCaregiverAlertTarget?.(event.target.value)
+                }
+                disabled={availableCaregiverAlertLinks.length <= 1}
+                style={styles.input}
+              >
+                {availableCaregiverAlertLinks.map((link) => (
+                  <option key={link.id} value={link.id}>
+                    {link.name || "Aidant"}
+                  </option>
+                ))}
+              </select>
+              <div
+                style={{
+                  ...styles.infoBox,
+                  marginTop: 10,
+                  fontSize: 14,
+                  lineHeight: 1.4,
+                }}
+              >
+                Le bouton Appel aidant enverra l'alarme uniquement à cet
+                aidant.
+              </div>
+            </div>
+          ) : null}
 
           <div style={{ display: "grid", gap: 14 }}>
             {caregiverAlertLinks.map((link, index) => (
