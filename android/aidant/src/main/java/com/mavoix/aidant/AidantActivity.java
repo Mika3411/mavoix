@@ -100,6 +100,7 @@ public class AidantActivity extends Activity {
   private TextView statusText;
   private TextView soundText;
   private Spinner soundSpinner;
+  private Button testSoundButton;
   private TextView unreadText;
   private LinearLayout messageListContainer;
   private Spinner messagePatientSpinner;
@@ -107,6 +108,7 @@ public class AidantActivity extends Activity {
   private boolean textToSpeechReady;
   private boolean isRefreshingPatientUi;
   private boolean isRefreshingSoundUi;
+  private boolean isTestingAlarmSound;
 
   private volatile boolean shouldListenMessages;
   private volatile boolean messagesConnected;
@@ -300,7 +302,8 @@ public class AidantActivity extends Activity {
       }
     });
     panel.addView(spinnerBox(soundSpinner), spacedParams(0, dp(8), 0, 0));
-    panel.addView(button("Tester le son", v -> testAlarm()), matchWrap());
+    testSoundButton = button("Tester le son", v -> toggleTestAlarm());
+    panel.addView(testSoundButton, matchWrap());
   }
 
   private void buildMessagesPanel(LinearLayout panel) {
@@ -946,19 +949,50 @@ public class AidantActivity extends Activity {
   }
 
   private void stopAlarm() {
+    setTestingAlarmSound(false);
     Intent intent = new Intent(this, AlarmListenerService.class);
     intent.setAction(AlertContract.ACTION_STOP_ALARM);
     startService(intent);
   }
 
+  private void toggleTestAlarm() {
+    if (isTestingAlarmSound) {
+      stopAlarm();
+    } else {
+      testAlarm();
+    }
+  }
+
   private void testAlarm() {
+    setTestingAlarmSound(true);
     Intent intent = new Intent(this, AlarmListenerService.class);
     intent.setAction(AlertContract.ACTION_TEST_ALARM);
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-      startForegroundService(intent);
-    } else {
-      startService(intent);
+    try {
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        startForegroundService(intent);
+      } else {
+        startService(intent);
+      }
+    } catch (Exception error) {
+      setTestingAlarmSound(false);
+      toast("Impossible de tester le son.");
     }
+  }
+
+  private void setTestingAlarmSound(boolean testing) {
+    isTestingAlarmSound = testing;
+    updateTestSoundButton();
+  }
+
+  private void updateTestSoundButton() {
+    if (testSoundButton == null) {
+      return;
+    }
+
+    testSoundButton.setText(isTestingAlarmSound ? "Stopper" : "Tester le son");
+    testSoundButton.setBackground(isTestingAlarmSound
+        ? rounded(COLOR_DANGER, 18)
+        : roundedStroke(COLOR_SECONDARY, COLOR_BORDER, 18, 1));
   }
 
   private void selectAlarmSound(int position) {
@@ -1448,6 +1482,7 @@ public class AidantActivity extends Activity {
       isRefreshingSoundUi = false;
     }
     soundText.setText("Son actuel: " + AlarmSounds.selectedLabel(prefs) + ".");
+    updateTestSoundButton();
     updateConnectionStatus();
     renderUnreadMessages();
     renderMessages();
