@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Ma Voix</string>
+    <string name="title_activity_main">Ma Voix</string>
+    <string name="package_name">com.mavoix.app</string>
+    <string name="custom_url_scheme">com.mavoix.app</string>
+</resources>

@@ -1,0 +1,46 @@
+apply plugin: 'com.android.application'
+
+def releaseSigningProperties = new Properties()
+def releaseSigningPropertiesFile = rootProject.file('keystore.properties')
+if (releaseSigningPropertiesFile.exists()) {
+    releaseSigningPropertiesFile.withInputStream { releaseSigningProperties.load(it) }
+}
+
+def releaseStoreFile = releaseSigningProperties['storeFile'] ?: System.getenv('MA_VOIX_RELEASE_STORE_FILE')
+def releaseStorePassword = releaseSigningProperties['storePassword'] ?: System.getenv('MA_VOIX_RELEASE_STORE_PASSWORD')
+def releaseKeyAlias = releaseSigningProperties['keyAlias'] ?: System.getenv('MA_VOIX_RELEASE_KEY_ALIAS')
+def releaseKeyPassword = releaseSigningProperties['keyPassword'] ?: System.getenv('MA_VOIX_RELEASE_KEY_PASSWORD')
+def hasReleaseSigning = [releaseStoreFile, releaseStorePassword, releaseKeyAlias, releaseKeyPassword]
+        .every { value -> value != null && value.toString().trim() }
+
+android {
+    namespace = "com.mavoix.aidant"
+    compileSdk = rootProject.ext.compileSdkVersion
+
+    defaultConfig {
+        applicationId "com.mavoix.aidant"
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        versionCode 1
+        versionName "1.0"
+        archivesBaseName = "aidant"
+    }
+    signingConfigs {
+        release {
+            if (hasReleaseSigning) {
+                storeFile rootProject.file(releaseStoreFile)
+                storePassword releaseStorePassword
+                keyAlias releaseKeyAlias
+                keyPassword releaseKeyPassword
+            }
+        }
+    }
+    buildTypes {
+        release {
+            if (hasReleaseSigning) {
+                signingConfig signingConfigs.release
+            }
+            minifyEnabled false
+        }
+    }
+}

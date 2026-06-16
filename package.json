@@ -8,6 +8,15 @@
     "starter"
   ],
   "dependencies": {
+    "@capacitor-community/speech-recognition": "^7.0.1",
+    "@capacitor-community/text-to-speech": "^8.0.2",
+    "@capacitor/android": "^8.4.0",
+    "@capacitor/cli": "^8.4.0",
+    "@capacitor/core": "^8.4.0",
+    "@capacitor/filesystem": "^8.1.2",
+    "@capacitor/ios": "^8.4.0",
+    "@capacitor/share": "^8.0.1",
+    "capacitor-voice-recorder": "^7.0.6",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
@@ -27,5 +36,10 @@
     "server": "node server.js",
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0"
+  },
+  "overrides": {
+    "get-blob-duration": {
+      "@babel/runtime": "^7.26.10"
+    }
   }
 }
