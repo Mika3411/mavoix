@@ -195,7 +195,9 @@ export default function NoticePage({
                   "Adapter la voix, la vitesse, la hauteur et le volume.",
                   "Utiliser une vraie voix enregistrée pour certaines phrases.",
                   "Conserver des informations de profil, de santé et de contact.",
+                  "Échanger des messages avec les aidants connectés.",
                   "Préparer une fiche Infos utilisable en situation d'urgence.",
+                  "Envoyer une alerte par la cloche orange à l'aidant choisi dans Configurer.",
                 ]}
               />
             </NoticeBlock>
@@ -226,6 +228,7 @@ export default function NoticePage({
                   "Infos : fiche récapitulative d'identité, santé, traitements et contacts d'urgence.",
                   "Menu : accès à Voix, Configurer, Aidants, Dictionnaire, Téléchargement, Notice et Soutenez-moi.",
                   "Le bouton Plein écran permet d'agrandir l'application pour une utilisation plus confortable.",
+                  "La cloche orange en bas de l'écran envoie l'appel aidant configuré.",
                 ]}
               />
             </NoticeBlock>
@@ -233,11 +236,13 @@ export default function NoticePage({
             <NoticeBlock title="Version Android">
               <NoticeList
                 items={[
-                  "Le menu Communication regroupe Rapide et Libre.",
+                  "Le menu Communication regroupe Rapide, Libre et Aidants.",
                   "Rapide ouvre les boutons de phrases.",
                   "Libre ouvre la zone de saisie et d'envoi de messages.",
+                  "Aidants ouvre la conversation avec les téléphones aidants connectés.",
                   "Le menu Profil regroupe Infos et Profil.",
-                  "Le menu secondaire donne accès à Voix, Dictionnaire, Notice et Soutenez-moi.",
+                  "Le menu secondaire donne accès à Voix, Configurer, Aidants, Dictionnaire, Notice et Soutenez-moi.",
+                  "La cloche orange en bas de l'écran envoie l'appel aidant configuré.",
                   "Si un code PIN est activé, il peut être demandé avant d'ouvrir Infos ou Profil.",
                 ]}
               />
@@ -548,6 +553,11 @@ export default function NoticePage({
                 actif dans un format plus lisible, utile pour un proche, un
                 aidant ou un professionnel de santé.
               </NoticeParagraph>
+              <NoticeParagraph>
+                L'écran principal n'affiche pas de bouton rouge d'urgence.
+                Utilisez l'onglet Infos pour ouvrir cette fiche quand elle doit
+                être montrée à quelqu'un.
+              </NoticeParagraph>
             </NoticeBlock>
 
             <NoticeBlock title="Contenu affiché">
@@ -605,6 +615,7 @@ export default function NoticePage({
                   "Repérez la section Téléphone auxiliaire.",
                   "Ajoutez un aidant si plusieurs téléphones doivent avoir leur propre lien.",
                   "Cochez Disponible pour Appel aidant pour chaque aidant qui doit apparaître dans la liste de choix.",
+                  "Dans Aidant appelé par la cloche, choisissez l'aidant qui doit recevoir l'alarme.",
                   "Copiez le lien d'alarme ou ouvrez le mode auxiliaire quand il est proposé.",
                   "Sur Android, le lien direct peut ouvrir l'application Ma Voix Auxiliaire si elle est installée.",
                 ]}
@@ -613,10 +624,10 @@ export default function NoticePage({
 
             <NoticeBlock title="Envoyer une alerte">
               <NoticeParagraph>
-                Le bouton Appel aidant, placé en bas de l'application,
-                envoie l'alarme uniquement à l'aidant sélectionné dans la
-                liste. Si son téléphone n'est pas connecté, l'application
-                l'indique.
+                La cloche orange, placée en bas de l'application, envoie
+                l'alarme uniquement à l'aidant choisi dans Configurer, section
+                Téléphone auxiliaire. Si son téléphone n'est pas connecté,
+                l'application l'indique.
               </NoticeParagraph>
             </NoticeBlock>
 
