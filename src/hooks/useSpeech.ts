@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Capacitor } from "@capacitor/core";
+import { Capacitor, registerPlugin } from "@capacitor/core";
 import { QueueStrategy, TextToSpeech } from "@capacitor-community/text-to-speech";
 import type { Phrase, VoiceSettings } from "../types";
+
+const NativeSpeech = registerPlugin("NativeSpeech");
 
 export default function useSpeech({
   language = "fr-FR",
@@ -27,13 +29,25 @@ export default function useSpeech({
       const textToSpeak = String(phrase || "").replace(/\s+/g, " ").trim();
       if (!textToSpeak) return;
 
-      await TextToSpeech.stop().catch(() => undefined);
-      await TextToSpeech.speak({
+      const options = {
         text: textToSpeak,
         lang: normalizedLanguage,
         rate: Math.min(2, Math.max(0.5, Number(settings.rate) || 1)),
         pitch: Math.min(2, Math.max(0, Number(settings.pitch) || 1)),
         volume: Math.min(1, Math.max(0, Number(settings.volume) || 1)),
+      };
+
+      await NativeSpeech.stop?.().catch(() => undefined);
+      try {
+        await NativeSpeech.speak(options);
+        return;
+      } catch (error) {
+        console.warn("NativeSpeech failed, falling back to TextToSpeech.", error);
+      }
+
+      await TextToSpeech.stop().catch(() => undefined);
+      await TextToSpeech.speak({
+        ...options,
         category: "playback",
         queueStrategy: QueueStrategy.Flush,
       });
@@ -326,6 +340,7 @@ export default function useSpeech({
 
   const stopSpeaking = useCallback(async () => {
     if (shouldUseNativeTextToSpeech) {
+      await NativeSpeech.stop?.().catch(() => undefined);
       await TextToSpeech.stop().catch(() => undefined);
     }
 

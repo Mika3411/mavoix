@@ -17,6 +17,7 @@
 		50B271D11FEDC1A000F3C39B /* public in Resources */ = {isa = PBXBuildFile; fileRef = 50B271D01FEDC1A000F3C39B /* public */; };
 		0860494C1A85E729BDBCAAFD /* DocumentSaverPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA9B7DE0DDCFF92A12853EC3 /* DocumentSaverPlugin.swift */; };
 		DFF5EB35C207A18A58A3C912 /* MessageNotifierPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80F8BBB76663B586D1CE10FA /* MessageNotifierPlugin.swift */; };
+		B3A6E4D31C2940F7B8A55D21 /* NativeSpeechPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3A6E4D21C2940F7B8A55D21 /* NativeSpeechPlugin.swift */; };
 		5133D9E1BB90296F00A069F5 /* MainViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42E6118D5F52DC1F421016E0 /* MainViewController.swift */; };
 		72581AA6826BC2C654D32289 /* SpeechRecognition.swift in Sources */ = {isa = PBXBuildFile; fileRef = 277C95D9C452F4C4432F90BB /* SpeechRecognition.swift */; };
 		9BA9FE2F1789D541410049B6 /* SpeechRecognitionPlugin.m in Sources */ = {isa = PBXBuildFile; fileRef = 4B0E38B75F44ACC48A21990B /* SpeechRecognitionPlugin.m */; };
@@ -43,6 +44,7 @@
 		958DCC722DB07C7200EA8C5F /* debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = debug.xcconfig; path = ../debug.xcconfig; sourceTree = SOURCE_ROOT; };
 		EA9B7DE0DDCFF92A12853EC3 /* DocumentSaverPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentSaverPlugin.swift; sourceTree = "<group>"; };
 		80F8BBB76663B586D1CE10FA /* MessageNotifierPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageNotifierPlugin.swift; sourceTree = "<group>"; };
+		B3A6E4D21C2940F7B8A55D21 /* NativeSpeechPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeSpeechPlugin.swift; sourceTree = "<group>"; };
 		42E6118D5F52DC1F421016E0 /* MainViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainViewController.swift; sourceTree = "<group>"; };
 		277C95D9C452F4C4432F90BB /* SpeechRecognition.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SpeechRecognition.swift; path = "../../node_modules/@capacitor-community/speech-recognition/ios/Plugin/Plugin.swift"; sourceTree = SOURCE_ROOT; };
 		4B0E38B75F44ACC48A21990B /* SpeechRecognitionPlugin.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = SpeechRecognitionPlugin.m; path = "../../node_modules/@capacitor-community/speech-recognition/ios/Plugin/Plugin.m"; sourceTree = SOURCE_ROOT; };
@@ -93,6 +95,7 @@
 				42E6118D5F52DC1F421016E0 /* MainViewController.swift */,
 				EA9B7DE0DDCFF92A12853EC3 /* DocumentSaverPlugin.swift */,
 				80F8BBB76663B586D1CE10FA /* MessageNotifierPlugin.swift */,
+				B3A6E4D21C2940F7B8A55D21 /* NativeSpeechPlugin.swift */,
 				277C95D9C452F4C4432F90BB /* SpeechRecognition.swift */,
 				4B0E38B75F44ACC48A21990B /* SpeechRecognitionPlugin.m */,
 				441894577A2D175BFE892AF7 /* CurrentRecordingStatus.swift */,
@@ -198,6 +201,7 @@
 				5133D9E1BB90296F00A069F5 /* MainViewController.swift in Sources */,
 				0860494C1A85E729BDBCAAFD /* DocumentSaverPlugin.swift in Sources */,
 				DFF5EB35C207A18A58A3C912 /* MessageNotifierPlugin.swift in Sources */,
+				B3A6E4D31C2940F7B8A55D21 /* NativeSpeechPlugin.swift in Sources */,
 				72581AA6826BC2C654D32289 /* SpeechRecognition.swift in Sources */,
 				9BA9FE2F1789D541410049B6 /* SpeechRecognitionPlugin.m in Sources */,
 				C63BE8F1A20F620AE7E5205B /* CurrentRecordingStatus.swift in Sources */,

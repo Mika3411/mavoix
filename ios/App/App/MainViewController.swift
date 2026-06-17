@@ -7,5 +7,6 @@ class MainViewController: CAPBridgeViewController {
         super.capacitorDidLoad()
         bridge?.registerPluginInstance(DocumentSaverPlugin())
         bridge?.registerPluginInstance(MessageNotifierPlugin())
+        bridge?.registerPluginInstance(NativeSpeechPlugin())
     }
 }
