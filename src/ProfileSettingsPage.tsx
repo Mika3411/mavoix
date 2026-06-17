@@ -1114,6 +1114,8 @@ function toggleEmojiMenu(event) {
         </button>
         <button
           type="button"
+          aria-label="Écouter"
+          title="Écouter"
           onMouseEnter={() => setHoveredKey("listen")}
           onMouseLeave={() => {
             setHoveredKey((prev) => (prev === "listen" ? null : prev));
@@ -1137,10 +1139,12 @@ function toggleEmojiMenu(event) {
             "listen"
           )}
         >
-          ▶️ Écouter
+          ▶
         </button>
         <button
           type="button"
+          aria-label="Stop voix"
+          title="Stop voix"
           onMouseEnter={() => setHoveredKey("stop")}
           onMouseLeave={() => {
             setHoveredKey((prev) => (prev === "stop" ? null : prev));
@@ -1163,7 +1167,7 @@ function toggleEmojiMenu(event) {
             "stop"
           )}
         >
-          ⏹️ Stop voix
+          ⏹
         </button>
       </div>
     </div>
@@ -2959,6 +2963,8 @@ export default function ProfileSettingsPage(props: any) {
                       }}
                     >
                       <button
+                        aria-label={isListening ? "Arrêter la dictée" : "Dicter"}
+                        title={isListening ? "Arrêter la dictée" : "Dicter"}
                         style={{
                           ...(isListening
                             ? styles.recordingButton
@@ -2971,10 +2977,12 @@ export default function ProfileSettingsPage(props: any) {
                         }}
                         onClick={isListening ? stopDictation : startDictation}
                       >
-                        {isListening ? "Arrêter la dictée" : "🎤 Dicter"}
+                        {isListening ? "⏹" : "🎙"}
                       </button>
 
                       <button
+                        aria-label="Écouter"
+                        title="Écouter"
                         style={{
                           ...styles.secondaryButton,
                           minHeight: isCompactLayout ? 42 : undefined,
@@ -2985,10 +2993,12 @@ export default function ProfileSettingsPage(props: any) {
                         }}
                         onClick={() => speakText(text)}
                       >
-                        ▶️ Écouter
+                        ▶
                       </button>
 
                       <button
+                        aria-label="Stop voix"
+                        title="Stop voix"
                         style={{
                           ...styles.secondaryButton,
                           gridColumn: isCompactLayout ? "1 / -1" : undefined,
@@ -3000,7 +3010,7 @@ export default function ProfileSettingsPage(props: any) {
                         }}
                         onClick={stopSpeaking}
                       >
-                        ⏹️ Stop voix
+                        ⏹
                       </button>
                     </div>
                   </>

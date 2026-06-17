@@ -628,6 +628,8 @@ export default function CaregiverMessagesPage(props: any) {
             >
               <button
                 type="button"
+                aria-label="Dicter"
+                title="Dicter"
                 style={{
                   ...styles.primaryButton,
                   width: "100%",
@@ -642,7 +644,7 @@ export default function CaregiverMessagesPage(props: any) {
                 onClick={startDictation}
                 disabled={isListening}
               >
-                🎤 Dicter
+                🎙
               </button>
 
               <button

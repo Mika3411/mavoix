@@ -930,6 +930,8 @@ export default function App() {
                 type="button"
                 aria-haspopup="menu"
                 aria-expanded={isMoreMenuOpen}
+                aria-label="Menu"
+                title="Menu"
                 onClick={() => setIsMoreMenuOpen((prev) => !prev)}
                 style={{
                   ...styles.secondaryButton,
@@ -941,7 +943,7 @@ export default function App() {
                   lineHeight: isCompactLayout ? 1.1 : undefined,
                 }}
               >
-                Menu ▾
+                ☰
               </button>
 
               {isMoreMenuOpen && (
