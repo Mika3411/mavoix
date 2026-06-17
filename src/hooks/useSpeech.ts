@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Capacitor } from "@capacitor/core";
+import { QueueStrategy, TextToSpeech } from "@capacitor-community/text-to-speech";
 import type { Phrase, VoiceSettings } from "../types";
 
 export default function useSpeech({
@@ -15,6 +17,29 @@ export default function useSpeech({
   const [isListening, setIsListening] = useState(false);
 
   const normalizedLanguage = useMemo(() => language || "fr-FR", [language]);
+  const shouldUseNativeTextToSpeech = useMemo(
+    () => Capacitor.isNativePlatform() && Capacitor.getPlatform() === "ios",
+    []
+  );
+
+  const speakWithNativeTextToSpeech = useCallback(
+    async (phrase, settings = defaultVoiceSettings) => {
+      const textToSpeak = String(phrase || "").replace(/\s+/g, " ").trim();
+      if (!textToSpeak) return;
+
+      await TextToSpeech.stop().catch(() => undefined);
+      await TextToSpeech.speak({
+        text: textToSpeak,
+        lang: normalizedLanguage,
+        rate: Math.min(2, Math.max(0.5, Number(settings.rate) || 1)),
+        pitch: Math.min(2, Math.max(0, Number(settings.pitch) || 1)),
+        volume: Math.min(1, Math.max(0, Number(settings.volume) || 1)),
+        category: "playback",
+        queueStrategy: QueueStrategy.Flush,
+      });
+    },
+    [defaultVoiceSettings, normalizedLanguage]
+  );
 
   useEffect(() => {
     const loadVoices = () => {
@@ -109,6 +134,16 @@ export default function useSpeech({
   const testVoice = useCallback(
     (voiceURI, sampleText = "Bonjour, ceci est un test de voix.") => {
       return new Promise((resolve) => {
+        if (shouldUseNativeTextToSpeech) {
+          speakWithNativeTextToSpeech(sampleText)
+            .then(() => resolve(true))
+            .catch((error) => {
+              console.error(error);
+              resolve(false);
+            });
+          return;
+        }
+
         if (!("speechSynthesis" in window)) {
           resolve(false);
           return;
@@ -170,7 +205,13 @@ export default function useSpeech({
         }
       });
     },
-    [markVoiceStatus, normalizedLanguage, resolveVoiceByURI]
+    [
+      markVoiceStatus,
+      normalizedLanguage,
+      resolveVoiceByURI,
+      shouldUseNativeTextToSpeech,
+      speakWithNativeTextToSpeech,
+    ]
   );
 
   const speakText = useCallback(
@@ -199,6 +240,16 @@ export default function useSpeech({
         ...(phraseSettings || {}),
         ...(overrideSettings || {}),
       };
+
+      if (shouldUseNativeTextToSpeech) {
+        try {
+          await speakWithNativeTextToSpeech(phrase, resolvedSettings);
+        } catch (error) {
+          console.error(error);
+          alert("La voix iOS n'a pas pu lire ce texte.");
+        }
+        return;
+      }
 
       const utterance = new SpeechSynthesisUtterance(phrase);
       utterance.lang = normalizedLanguage;
@@ -268,14 +319,20 @@ export default function useSpeech({
       normalizedLanguage,
       resolveVoiceByURI,
       savedPhrases,
+      shouldUseNativeTextToSpeech,
+      speakWithNativeTextToSpeech,
     ]
   );
 
-  const stopSpeaking = useCallback(() => {
+  const stopSpeaking = useCallback(async () => {
+    if (shouldUseNativeTextToSpeech) {
+      await TextToSpeech.stop().catch(() => undefined);
+    }
+
     if ("speechSynthesis" in window) {
       window.speechSynthesis.cancel();
     }
-  }, []);
+  }, [shouldUseNativeTextToSpeech]);
 
   const startDictation = useCallback(() => {
     const SpeechRecognition =
