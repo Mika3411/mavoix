@@ -856,7 +856,7 @@ export default function App() {
             style={{
               ...styles.topButtons,
               position: "relative",
-              gap: isCompactLayout ? 8 : 10,
+              gap: isCompactLayout ? 6 : 10,
               flexWrap: "wrap",
               width: isCompactLayout ? "100%" : undefined,
               display: isCompactLayout ? "grid" : "flex",
@@ -870,10 +870,12 @@ export default function App() {
                 ...(page === "communication"
                   ? styles.primaryButton
                   : styles.secondaryButton),
-                padding: isCompactLayout ? "8px 10px" : "6px 18px",
-                fontSize: "15px",
+                padding: isCompactLayout ? "6px 8px" : "6px 18px",
+                fontSize: isCompactLayout ? 13 : 15,
                 width: isCompactLayout ? "100%" : undefined,
-                minHeight: isCompactLayout ? 50 : undefined,
+                minHeight: isCompactLayout ? 42 : undefined,
+                borderRadius: isCompactLayout ? 14 : undefined,
+                lineHeight: isCompactLayout ? 1.1 : undefined,
               }}
               onClick={() => setPage("communication")}
             >
@@ -886,10 +888,12 @@ export default function App() {
                   ...(page === "reglages"
                     ? styles.primaryButton
                     : styles.secondaryButton),
-                  padding: isCompactLayout ? "8px 10px" : "12px 14px",
-                  fontSize: "15px",
+                  padding: isCompactLayout ? "6px 8px" : "12px 14px",
+                  fontSize: isCompactLayout ? 13 : 15,
                   width: isCompactLayout ? "100%" : undefined,
-                  minHeight: isCompactLayout ? 50 : undefined,
+                  minHeight: isCompactLayout ? 42 : undefined,
+                  borderRadius: isCompactLayout ? 14 : undefined,
+                  lineHeight: isCompactLayout ? 1.1 : undefined,
                 }
               }
               onClick={() => setPage("reglages")}
@@ -903,10 +907,12 @@ export default function App() {
                   ...(page === "infos"
                     ? styles.primaryButton
                     : styles.secondaryButton),
-                  padding: isCompactLayout ? "8px 10px" : "12px 14px",
-                  fontSize: "15px",
+                  padding: isCompactLayout ? "6px 8px" : "12px 14px",
+                  fontSize: isCompactLayout ? 13 : 15,
                   width: isCompactLayout ? "100%" : undefined,
-                  minHeight: isCompactLayout ? 50 : undefined,
+                  minHeight: isCompactLayout ? 42 : undefined,
+                  borderRadius: isCompactLayout ? 14 : undefined,
+                  lineHeight: isCompactLayout ? 1.1 : undefined,
                 }
               }
               onClick={() => setPage("infos")}
@@ -927,10 +933,12 @@ export default function App() {
                 onClick={() => setIsMoreMenuOpen((prev) => !prev)}
                 style={{
                   ...styles.secondaryButton,
-                  padding: isCompactLayout ? "8px 10px" : "6px 18px",
-                  fontSize: "15px",
+                  padding: isCompactLayout ? "6px 8px" : "6px 18px",
+                  fontSize: isCompactLayout ? 13 : 15,
                   width: isCompactLayout ? "100%" : undefined,
-                  minHeight: isCompactLayout ? 50 : undefined,
+                  minHeight: isCompactLayout ? 42 : undefined,
+                  borderRadius: isCompactLayout ? 14 : undefined,
+                  lineHeight: isCompactLayout ? 1.1 : undefined,
                 }}
               >
                 Menu ▾

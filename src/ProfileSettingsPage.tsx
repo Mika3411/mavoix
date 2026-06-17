@@ -1235,6 +1235,8 @@ export default function ProfileSettingsPage(props: any) {
   const [configSection, setConfigSection] = React.useState("identite");
   const [inputMode, setInputMode] = React.useState("standard");
   const standardTextAreaRef = React.useRef<HTMLTextAreaElement | null>(null);
+  const isCompactLayout =
+    typeof window !== "undefined" && window.innerWidth <= 640;
 
   const [sendMode, setSendMode] = React.useState("sms");
   const [selectedSendContactId, setSelectedSendContactId] = React.useState(
@@ -2842,18 +2844,23 @@ export default function ProfileSettingsPage(props: any) {
                 display: "flex",
                 justifyContent: "flex-end",
                 alignItems: "center",
-                gap: 12,
+                gap: isCompactLayout ? 6 : 12,
                 flexWrap: "wrap",
-                marginBottom: 12,
+                marginBottom: isCompactLayout ? 8 : 12,
               }}
             >
               <div
                 style={{
-                  display: "flex",
+                  display: isCompactLayout ? "grid" : "flex",
+                  gridTemplateColumns: isCompactLayout
+                    ? "repeat(2, minmax(0, 1fr))"
+                    : undefined,
                   flexDirection: "column",
-                  gap: 10,
-                  alignItems: window.innerWidth > 980 ? "flex-end" : "stretch",
+                  gap: isCompactLayout ? 6 : 10,
+                  alignItems:
+                    window.innerWidth > 980 ? "flex-end" : "stretch",
                   marginLeft: "auto",
+                  width: isCompactLayout ? "100%" : undefined,
                 }}
               >
                 <button
@@ -2863,7 +2870,15 @@ export default function ProfileSettingsPage(props: any) {
                     ...(inputMode === "standard"
                       ? styles.primaryButton
                       : styles.secondaryButton),
-                    width: window.innerWidth > 980 ? "auto" : "100%",
+                    width:
+                      window.innerWidth > 980 && !isCompactLayout
+                        ? "auto"
+                        : "100%",
+                    minHeight: isCompactLayout ? 42 : undefined,
+                    padding: isCompactLayout ? "7px 8px" : undefined,
+                    borderRadius: isCompactLayout ? 14 : undefined,
+                    fontSize: isCompactLayout ? 13 : undefined,
+                    lineHeight: isCompactLayout ? 1.1 : undefined,
                   }}
                 >
                   Interface classique
@@ -2876,7 +2891,15 @@ export default function ProfileSettingsPage(props: any) {
                     ...(inputMode === "keyboard"
                       ? styles.primaryButton
                       : styles.secondaryButton),
-                    width: window.innerWidth > 980 ? "auto" : "100%",
+                    width:
+                      window.innerWidth > 980 && !isCompactLayout
+                        ? "auto"
+                        : "100%",
+                    minHeight: isCompactLayout ? 42 : undefined,
+                    padding: isCompactLayout ? "7px 8px" : undefined,
+                    borderRadius: isCompactLayout ? 14 : undefined,
+                    fontSize: isCompactLayout ? 13 : undefined,
+                    lineHeight: isCompactLayout ? 1.1 : undefined,
                   }}
                 >
                   Clavier virtuel
@@ -2924,29 +2947,57 @@ export default function ProfileSettingsPage(props: any) {
 
                     <div
                       style={{
-                        marginTop: 12,
+                        marginTop: isCompactLayout ? 8 : 12,
                         display: "grid",
                         gridTemplateColumns:
-                          window.innerWidth > 900 ? "repeat(3, minmax(0, 1fr))" : "1fr",
-                        gap: 12,
+                          window.innerWidth > 900
+                            ? "repeat(3, minmax(0, 1fr))"
+                            : isCompactLayout
+                              ? "repeat(2, minmax(0, 1fr))"
+                              : "1fr",
+                        gap: isCompactLayout ? 6 : 12,
                       }}
                     >
                       <button
-                        style={isListening ? styles.recordingButton : styles.primaryButton}
+                        style={{
+                          ...(isListening
+                            ? styles.recordingButton
+                            : styles.primaryButton),
+                          minHeight: isCompactLayout ? 42 : undefined,
+                          padding: isCompactLayout ? "7px 8px" : undefined,
+                          borderRadius: isCompactLayout ? 14 : undefined,
+                          fontSize: isCompactLayout ? 14 : undefined,
+                          lineHeight: isCompactLayout ? 1.1 : undefined,
+                        }}
                         onClick={isListening ? stopDictation : startDictation}
                       >
                         {isListening ? "Arrêter la dictée" : "🎤 Dicter"}
                       </button>
 
                       <button
-                        style={styles.secondaryButton}
+                        style={{
+                          ...styles.secondaryButton,
+                          minHeight: isCompactLayout ? 42 : undefined,
+                          padding: isCompactLayout ? "7px 8px" : undefined,
+                          borderRadius: isCompactLayout ? 14 : undefined,
+                          fontSize: isCompactLayout ? 14 : undefined,
+                          lineHeight: isCompactLayout ? 1.1 : undefined,
+                        }}
                         onClick={() => speakText(text)}
                       >
                         ▶️ Écouter
                       </button>
 
                       <button
-                        style={styles.secondaryButton}
+                        style={{
+                          ...styles.secondaryButton,
+                          gridColumn: isCompactLayout ? "1 / -1" : undefined,
+                          minHeight: isCompactLayout ? 42 : undefined,
+                          padding: isCompactLayout ? "7px 8px" : undefined,
+                          borderRadius: isCompactLayout ? 14 : undefined,
+                          fontSize: isCompactLayout ? 14 : undefined,
+                          lineHeight: isCompactLayout ? 1.1 : undefined,
+                        }}
                         onClick={stopSpeaking}
                       >
                         ⏹️ Stop voix
