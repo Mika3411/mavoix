@@ -13,1168 +13,6 @@ const CONFIG_SECTIONS = [
 ];
 
 
-function VirtualKeyboard({
-  text,
-  setText,
-  saveWordToHistory,
-  speakText,
-  stopSpeaking,
-  styles,
-}) {
-  const keyboardContainerRef = React.useRef(null);
-  const textAreaRef = React.useRef(null);
-  const longPressTimerRef = React.useRef(null);
-  const longPressTriggeredRef = React.useRef(false);
-  const backspaceHoldTimeoutRef = React.useRef(null);
-  const deleteRepeatTimerRef = React.useRef(null);
-
-  const [isShiftActive, setIsShiftActive] = React.useState(false);
-  const [keyboardMode, setKeyboardMode] = React.useState("letters");
-  const [accentMenu, setAccentMenu] = React.useState(null);
-  const [punctuationMenu, setPunctuationMenu] = React.useState(null);
-  const [emojiMenu, setEmojiMenu] = React.useState(null);
-  const [hoveredKey, setHoveredKey] = React.useState(null);
-  const [pressedKey, setPressedKey] = React.useState(null);
-
-  const letterRows = [
-    ["a", "z", "e", "r", "t", "y", "u", "i", "o", "p"],
-    ["q", "s", "d", "f", "g", "h", "j", "k", "l", "m"],
-    ["Maj", "w", "x", "c", "v", "b", "n", "⌫", "123#+"],
-  ];
-
-  const symbolRows = [
-    ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"],
-    [".", ",", "?", "!", "'", ":", ";", "-"],
-    ["ABC", "@", "#", "+", "/", "€", "(", ")", "&"],
-  ];
-
-const ACCENT_OPTIONS = {
-  a: ["à", "â", "ä", "á", "ã", "1", "@", "#", "+", "-"],
-  z: ["2"],
-  e: ["é", "è", "ê", "ë", "€", "3"],
-  r: ["4"],
-  t: ["5"],
-  y: ["ÿ", "6"],
-  u: ["ù", "û", "ü", "ú", "7"],
-  i: ["î", "ï", "í", "ì", "8"],
-  o: ["ô", "ö", "ó", "ò", "õ", "9"],
-  p: ["0"],
-  c: ["ç"],
-};
-
-  const isCompactScreen =
-    typeof window !== "undefined" && window.innerHeight < 900;
-
-  function focusTextArea(nextCursorStart = null, nextCursorEnd = null) {
-    window.requestAnimationFrame(() => {
-      if (!textAreaRef.current) return;
-      textAreaRef.current.focus();
-
-      const startPos =
-        typeof nextCursorStart === "number"
-          ? nextCursorStart
-          : textAreaRef.current.value.length;
-      const endPos =
-        typeof nextCursorEnd === "number" ? nextCursorEnd : startPos;
-
-      try {
-        textAreaRef.current.setSelectionRange(startPos, endPos);
-      } catch (error) {
-        console.error("Impossible de positionner le curseur :", error);
-      }
-    });
-  }
-
-  function getFormattedCursorPosition(rawValue, formattedValue, rawCursorPosition) {
-    if (rawCursorPosition <= 0) return 0;
-    if (rawValue === formattedValue) return rawCursorPosition;
-
-    let rawIndex = 0;
-    let formattedIndex = 0;
-
-    while (rawIndex < rawCursorPosition && formattedIndex < formattedValue.length) {
-      if (rawValue[rawIndex] === formattedValue[formattedIndex]) {
-        rawIndex += 1;
-        formattedIndex += 1;
-        continue;
-      }
-
-      formattedIndex += 1;
-    }
-
-    while (rawIndex < rawCursorPosition && formattedIndex < formattedValue.length) {
-      rawIndex += 1;
-      formattedIndex += 1;
-    }
-
-    return formattedIndex;
-  }
-
-  function insertAtCursor(insertedText) {
-    const currentValue = String(text || "");
-    const textarea = textAreaRef.current;
-    const selectionStart =
-      textarea && typeof textarea.selectionStart === "number"
-        ? textarea.selectionStart
-        : currentValue.length;
-    const selectionEnd =
-      textarea && typeof textarea.selectionEnd === "number"
-        ? textarea.selectionEnd
-        : currentValue.length;
-
-    const rawNextValue =
-      currentValue.slice(0, selectionStart) +
-      insertedText +
-      currentValue.slice(selectionEnd);
-
-    const rawCursor = selectionStart + insertedText.length;
-    const formattedValue = formatTextSmart(rawNextValue);
-    const nextCursor = getFormattedCursorPosition(
-      rawNextValue,
-      formattedValue,
-      rawCursor
-    );
-
-    setText(formattedValue);
-    focusTextArea(nextCursor, nextCursor);
-
-    if (keyboardMode === "letters" && isShiftActive && /[a-zà-ÿA-ZÀ-Ÿ]/.test(insertedText)) {
-      setIsShiftActive(false);
-    }
-  }
-
-  function handleTextAreaChange(event) {
-    const nextValue = formatTextSmart(event.target.value);
-    setText(nextValue);
-  }
-
-  function handleTextAreaKeyUp() {
-    if (!textAreaRef.current) return;
-    const currentValue = String(textAreaRef.current.value || "");
-
-    if (/\s$/.test(currentValue)) {
-      const typedWords = currentValue
-        .trim()
-        .toLowerCase()
-        .split(/\s+/)
-        .filter(Boolean);
-
-      const lastTypedWord = typedWords[typedWords.length - 1];
-      if (lastTypedWord) {
-        saveWordToHistory(lastTypedWord);
-      }
-    }
-  }
-
-  function addCharacter(character) {
-    const value =
-      keyboardMode === "letters" && isShiftActive
-        ? character.toUpperCase()
-        : character;
-    insertAtCursor(value);
-  }
-
-  function addSpace() {
-    const currentValue = String(text || "");
-    const textarea = textAreaRef.current;
-    const selectionStart =
-      textarea && typeof textarea.selectionStart === "number"
-        ? textarea.selectionStart
-        : currentValue.length;
-    const selectionEnd =
-      textarea && typeof textarea.selectionEnd === "number"
-        ? textarea.selectionEnd
-        : currentValue.length;
-
-    const nextValue =
-      currentValue.slice(0, selectionStart) +
-      " " +
-      currentValue.slice(selectionEnd);
-
-    const typedWords = nextValue.trim().toLowerCase().split(/\s+/).filter(Boolean);
-    const lastTypedWord = typedWords[typedWords.length - 1];
-    if (lastTypedWord) {
-      saveWordToHistory(lastTypedWord);
-    }
-
-    const nextCursor = selectionStart + 1;
-    setText(formatTextSmart(nextValue));
-    focusTextArea(nextCursor, nextCursor);
-  }
-
-  function clearAll() {
-    setText("");
-    focusTextArea(0, 0);
-  }
-
-  function getGraphemeSegments(currentValue) {
-    if (!currentValue) return [];
-
-    const intlObject =
-      typeof Intl !== "undefined" ? Intl : undefined;
-    const segmenterCtor =
-      intlObject && typeof intlObject === "object"
-        ? intlObject["Segmenter"]
-        : undefined;
-
-    if (typeof segmenterCtor === "function") {
-      const segmenter = new segmenterCtor("fr", { granularity: "grapheme" });
-      return Array.from(segmenter.segment(currentValue), ({ segment, index }) => ({
-        segment,
-        index,
-      }));
-    }
-
-    return Array.from(currentValue).map((segment, index) => ({
-      segment,
-      index,
-    }));
-  }
-
-  function removePreviousGrapheme(currentValue, cursorPosition) {
-    const segments = getGraphemeSegments(currentValue);
-
-    if (!segments.length) return null;
-
-    let segmentIndex = -1;
-
-    for (let i = 0; i < segments.length; i += 1) {
-      const start = segments[i].index;
-      const end = start + segments[i].segment.length;
-
-      if (cursorPosition > start && cursorPosition <= end) {
-        segmentIndex = i;
-        break;
-      }
-
-      if (cursorPosition <= start) {
-        segmentIndex = i - 1;
-        break;
-      }
-    }
-
-    if (segmentIndex === -1) {
-      segmentIndex = segments.length - 1;
-    }
-
-    if (segmentIndex < 0) return null;
-
-    const segmentToRemove = segments[segmentIndex];
-    const nextValue =
-      currentValue.slice(0, segmentToRemove.index) +
-      currentValue.slice(segmentToRemove.index + segmentToRemove.segment.length);
-
-    return {
-      nextValue,
-      nextCursor: segmentToRemove.index,
-    };
-  }
-
-  function removeLastCharacter() {
-    const textarea = textAreaRef.current;
-    const currentValue = textarea ? String(textarea.value || "") : String(text || "");
-
-    if (!textarea) {
-      const result = removePreviousGrapheme(currentValue, currentValue.length);
-      if (!result) return;
-      setText(formatTextSmart(result.nextValue));
-      return;
-    }
-
-    const selectionStart = textarea.selectionStart;
-    const selectionEnd = textarea.selectionEnd;
-
-    if (selectionStart != null && selectionEnd != null && selectionStart !== selectionEnd) {
-      const nextValue =
-        currentValue.slice(0, selectionStart) + currentValue.slice(selectionEnd);
-      setText(formatTextSmart(nextValue));
-      focusTextArea(selectionStart, selectionStart);
-      return;
-    }
-
-    if (selectionStart == null || selectionStart === 0) return;
-
-    const result = removePreviousGrapheme(currentValue, selectionStart);
-    if (!result) return;
-
-    setText(formatTextSmart(result.nextValue));
-    focusTextArea(result.nextCursor, result.nextCursor);
-  }
-
-  function toggleKeyboardMode() {
-    setKeyboardMode((prev) => (prev === "letters" ? "symbols" : "letters"));
-    setIsShiftActive(false);
-    setAccentMenu(null);
-    setPunctuationMenu(null);
-    setEmojiMenu(null);
-    focusTextArea();
-  }
-
-  function clearLongPressTimer() {
-    if (longPressTimerRef.current) {
-      window.clearTimeout(longPressTimerRef.current);
-      longPressTimerRef.current = null;
-    }
-  }
-
-  function startLongPress(letter, event) {
-    if (keyboardMode !== "letters") return;
-    if (!ACCENT_OPTIONS[letter]) return;
-    if (!keyboardContainerRef.current) return;
-
-    longPressTriggeredRef.current = false;
-    clearLongPressTimer();
-
-    const button = event.currentTarget;
-    longPressTimerRef.current = window.setTimeout(() => {
-      const buttonRect = button.getBoundingClientRect();
-      const containerRect = keyboardContainerRef.current.getBoundingClientRect();
-      const variants = ACCENT_OPTIONS[letter].map((char) =>
-        isShiftActive ? char.toUpperCase() : char
-      );
-
-      const columns = Math.min(4, variants.length);
-      const rows = Math.ceil(variants.length / columns);
-      const estimatedWidth = columns * 54 + (columns - 1) * 6 + 16;
-      const estimatedHeight = rows * 48 + (rows - 1) * 6 + 16;
-      const leftCenter = buttonRect.left - containerRect.left + buttonRect.width / 2;
-      const clampedLeft = Math.min(
-        Math.max(leftCenter, estimatedWidth / 2 + 8),
-        containerRect.width - estimatedWidth / 2 - 8
-      );
-
-      let top = buttonRect.top - containerRect.top - estimatedHeight - 10;
-      if (top < 8) {
-        top = buttonRect.bottom - containerRect.top + 8;
-      }
-
-      setAccentMenu({
-        key: letter,
-        variants,
-        top,
-        left: clampedLeft,
-      });
-      longPressTriggeredRef.current = true;
-      longPressTimerRef.current = null;
-    }, 380);
-  }
-
-  function stopLongPress() {
-    const wasLongPress = longPressTriggeredRef.current;
-    clearLongPressTimer();
-    return wasLongPress;
-  }
-
-
-  function startPunctuationLongPress(event) {
-    if (!keyboardContainerRef.current) return;
-
-    longPressTriggeredRef.current = false;
-    clearLongPressTimer();
-
-    const button = event.currentTarget;
-    longPressTimerRef.current = window.setTimeout(() => {
-      const buttonRect = button.getBoundingClientRect();
-      const containerRect = keyboardContainerRef.current.getBoundingClientRect();
-      const variants = [".", ",", "?", "!", ";", ":"];
-
-      const columns = Math.min(4, variants.length);
-      const rows = Math.ceil(variants.length / columns);
-      const estimatedWidth = columns * 54 + (columns - 1) * 6 + 16;
-      const estimatedHeight = rows * 48 + (rows - 1) * 6 + 16;
-      const leftCenter = buttonRect.left - containerRect.left + buttonRect.width / 2;
-      const clampedLeft = Math.min(
-        Math.max(leftCenter, estimatedWidth / 2 + 8),
-        containerRect.width - estimatedWidth / 2 - 8
-      );
-
-      let top = buttonRect.top - containerRect.top - estimatedHeight - 10;
-      if (top < 8) {
-        top = buttonRect.bottom - containerRect.top + 8;
-      }
-
-      setPunctuationMenu({
-        variants,
-        top,
-        left: clampedLeft,
-      });
-      longPressTriggeredRef.current = true;
-      longPressTimerRef.current = null;
-    }, 380);
-  }
-
-function startApostropheLongPress(event) {
-  if (!keyboardContainerRef.current) return;
-
-  longPressTriggeredRef.current = false;
-  clearLongPressTimer();
-
-  const button = event.currentTarget;
-  longPressTimerRef.current = window.setTimeout(() => {
-    const buttonRect = button.getBoundingClientRect();
-    const containerRect = keyboardContainerRef.current.getBoundingClientRect();
-    const variants = ["'", '"', "(", ")"];
-
-      const columns = Math.min(4, variants.length);
-      const rows = Math.ceil(variants.length / columns);
-      const estimatedWidth = columns * 54 + (columns - 1) * 6 + 16;
-      const estimatedHeight = rows * 48 + (rows - 1) * 6 + 16;
-      const leftCenter = buttonRect.left - containerRect.left + buttonRect.width / 2;
-      const clampedLeft = Math.min(
-        Math.max(leftCenter, estimatedWidth / 2 + 8),
-        containerRect.width - estimatedWidth / 2 - 8
-      );
-
-      let top = buttonRect.top - containerRect.top - estimatedHeight - 10;
-    if (top < 8) {
-      top = buttonRect.bottom - containerRect.top + 8;
-    }
-
-    setPunctuationMenu({
-      variants,
-      top,
-      left: clampedLeft,
-    });
-    longPressTriggeredRef.current = true;
-    longPressTimerRef.current = null;
-  }, 380);
-}
-
-function toggleEmojiMenu(event) {
-  if (!keyboardContainerRef.current) return;
-
-  const button = event.currentTarget;
-  const buttonRect = button.getBoundingClientRect();
-  const containerRect = keyboardContainerRef.current.getBoundingClientRect();
-  const variants = [
-    "😀", "😁", "😂", "🤣", "😊",
-    "😍", "😘", "😎", "🤔", "😴",
-    "😢", "😭", "😡", "😱", "👍",
-    "👎", "👏", "🙏", "❤️", "🔥",
-  ];
-
-  const columns = 5;
-  const rows = 4;
-  const keySize = 48;
-  const gap = 6;
-  const padding = 8;
-
-  const estimatedWidth = columns * keySize + (columns - 1) * gap + padding * 2;
-  const estimatedHeight = rows * keySize + (rows - 1) * gap + padding * 2;
-
-  const leftCenter = buttonRect.left - containerRect.left + buttonRect.width / 2;
-  const clampedLeft = Math.min(
-    Math.max(leftCenter, estimatedWidth / 2 + 8),
-    containerRect.width - estimatedWidth / 2 - 8
-  );
-
-  let top = buttonRect.top - containerRect.top - estimatedHeight - 10;
-  if (top < 8) {
-    top = buttonRect.bottom - containerRect.top + 8;
-  }
-
-  setAccentMenu(null);
-  setPunctuationMenu(null);
-  setEmojiMenu((prev) =>
-    prev
-      ? null
-      : {
-          variants,
-          top,
-          left: clampedLeft,
-        }
-  );
-}
-
-
-  function startDeleteHold() {
-    stopDeleteHold();
-    deleteRepeatTimerRef.current = window.setInterval(() => {
-      removeLastCharacter();
-    }, 90);
-  }
-
-  function stopDeleteHold() {
-    if (backspaceHoldTimeoutRef.current) {
-      window.clearTimeout(backspaceHoldTimeoutRef.current);
-      backspaceHoldTimeoutRef.current = null;
-    }
-    if (deleteRepeatTimerRef.current) {
-      window.clearInterval(deleteRepeatTimerRef.current);
-      deleteRepeatTimerRef.current = null;
-    }
-  }
-
-  React.useEffect(() => {
-    function handleGlobalPointerDown(event) {
-      if (!accentMenu && !punctuationMenu && !emojiMenu) return;
-      const target = event.target;
-      if (target && target.closest && target.closest("[data-accent-menu='true']")) {
-        return;
-      }
-      setAccentMenu(null);
-      setPunctuationMenu(null);
-      setEmojiMenu(null);
-    }
-
-    function handleResize() {
-      setAccentMenu(null);
-      setPunctuationMenu(null);
-      setEmojiMenu(null);
-    }
-
-    window.addEventListener("pointerdown", handleGlobalPointerDown);
-    window.addEventListener("resize", handleResize);
-
-    return () => {
-      window.removeEventListener("pointerdown", handleGlobalPointerDown);
-      window.removeEventListener("resize", handleResize);
-      clearLongPressTimer();
-      stopDeleteHold();
-    };
-  }, [accentMenu, punctuationMenu, emojiMenu]);
-
-  const textFontSize = isCompactScreen ? 22 : 28;
-  const textMinHeight = isCompactScreen ? 92 : 116;
-  const suggestionPadding = isCompactScreen ? "6px 10px" : "8px 12px";
-  const suggestionFontSize = isCompactScreen ? 13 : 14;
-  const keyMinHeight = isCompactScreen ? 40 : 48;
-  const keyFontSize = isCompactScreen ? 18 : 22;
-  const keyPadding = isCompactScreen ? "7px 6px" : "9px 6px";
-  const gapSize = isCompactScreen ? 6 : 8;
-  const actionMinHeight = isCompactScreen ? 44 : 52;
-  const displayedRows = keyboardMode === "letters" ? letterRows : symbolRows;
-
-  function renderKeyLabel(item) {
-    if (keyboardMode === "letters" && item === "Maj") {
-      return isShiftActive ? "Maj ON" : "Maj";
-    }
-    if (
-      keyboardMode === "letters" &&
-      isShiftActive &&
-      item.length === 1 &&
-      /[a-z]/i.test(item)
-    ) {
-      return item.toUpperCase();
-    }
-    return item;
-  }
-
-  function handleKeyPress(item) {
-    if (keyboardMode === "letters" && item === "Maj") {
-      setIsShiftActive((prev) => !prev);
-      focusTextArea();
-      return;
-    }
-
-    if (item === "⌫") {
-      removeLastCharacter();
-      return;
-    }
-
-    if (
-      (keyboardMode === "letters" && item === "123#+") ||
-      (keyboardMode === "symbols" && item === "ABC")
-    ) {
-      toggleKeyboardMode();
-      return;
-    }
-
-    addCharacter(item);
-  }
-
-  function getInteractiveKeyStyle(baseStyle, keyId) {
-    const isPressed = pressedKey === keyId;
-    const isHovered = hoveredKey === keyId;
-
-    return {
-      ...baseStyle,
-      transition:
-        "background 0.12s ease, border-color 0.12s ease, transform 0.06s ease, box-shadow 0.12s ease",
-      background: isPressed
-        ? "linear-gradient(180deg, #1d4ed8 0%, #1e40af 100%)"
-        : isHovered
-        ? "rgba(59,130,246,0.24)"
-        : baseStyle.background,
-      borderColor: isPressed
-        ? "rgba(147,197,253,0.95)"
-        : isHovered
-        ? "rgba(96,165,250,0.85)"
-        : baseStyle.borderColor,
-      boxShadow: isPressed
-        ? "inset 0 2px 6px rgba(0,0,0,0.28), 0 0 0 1px rgba(147,197,253,0.22)"
-        : isHovered
-        ? "0 0 0 1px rgba(96,165,250,0.16)"
-        : baseStyle.boxShadow,
-      transform: isPressed ? "scale(0.985)" : "scale(1)",
-    };
-  }
-
-  return (
-    <div
-      ref={keyboardContainerRef}
-      style={{ display: "grid", gap: gapSize, position: "relative", overflow: "visible" }}
-    >
-      <textarea
-        ref={textAreaRef}
-        value={text}
-        onChange={handleTextAreaChange}
-        onKeyUp={handleTextAreaKeyUp}
-        placeholder="Écrire ici..."
-        style={{
-          width: "100%",
-          minHeight: textMinHeight,
-          maxHeight: isCompactScreen ? 128 : 160,
-          resize: "vertical",
-          overflowY: "auto",
-          padding: isCompactScreen ? 12 : 16,
-          borderRadius: 18,
-          background: "rgba(255,255,255,0.04)",
-          border: "1px solid rgba(255,255,255,0.08)",
-          fontSize: textFontSize,
-          lineHeight: 1.3,
-          color: "#ffffff",
-          outline: "none",
-          boxSizing: "border-box",
-        }}
-      />
-
-
-      {accentMenu ? (
-        <div
-          data-accent-menu="true"
-          style={{
-            position: "absolute",
-            top: accentMenu.top,
-            left: accentMenu.left,
-            transform: "translateX(-50%)",
-            zIndex: 50,
-            display: "grid",
-            gridTemplateColumns: `repeat(${Math.min(4, accentMenu.variants.length)}, 48px)`,
-            gap: 6,
-            padding: 8,
-            borderRadius: 16,
-            background: "rgba(8,15,35,0.98)",
-            border: "1px solid rgba(59,130,246,0.5)",
-            boxShadow: "0 10px 30px rgba(0,0,0,0.35)",
-            maxWidth: "calc(100% - 16px)",
-          }}
-        >
-          {accentMenu.variants.map((variant) => {
-            const keyId = `accent-${variant}`;
-            return (
-              <button
-                key={variant}
-                type="button"
-                onMouseEnter={() => setHoveredKey(keyId)}
-                onMouseLeave={() => {
-                  setHoveredKey((prev) => (prev === keyId ? null : prev));
-                  setPressedKey((prev) => (prev === keyId ? null : prev));
-                }}
-                onMouseDown={(event) => {
-                  event.preventDefault();
-                  setPressedKey(keyId);
-                }}
-                onMouseUp={() => {
-                  setPressedKey((prev) => (prev === keyId ? null : prev));
-                }}
-                onClick={() => {
-                  insertAtCursor(variant);
-                  setAccentMenu(null);
-                }}
-                style={getInteractiveKeyStyle(
-                  {
-                    ...styles.secondaryButton,
-                    minWidth: 48,
-                    minHeight: 48,
-                    padding: "8px 10px",
-                    fontSize: 22,
-                    fontWeight: 800,
-                  },
-                  keyId
-                )}
-              >
-                {variant}
-              </button>
-            );
-          })}
-        </div>
-      ) : null}
-
-{emojiMenu ? (
-  <div
-    data-accent-menu="true"
-    style={{
-      position: "absolute",
-      top: emojiMenu.top,
-      left: emojiMenu.left,
-      transform: "translateX(-50%)",
-      zIndex: 50,
-      display: "grid",
-      gridTemplateColumns: "repeat(5, 48px)",
-      gridTemplateRows: "repeat(4, 48px)",
-      gap: 6,
-      padding: 8,
-      borderRadius: 16,
-      background: "rgba(8,15,35,0.98)",
-      border: "1px solid rgba(59,130,246,0.5)",
-      boxShadow: "0 10px 30px rgba(0,0,0,0.35)",
-      width: 292,
-      maxWidth: "calc(100% - 16px)",
-      overflow: "hidden",
-      boxSizing: "border-box",
-    }}
-  >
-    {emojiMenu.variants.map((variant) => {
-      const keyId = `emoji-${variant}`;
-      return (
-        <button
-          key={variant}
-          type="button"
-          onMouseEnter={() => setHoveredKey(keyId)}
-          onMouseLeave={() => {
-            setHoveredKey((prev) => (prev === keyId ? null : prev));
-            setPressedKey((prev) => (prev === keyId ? null : prev));
-          }}
-          onMouseDown={(event) => {
-            event.preventDefault();
-            setPressedKey(keyId);
-          }}
-          onMouseUp={() => {
-            setPressedKey((prev) => (prev === keyId ? null : prev));
-          }}
-          onClick={() => {
-            insertAtCursor(variant);
-            setEmojiMenu(null);
-          }}
-          style={getInteractiveKeyStyle(
-            {
-              ...styles.secondaryButton,
-              width: 48,
-              minWidth: 48,
-              height: 48,
-              minHeight: 48,
-              padding: 0,
-              fontSize: 22,
-              fontWeight: 800,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            },
-            keyId
-          )}
-        >
-          {variant}
-        </button>
-      );
-    })}
-  </div>
-) : null}
-
-      {punctuationMenu ? (
-        <div
-          data-accent-menu="true"
-          style={{
-            position: "absolute",
-            top: punctuationMenu.top,
-            left: punctuationMenu.left,
-            transform: "translateX(-50%)",
-            zIndex: 50,
-            display: "grid",
-            gridTemplateColumns: `repeat(${Math.min(4, punctuationMenu.variants.length)}, 48px)`,
-            gap: 6,
-            padding: 8,
-            borderRadius: 16,
-            background: "rgba(8,15,35,0.98)",
-            border: "1px solid rgba(59,130,246,0.5)",
-            boxShadow: "0 10px 30px rgba(0,0,0,0.35)",
-            maxWidth: "calc(100% - 16px)",
-          }}
-        >
-          {punctuationMenu.variants.map((variant) => {
-            const keyId = `punct-${variant}`;
-            return (
-              <button
-                key={variant}
-                type="button"
-                onMouseEnter={() => setHoveredKey(keyId)}
-                onMouseLeave={() => {
-                  setHoveredKey((prev) => (prev === keyId ? null : prev));
-                  setPressedKey((prev) => (prev === keyId ? null : prev));
-                }}
-                onMouseDown={(event) => {
-                  event.preventDefault();
-                  setPressedKey(keyId);
-                }}
-                onMouseUp={() => {
-                  setPressedKey((prev) => (prev === keyId ? null : prev));
-                }}
-                onClick={() => {
-                  insertAtCursor(variant);
-                  setPunctuationMenu(null);
-                }}
-                style={getInteractiveKeyStyle(
-                  {
-                    ...styles.secondaryButton,
-                    minWidth: 48,
-                    minHeight: 48,
-                    padding: "8px 10px",
-                    fontSize: 22,
-                    fontWeight: 800,
-                  },
-                  keyId
-                )}
-              >
-                {variant}
-              </button>
-            );
-          })}
-        </div>
-      ) : null}
-
-      <div style={{ display: "grid", gap: gapSize }}>
-        {displayedRows.map((row, rowIndex) => (
-          <div
-            key={rowIndex}
-            style={{
-              display: "grid",
-              gridTemplateColumns: `repeat(${row.length}, minmax(0, 1fr))`,
-              gap: gapSize,
-            }}
-          >
-            {row.map((item, itemIndex) => {
-              const isAccentable =
-                keyboardMode === "letters" && Boolean(ACCENT_OPTIONS[item]);
-              const keyId = `key-${keyboardMode}-${rowIndex}-${itemIndex}-${item}`;
-
-              return (
-                <button
-                  key={`${item}-${itemIndex}`}
-                  type="button"
-                  onMouseEnter={() => setHoveredKey(keyId)}
-                  onMouseLeave={() => {
-                    setHoveredKey((prev) => (prev === keyId ? null : prev));
-                    setPressedKey((prev) => (prev === keyId ? null : prev));
-                    clearLongPressTimer();
-                    stopDeleteHold();
-                  }}
-                  onMouseDown={(event) => {
-                    event.preventDefault();
-                    setPressedKey(keyId);
-                    if (item === "⌫") {
-                      backspaceHoldTimeoutRef.current = window.setTimeout(() => {
-                        startDeleteHold();
-                      }, 350);
-                    }
-                    if (isAccentable) {
-                      startLongPress(item, event);
-                    }
-                  }}
-                  onMouseUp={(event) => {
-                    event.preventDefault();
-                    const wasDeleting = item === "⌫" && Boolean(deleteRepeatTimerRef.current);
-                    stopDeleteHold();
-                    setPressedKey((prev) => (prev === keyId ? null : prev));
-                    const wasLongPress = isAccentable ? stopLongPress() : false;
-                    if (wasLongPress || wasDeleting) return;
-                    handleKeyPress(item);
-                  }}
-                  onTouchStart={(event) => {
-                    setPressedKey(keyId);
-                    if (item === "⌫") {
-                      backspaceHoldTimeoutRef.current = window.setTimeout(() => {
-                        startDeleteHold();
-                      }, 350);
-                    }
-                    if (isAccentable) {
-                      startLongPress(item, event);
-                    }
-                  }}
-                  onTouchEnd={(event) => {
-                    event.preventDefault();
-                    const wasDeleting = item === "⌫" && Boolean(deleteRepeatTimerRef.current);
-                    stopDeleteHold();
-                    setPressedKey((prev) => (prev === keyId ? null : prev));
-                    const wasLongPress = isAccentable ? stopLongPress() : false;
-                    if (wasLongPress || wasDeleting) return;
-                    handleKeyPress(item);
-                  }}
-                  style={getInteractiveKeyStyle(
-                    {
-                      ...styles.secondaryButton,
-                      minHeight: keyMinHeight,
-                      fontSize: keyFontSize,
-                      fontWeight: 800,
-                      padding: keyPadding,
-                    },
-                    keyId
-                  )}
-                >
-                  {renderKeyLabel(item)}
-                </button>
-              );
-            })}
-          </div>
-        ))}
-      </div>
-
-<div
-  style={{
-    display: "grid",
-    gridTemplateColumns: "auto 1fr auto auto auto",
-    gap: gapSize,
-  }}
->
-  <button
-    type="button"
-    onMouseEnter={() => setHoveredKey("emoji")}
-    onMouseLeave={() => {
-      setHoveredKey((prev) => (prev === "emoji" ? null : prev));
-      setPressedKey((prev) => (prev === "emoji" ? null : prev));
-    }}
-    onMouseDown={(event) => {
-      event.preventDefault();
-      setPressedKey("emoji");
-    }}
-    onMouseUp={() => {
-      setPressedKey((prev) => (prev === "emoji" ? null : prev));
-    }}
-    onClick={toggleEmojiMenu}
-    style={getInteractiveKeyStyle(
-      {
-        ...styles.secondaryButton,
-        minHeight: actionMinHeight,
-        padding: "8px 16px",
-        fontSize: 18,
-        fontWeight: 800,
-      },
-      "emoji"
-    )}
-  >
-    😀
-  </button>
-
-  <button
-    type="button"
-    onMouseEnter={() => setHoveredKey("space")}
-    onMouseLeave={() => {
-      setHoveredKey((prev) => (prev === "space" ? null : prev));
-      setPressedKey((prev) => (prev === "space" ? null : prev));
-    }}
-    onMouseDown={(event) => {
-      event.preventDefault();
-      setPressedKey("space");
-    }}
-    onMouseUp={() => {
-      setPressedKey((prev) => (prev === "space" ? null : prev));
-    }}
-    onClick={addSpace}
-    style={getInteractiveKeyStyle(
-      {
-        ...styles.primaryButton,
-        minHeight: actionMinHeight,
-        padding: isCompactScreen ? "8px 10px" : undefined,
-      },
-      "space"
-    )}
-  >
-    Espace
-  </button>
-
-  <button
-    type="button"
-    onMouseEnter={() => setHoveredKey("enter")}
-    onMouseLeave={() => {
-      setHoveredKey((prev) => (prev === "enter" ? null : prev));
-      setPressedKey((prev) => (prev === "enter" ? null : prev));
-    }}
-    onMouseDown={(event) => {
-      event.preventDefault();
-      setPressedKey("enter");
-    }}
-    onMouseUp={() => {
-      setPressedKey((prev) => (prev === "enter" ? null : prev));
-    }}
-    onClick={() => insertAtCursor("\n")}
-    style={getInteractiveKeyStyle(
-      {
-        ...styles.primaryButton,
-        minHeight: actionMinHeight,
-        padding: "8px 16px",
-        fontSize: 18,
-        fontWeight: 800,
-      },
-      "enter"
-    )}
-  >
-    ↵ Entrée
-  </button>
-
-  <button
-    type="button"
-    onMouseEnter={() => setHoveredKey("apostrophe")}
-    onMouseLeave={() => {
-      setHoveredKey((prev) => (prev === "apostrophe" ? null : prev));
-      setPressedKey((prev) => (prev === "apostrophe" ? null : prev));
-      clearLongPressTimer();
-    }}
-    onMouseDown={(event) => {
-      event.preventDefault();
-      setPressedKey("apostrophe");
-      startApostropheLongPress(event);
-    }}
-    onMouseUp={(event) => {
-      event.preventDefault();
-      setPressedKey((prev) => (prev === "apostrophe" ? null : prev));
-      const wasLongPress = stopLongPress();
-      if (wasLongPress) return;
-      insertAtCursor("'");
-    }}
-    style={getInteractiveKeyStyle(
-      {
-        ...styles.secondaryButton,
-        minHeight: actionMinHeight,
-        padding: "8px 16px",
-        fontSize: 18,
-        fontWeight: 800,
-      },
-      "apostrophe"
-    )}
-  >
-    '
-  </button>
-
-  <button
-    type="button"
-    onMouseEnter={() => setHoveredKey("dot")}
-    onMouseLeave={() => {
-      setHoveredKey((prev) => (prev === "dot" ? null : prev));
-      setPressedKey((prev) => (prev === "dot" ? null : prev));
-      clearLongPressTimer();
-    }}
-    onMouseDown={(event) => {
-      event.preventDefault();
-      setPressedKey("dot");
-      startPunctuationLongPress(event);
-    }}
-    onMouseUp={(event) => {
-      event.preventDefault();
-      setPressedKey((prev) => (prev === "dot" ? null : prev));
-      const wasLongPress = stopLongPress();
-      if (wasLongPress) return;
-      insertAtCursor(".");
-    }}
-    style={getInteractiveKeyStyle(
-      {
-        ...styles.secondaryButton,
-        minHeight: actionMinHeight,
-        padding: "8px 16px",
-        fontSize: 18,
-        fontWeight: 800,
-      },
-      "dot"
-    )}
-  >
-    .
-  </button>
-</div>
-
-<div
-  style={{
-    display: "grid",
-    gridTemplateColumns: "1fr 1fr 1fr",
-          gap: gapSize,
-        }}
-      >
-        <button
-          type="button"
-          onMouseEnter={() => setHoveredKey("clear")}
-          onMouseLeave={() => {
-            setHoveredKey((prev) => (prev === "clear" ? null : prev));
-            setPressedKey((prev) => (prev === "clear" ? null : prev));
-          }}
-          onMouseDown={(event) => {
-            event.preventDefault();
-            setPressedKey("clear");
-          }}
-          onMouseUp={() => {
-            setPressedKey((prev) => (prev === "clear" ? null : prev));
-          }}
-          onClick={clearAll}
-          style={getInteractiveKeyStyle(
-            {
-              ...styles.deleteButton,
-              minHeight: actionMinHeight,
-              padding: isCompactScreen ? "8px 10px" : undefined,
-            },
-            "clear"
-          )}
-        >
-          Effacer
-        </button>
-        <button
-          type="button"
-          aria-label="Écouter"
-          title="Écouter"
-          onMouseEnter={() => setHoveredKey("listen")}
-          onMouseLeave={() => {
-            setHoveredKey((prev) => (prev === "listen" ? null : prev));
-            setPressedKey((prev) => (prev === "listen" ? null : prev));
-          }}
-          onMouseDown={(event) => {
-            event.preventDefault();
-            setPressedKey("listen");
-          }}
-          onMouseUp={() => {
-            setPressedKey((prev) => (prev === "listen" ? null : prev));
-          }}
-          onClick={() => speakText(text)}
-          disabled={!String(text || "").trim()}
-          style={getInteractiveKeyStyle(
-            {
-              ...styles.primaryButton,
-              minHeight: actionMinHeight,
-              padding: isCompactScreen ? "8px 10px" : undefined,
-            },
-            "listen"
-          )}
-        >
-          ▶
-        </button>
-        <button
-          type="button"
-          aria-label="Stop voix"
-          title="Stop voix"
-          onMouseEnter={() => setHoveredKey("stop")}
-          onMouseLeave={() => {
-            setHoveredKey((prev) => (prev === "stop" ? null : prev));
-            setPressedKey((prev) => (prev === "stop" ? null : prev));
-          }}
-          onMouseDown={(event) => {
-            event.preventDefault();
-            setPressedKey("stop");
-          }}
-          onMouseUp={() => {
-            setPressedKey((prev) => (prev === "stop" ? null : prev));
-          }}
-          onClick={stopSpeaking}
-          style={getInteractiveKeyStyle(
-            {
-              ...styles.secondaryButton,
-              minHeight: actionMinHeight,
-              padding: isCompactScreen ? "8px 10px" : undefined,
-            },
-            "stop"
-          )}
-        >
-          ⏹
-        </button>
-      </div>
-    </div>
-  );
-}
-
-
 export default function ProfileSettingsPage(props: any) {
   const {
     styles,
@@ -1237,7 +75,6 @@ export default function ProfileSettingsPage(props: any) {
   } = props;
   const [showDeleteConfirm, setShowDeleteConfirm] = React.useState(false);
   const [configSection, setConfigSection] = React.useState("identite");
-  const [inputMode, setInputMode] = React.useState("standard");
   const standardTextAreaRef = React.useRef<HTMLTextAreaElement | null>(null);
   const isCompactLayout =
     typeof window !== "undefined" && window.innerWidth <= 640;
@@ -1497,18 +334,234 @@ export default function ProfileSettingsPage(props: any) {
     currentProfile.themeMode === mode
       ? styles.primaryButton
       : styles.secondaryButton;
+  const compactThemeOptionStyle = (mode): CSSProperties => ({
+    ...themeOptionStyle(mode),
+    minWidth: 0,
+    minHeight: 56,
+    padding: "9px 8px",
+    borderRadius: 16,
+    fontSize: 16,
+    lineHeight: 1.1,
+    whiteSpace: "normal",
+  });
 
   if (page === "profil") {
+    const compactViewportWidth = isCompactLayout
+      ? "calc(100vw - 52px)"
+      : "100%";
+    const caregiverPanelWidth = isCompactLayout
+      ? "calc(100vw - 86px)"
+      : "100%";
+    const caregiverControlsWidth = isCompactLayout
+      ? "calc(100vw - 112px)"
+      : "100%";
     const compactCard = createCompactCardStyle(styles.card, {
       marginBottom: 20,
       minWidth: 0,
+      maxWidth: "100%",
+      overflow: "hidden",
     });
+    const caregiverCardStyle: CSSProperties = {
+      ...compactCard,
+      width: compactViewportWidth,
+      maxWidth: compactViewportWidth,
+      inlineSize: compactViewportWidth,
+      maxInlineSize: compactViewportWidth,
+      justifySelf: "start",
+    };
     const configContentGrid: CSSProperties = {
       display: "grid",
-      gridTemplateColumns: "repeat(auto-fit, minmax(min(390px, 100%), 1fr))",
+      gridTemplateColumns: isCompactLayout
+        ? "minmax(0, max-content)"
+        : "repeat(auto-fit, minmax(min(390px, 100%), 1fr))",
       gap: 20,
       alignItems: "start",
       width: "100%",
+      maxWidth: "100%",
+      minWidth: 0,
+      overflow: "hidden",
+    };
+    const activeConfigSection =
+      CONFIG_SECTIONS.find((section) => section.id === configSection) ||
+      CONFIG_SECTIONS[0];
+    const configSectionMenuStyle: CSSProperties = {
+      ...styles.card,
+      padding: 12,
+      marginBottom: 16,
+      borderRadius: 18,
+      boxShadow: "0 10px 28px rgba(0,0,0,0.22)",
+    };
+    const configSectionSelectWrapStyle: CSSProperties = {
+      position: "relative",
+      marginTop: 8,
+    };
+    const configSectionSelectStyle: CSSProperties = {
+      ...styles.input,
+      minHeight: 50,
+      marginTop: 0,
+      padding: "10px 42px 10px 12px",
+      borderRadius: 14,
+      fontWeight: 800,
+      appearance: "none",
+      WebkitAppearance: "none",
+    };
+    const caregiverPanelStyle: CSSProperties = {
+      display: "grid",
+      gap: 12,
+      padding: 12,
+      borderRadius: 18,
+      border: `1px solid ${styles.input.borderColor || "rgba(148, 163, 184, 0.32)"}`,
+      background: "rgba(15, 23, 42, 0.20)",
+      boxSizing: "border-box",
+      width: caregiverPanelWidth,
+      maxWidth: caregiverPanelWidth,
+      inlineSize: caregiverPanelWidth,
+      maxInlineSize: caregiverPanelWidth,
+      minWidth: 0,
+      overflow: "hidden",
+    };
+    const caregiverHeaderStyle: CSSProperties = {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 10,
+      flexWrap: "wrap",
+      minWidth: 0,
+      maxWidth: "100%",
+    };
+    const caregiverToggleStyle: CSSProperties = {
+      display: "inline-flex",
+      alignItems: "center",
+      gap: 8,
+      padding: "7px 10px",
+      borderRadius: 999,
+      border: `1px solid ${styles.input.borderColor || "rgba(148, 163, 184, 0.32)"}`,
+      background: styles.input.background || "rgba(15, 23, 42, 0.55)",
+      fontSize: 13,
+      fontWeight: 800,
+      lineHeight: 1,
+    };
+    const caregiverLinkBoxStyle: CSSProperties = {
+      display: "flex",
+      alignItems: "center",
+      gap: 8,
+      minHeight: 44,
+      padding: "6px 6px 6px 10px",
+      borderRadius: 14,
+      border: styles.input.border,
+      background: styles.input.background,
+      color: styles.input.color,
+      boxSizing: "border-box",
+      width: caregiverControlsWidth,
+      maxWidth: caregiverControlsWidth,
+      inlineSize: caregiverControlsWidth,
+      maxInlineSize: caregiverControlsWidth,
+      minWidth: 0,
+      overflow: "hidden",
+    };
+    const caregiverLinkTextStyle: CSSProperties = {
+      flex: 1,
+      minWidth: 0,
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      whiteSpace: "nowrap",
+      display: "block",
+      fontSize: 14,
+      fontWeight: 700,
+      lineHeight: 1.2,
+    };
+    const caregiverActionGridStyle: CSSProperties = {
+      display: "grid",
+      gridTemplateColumns: "40px minmax(0, 1fr) 40px",
+      gap: 6,
+      alignItems: "stretch",
+      minWidth: 0,
+      width: caregiverControlsWidth,
+      maxWidth: caregiverControlsWidth,
+      inlineSize: caregiverControlsWidth,
+      maxInlineSize: caregiverControlsWidth,
+      overflow: "hidden",
+    };
+    const compactCaregiverButtonStyle: CSSProperties = {
+      ...styles.secondaryButton,
+      width: "100%",
+      minHeight: 40,
+      padding: "8px 10px",
+      borderRadius: 14,
+      fontSize: 14,
+      lineHeight: 1.1,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      textAlign: "center",
+      textDecoration: "none",
+      boxSizing: "border-box",
+      minWidth: 0,
+      maxWidth: "100%",
+      overflow: "hidden",
+      whiteSpace: "normal",
+    };
+    const caregiverIconButtonStyle: CSSProperties = {
+      ...compactCaregiverButtonStyle,
+      minHeight: 40,
+      padding: 0,
+      borderRadius: 12,
+      fontSize: 18,
+      lineHeight: 1,
+      whiteSpace: "nowrap",
+    };
+    const caregiverModeButtonStyle: CSSProperties = {
+      ...compactCaregiverButtonStyle,
+      minHeight: 40,
+      padding: "8px 8px",
+      borderRadius: 12,
+      fontSize: 14,
+      fontWeight: 800,
+      whiteSpace: "nowrap",
+    };
+    const primaryCaregiverButtonStyle: CSSProperties = {
+      ...styles.primaryButton,
+      width: "100%",
+      minWidth: 0,
+      maxWidth: "100%",
+      minHeight: 44,
+      padding: "10px 12px",
+      borderRadius: 16,
+      fontSize: 16,
+      lineHeight: 1.1,
+      boxSizing: "border-box",
+    };
+    const securityPrimaryButtonStyle: CSSProperties = {
+      ...styles.primaryButton,
+      width: "100%",
+      minHeight: 48,
+      padding: "10px 12px",
+      borderRadius: 16,
+      fontSize: 18,
+      lineHeight: 1.1,
+      boxSizing: "border-box",
+    };
+    const securityActionGridStyle: CSSProperties = {
+      display: "grid",
+      gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+      gap: 10,
+      alignItems: "stretch",
+      width: "100%",
+      minWidth: 0,
+    };
+    const securityActionButtonStyle: CSSProperties = {
+      ...styles.secondaryButton,
+      width: "100%",
+      minHeight: 46,
+      padding: "10px 12px",
+      borderRadius: 16,
+      fontSize: 16,
+      lineHeight: 1.1,
+      display: "inline-flex",
+      alignItems: "center",
+      justifyContent: "center",
+      textAlign: "center",
+      boxSizing: "border-box",
     };
 
     if (privacyStatus?.passwordProtected && privacyStatus?.locked) {
@@ -1563,37 +616,40 @@ export default function ProfileSettingsPage(props: any) {
 
     return (
       <>
-        <div
-          role="tablist"
-          aria-label="Sections de configuration"
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(128px, 1fr))",
-            gap: 10,
-            marginBottom: 16,
-          }}
-        >
-          {CONFIG_SECTIONS.map((section) => {
-            const isActive = configSection === section.id;
-
-            return (
-              <button
-                key={section.id}
-                type="button"
-                role="tab"
-                aria-selected={isActive}
-                onClick={() => setConfigSection(section.id)}
-                style={{
-                  ...(isActive ? styles.primaryButton : styles.secondaryButton),
-                  minWidth: 0,
-                  padding: "10px 12px",
-                  whiteSpace: "normal",
-                }}
-              >
-                {section.label}
-              </button>
-            );
-          })}
+        <div style={configSectionMenuStyle}>
+          <label style={styles.label} htmlFor="profile-config-section">
+            Rubrique du profil
+          </label>
+          <div style={configSectionSelectWrapStyle}>
+            <select
+              id="profile-config-section"
+              value={activeConfigSection.id}
+              onChange={(event) => setConfigSection(event.target.value)}
+              style={configSectionSelectStyle}
+              aria-label="Choisir une rubrique du profil"
+            >
+              {CONFIG_SECTIONS.map((section) => (
+                <option key={section.id} value={section.id}>
+                  {section.label}
+                </option>
+              ))}
+            </select>
+            <span
+              aria-hidden="true"
+              style={{
+                position: "absolute",
+                right: 14,
+                top: "50%",
+                transform: "translateY(-50%)",
+                pointerEvents: "none",
+                fontSize: 16,
+                fontWeight: 900,
+                opacity: 0.72,
+              }}
+            >
+              ▾
+            </span>
+          </div>
         </div>
 
         <div
@@ -1744,14 +800,14 @@ export default function ProfileSettingsPage(props: any) {
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
-                gap: 12,
+                gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                gap: 10,
               }}
             >
               <button
                 type="button"
                 onClick={() => updateCurrentProfileField("themeMode", "dark")}
-                style={themeOptionStyle("dark")}
+                style={compactThemeOptionStyle("dark")}
               >
                 🌙 Sombre
               </button>
@@ -1759,7 +815,7 @@ export default function ProfileSettingsPage(props: any) {
               <button
                 type="button"
                 onClick={() => updateCurrentProfileField("themeMode", "light")}
-                style={themeOptionStyle("light")}
+                style={compactThemeOptionStyle("light")}
               >
                 ☀️ Clair
               </button>
@@ -1769,7 +825,7 @@ export default function ProfileSettingsPage(props: any) {
                 onClick={() =>
                   updateCurrentProfileField("themeMode", "colorful")
                 }
-                style={themeOptionStyle("colorful")}
+                style={compactThemeOptionStyle("colorful")}
               >
                 🎨 Coloré
               </button>
@@ -1777,7 +833,7 @@ export default function ProfileSettingsPage(props: any) {
               <button
                 type="button"
                 onClick={() => updateCurrentProfileField("themeMode", "custom")}
-                style={themeOptionStyle("custom")}
+                style={compactThemeOptionStyle("custom")}
               >
                 🛠️ Personnalisé
               </button>
@@ -2374,7 +1430,7 @@ export default function ProfileSettingsPage(props: any) {
           </div>
         </div>
 
-        <div style={compactCard}>
+        <div style={caregiverCardStyle}>
           <h2 style={styles.sectionTitle}>Téléphone aidant</h2>
 
           <div style={{ ...styles.infoBox, marginBottom: 14, lineHeight: 1.55 }}>
@@ -2418,37 +1474,32 @@ export default function ProfileSettingsPage(props: any) {
             </div>
           ) : null}
 
-          <div style={{ display: "grid", gap: 14 }}>
+          <div
+            style={{
+              display: "grid",
+              gap: 12,
+              minWidth: 0,
+              maxWidth: "100%",
+              overflow: "hidden",
+            }}
+          >
             {caregiverAlertLinks.map((link, index) => (
               <div
                 key={link.id}
-                style={{
-                  borderTop:
-                    index === 0 ? "none" : "1px solid rgba(148, 163, 184, 0.25)",
-                  paddingTop: index === 0 ? 0 : 14,
-                }}
+                style={caregiverPanelStyle}
               >
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    gap: 10,
-                    flexWrap: "wrap",
-                    marginBottom: 10,
-                  }}
-                >
-                  <label style={{ ...styles.label, margin: 0 }}>
-                    Aidant {index + 1}
-                  </label>
+                <div style={caregiverHeaderStyle}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ ...styles.label, margin: 0 }}>
+                      Aidant {index + 1}
+                    </div>
+                    <div style={{ ...styles.text, fontSize: 13, opacity: 0.72 }}>
+                      {link.name || `Aidant ${index + 1}`}
+                    </div>
+                  </div>
 
                   <label
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: 8,
-                      fontWeight: 700,
-                    }}
+                    style={caregiverToggleStyle}
                   >
                     <input
                       type="checkbox"
@@ -2459,11 +1510,11 @@ export default function ProfileSettingsPage(props: any) {
                         })
                       }
                     />
-                    Disponible pour Appel aidant
+                    Disponible
                   </label>
                 </div>
 
-                <div style={styles.formGroup}>
+                <div style={{ ...styles.formGroup, marginBottom: 0 }}>
                   <label style={styles.label}>Nom de l'aidant</label>
                   <input
                     value={link.name || ""}
@@ -2472,27 +1523,42 @@ export default function ProfileSettingsPage(props: any) {
                         name: e.target.value,
                       })
                     }
-                    style={styles.input}
+                    style={{
+                      ...styles.input,
+                      width: caregiverControlsWidth,
+                      maxWidth: caregiverControlsWidth,
+                      inlineSize: caregiverControlsWidth,
+                      maxInlineSize: caregiverControlsWidth,
+                      minWidth: 0,
+                    }}
                     placeholder={`Aidant ${index + 1}`}
                   />
                 </div>
 
-                <div style={styles.formGroup}>
+                <div style={{ ...styles.formGroup, marginBottom: 0 }}>
                   <label style={styles.label}>Lien d'alarme</label>
-                  <input
-                    readOnly
-                    value={link.alertLink || ""}
-                    style={styles.input}
-                  />
+                  <div style={caregiverLinkBoxStyle}>
+                    <span
+                      title={link.alertLink || ""}
+                      style={{
+                        ...caregiverLinkTextStyle,
+                        opacity: link.alertLink ? 1 : 0.62,
+                      }}
+                    >
+                      {link.alertLink || "Lien indisponible"}
+                    </span>
+                  </div>
                 </div>
 
-                <div style={styles.inlineButtons}>
+                <div style={caregiverActionGridStyle}>
                   <button
                     type="button"
-                    style={styles.secondaryButton}
+                    aria-label="Copier le lien"
+                    title="Copier le lien"
+                    style={{ ...caregiverIconButtonStyle, gridColumn: 1 }}
                     onClick={() => copyCaregiverAlertLink?.(link.id)}
                   >
-                    Copier le lien
+                    📋
                   </button>
 
                   {link.alertLink ? (
@@ -2500,37 +1566,38 @@ export default function ProfileSettingsPage(props: any) {
                       href={link.alertLink}
                       target="_blank"
                       rel="noreferrer"
+                      aria-label="Ouvrir le mode aidant"
+                      title="Ouvrir le mode aidant"
                       style={{
-                        ...styles.secondaryButton,
-                        display: "inline-flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        textDecoration: "none",
+                        ...caregiverModeButtonStyle,
+                        gridColumn: 2,
                       }}
                     >
-                      Ouvrir le mode aidant
+                      Mode aidant
                     </a>
                   ) : null}
 
                   {link.appLink ? (
                     <a
                       href={link.appLink}
+                      aria-label="Ouvrir l'application aidant"
+                      title="Ouvrir l'application aidant"
                       style={{
-                        ...styles.secondaryButton,
-                        display: "inline-flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        textDecoration: "none",
+                        ...caregiverModeButtonStyle,
+                        gridColumn: "1 / -1",
                       }}
                     >
-                      Ouvrir l'application aidant
+                      App aidant
                     </a>
                   ) : null}
 
                   <button
                     type="button"
+                    aria-label="Supprimer l'aidant"
+                    title="Supprimer l'aidant"
                     style={{
-                      ...styles.secondaryButton,
+                      ...caregiverIconButtonStyle,
+                      gridColumn: 3,
                       opacity: caregiverAlertLinks.length <= 1 ? 0.55 : 1,
                       cursor:
                         caregiverAlertLinks.length <= 1
@@ -2540,17 +1607,32 @@ export default function ProfileSettingsPage(props: any) {
                     disabled={caregiverAlertLinks.length <= 1}
                     onClick={() => deleteCaregiverAlertLink?.(link.id)}
                   >
-                    Supprimer
+                    🗑
                   </button>
                 </div>
               </div>
             ))}
           </div>
 
-          <div style={{ ...styles.inlineButtons, marginTop: 14 }}>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "minmax(0, 1fr) minmax(74px, 0.34fr)",
+              gap: 10,
+              marginTop: 14,
+              alignItems: "stretch",
+              width: caregiverPanelWidth,
+              maxWidth: caregiverPanelWidth,
+              inlineSize: caregiverPanelWidth,
+              maxInlineSize: caregiverPanelWidth,
+              minWidth: 0,
+              overflow: "hidden",
+              boxSizing: "border-box",
+            }}
+          >
             <button
               type="button"
-              style={styles.primaryButton}
+              style={primaryCaregiverButtonStyle}
               onClick={addCaregiverAlertLink}
             >
               Ajouter un aidant
@@ -2558,7 +1640,13 @@ export default function ProfileSettingsPage(props: any) {
 
             <button
               type="button"
-              style={styles.secondaryButton}
+              style={{
+                ...compactCaregiverButtonStyle,
+                minHeight: 44,
+                borderRadius: 16,
+                fontSize: 16,
+                fontWeight: 800,
+              }}
               onClick={() => openNoticeSection?.("aidant")}
             >
               Aide
@@ -2656,7 +1744,7 @@ export default function ProfileSettingsPage(props: any) {
                 />
                 <button
                   type="button"
-                  style={styles.primaryButton}
+                  style={securityPrimaryButtonStyle}
                   onClick={handleUnlockPrivateData}
                   disabled={privacyActionLoading || !privacyUnlockPassword}
                 >
@@ -2684,7 +1772,7 @@ export default function ProfileSettingsPage(props: any) {
                 />
                 <button
                   type="button"
-                  style={styles.primaryButton}
+                  style={securityPrimaryButtonStyle}
                   onClick={handleEnablePrivacyPassword}
                   disabled={
                     privacyActionLoading ||
@@ -2701,7 +1789,7 @@ export default function ProfileSettingsPage(props: any) {
               <div style={{ marginBottom: 14 }}>
                 <button
                   type="button"
-                  style={styles.secondaryButton}
+                  style={securityActionButtonStyle}
                   onClick={() => {
                     lockPrivateData?.();
                     setPrivacyActionMessage("Données médicales verrouillées.");
@@ -2729,15 +1817,16 @@ export default function ProfileSettingsPage(props: any) {
               </div>
             ) : null}
 
-            <div style={styles.inlineButtons}>
+            <div style={securityActionGridStyle}>
               <button
-                style={styles.secondaryButton}
+                type="button"
+                style={securityActionButtonStyle}
                 onClick={exportAllProfiles}
               >
                 Exporter
               </button>
 
-              <label style={styles.importLabel}>
+              <label style={{ ...securityActionButtonStyle, cursor: "pointer" }}>
                 Importer
                 <input
                   ref={fileInputRef}
@@ -2845,74 +1934,6 @@ export default function ProfileSettingsPage(props: any) {
           <div style={styles.formGroup}>
             <div
               style={{
-                display: "flex",
-                justifyContent: "flex-end",
-                alignItems: "center",
-                gap: isCompactLayout ? 6 : 12,
-                flexWrap: "wrap",
-                marginBottom: isCompactLayout ? 8 : 12,
-              }}
-            >
-              <div
-                style={{
-                  display: isCompactLayout ? "grid" : "flex",
-                  gridTemplateColumns: isCompactLayout
-                    ? "repeat(2, minmax(0, 1fr))"
-                    : undefined,
-                  flexDirection: "column",
-                  gap: isCompactLayout ? 6 : 10,
-                  alignItems:
-                    window.innerWidth > 980 ? "flex-end" : "stretch",
-                  marginLeft: "auto",
-                  width: isCompactLayout ? "100%" : undefined,
-                }}
-              >
-                <button
-                  type="button"
-                  onClick={() => setInputMode("standard")}
-                  style={{
-                    ...(inputMode === "standard"
-                      ? styles.primaryButton
-                      : styles.secondaryButton),
-                    width:
-                      window.innerWidth > 980 && !isCompactLayout
-                        ? "auto"
-                        : "100%",
-                    minHeight: isCompactLayout ? 42 : undefined,
-                    padding: isCompactLayout ? "7px 8px" : undefined,
-                    borderRadius: isCompactLayout ? 14 : undefined,
-                    fontSize: isCompactLayout ? 13 : undefined,
-                    lineHeight: isCompactLayout ? 1.1 : undefined,
-                  }}
-                >
-                  Interface classique
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setInputMode("keyboard")}
-                  style={{
-                    ...(inputMode === "keyboard"
-                      ? styles.primaryButton
-                      : styles.secondaryButton),
-                    width:
-                      window.innerWidth > 980 && !isCompactLayout
-                        ? "auto"
-                        : "100%",
-                    minHeight: isCompactLayout ? 42 : undefined,
-                    padding: isCompactLayout ? "7px 8px" : undefined,
-                    borderRadius: isCompactLayout ? 14 : undefined,
-                    fontSize: isCompactLayout ? 13 : undefined,
-                    lineHeight: isCompactLayout ? 1.1 : undefined,
-                  }}
-                >
-                  Clavier virtuel
-                </button>
-
-              </div>
-            </div>
-            <div
-              style={{
                 display: "grid",
                 gridTemplateColumns:
                   window.innerWidth > 1180 ? "minmax(0, 1fr) 320px" : "1fr",
@@ -2923,107 +1944,93 @@ export default function ProfileSettingsPage(props: any) {
               <div>
                 <label style={styles.label}>Texte à dire</label>
 
-                {inputMode === "standard" ? (
-                  <>
-                    <textarea
-                      ref={standardTextAreaRef}
-                      value={text}
-                      onChange={(e) => {
-                        const nextValue = e.target.value;
-                        setText(formatTextSmart(nextValue));
+                <textarea
+                  ref={standardTextAreaRef}
+                  value={text}
+                  onChange={(e) => {
+                    const nextValue = e.target.value;
+                    setText(formatTextSmart(nextValue));
 
-                        if (/\s$/.test(nextValue)) {
-                          const typedWords = nextValue
-                            .trim()
-                            .toLowerCase()
-                            .split(/\s+/)
-                            .filter(Boolean);
+                    if (/\s$/.test(nextValue)) {
+                      const typedWords = nextValue
+                        .trim()
+                        .toLowerCase()
+                        .split(/\s+/)
+                        .filter(Boolean);
 
-                          const lastTypedWord = typedWords[typedWords.length - 1];
-                          if (lastTypedWord) {
-                            saveWordToHistory(lastTypedWord);
-                          }
-                        }
-                      }}
-                      style={styles.textarea}
-                      placeholder="Écrire ici..."
-                    />
+                      const lastTypedWord = typedWords[typedWords.length - 1];
+                      if (lastTypedWord) {
+                        saveWordToHistory(lastTypedWord);
+                      }
+                    }
+                  }}
+                  style={styles.textarea}
+                  placeholder="Écrire ici..."
+                />
 
-                    <div
-                      style={{
-                        marginTop: isCompactLayout ? 8 : 12,
-                        display: "grid",
-                        gridTemplateColumns:
-                          window.innerWidth > 900
-                            ? "repeat(3, minmax(0, 1fr))"
-                            : isCompactLayout
-                              ? "repeat(2, minmax(0, 1fr))"
-                              : "1fr",
-                        gap: isCompactLayout ? 6 : 12,
-                      }}
-                    >
-                      <button
-                        aria-label={isListening ? "Arrêter la dictée" : "Dicter"}
-                        title={isListening ? "Arrêter la dictée" : "Dicter"}
-                        style={{
-                          ...(isListening
-                            ? styles.recordingButton
-                            : styles.primaryButton),
-                          minHeight: isCompactLayout ? 42 : undefined,
-                          padding: isCompactLayout ? "7px 8px" : undefined,
-                          borderRadius: isCompactLayout ? 14 : undefined,
-                          fontSize: isCompactLayout ? 14 : undefined,
-                          lineHeight: isCompactLayout ? 1.1 : undefined,
-                        }}
-                        onClick={isListening ? stopDictation : startDictation}
-                      >
-                        {isListening ? "⏹" : "🎙"}
-                      </button>
+                <div
+                  style={{
+                    marginTop: isCompactLayout ? 8 : 12,
+                    display: "grid",
+                    gridTemplateColumns:
+                      window.innerWidth > 900
+                        ? "repeat(3, minmax(0, 1fr))"
+                        : isCompactLayout
+                          ? "repeat(3, minmax(0, 1fr))"
+                          : "1fr",
+                    gap: isCompactLayout ? 6 : 12,
+                  }}
+                >
+                  <button
+                    aria-label={isListening ? "Arrêter la dictée" : "Dicter"}
+                    title={isListening ? "Arrêter la dictée" : "Dicter"}
+                    style={{
+                      ...(isListening
+                        ? styles.recordingButton
+                        : styles.primaryButton),
+                      minHeight: isCompactLayout ? 34 : undefined,
+                      padding: isCompactLayout ? "5px 6px" : undefined,
+                      borderRadius: isCompactLayout ? 11 : undefined,
+                      fontSize: isCompactLayout ? 13 : undefined,
+                      lineHeight: isCompactLayout ? 1.1 : undefined,
+                    }}
+                    onClick={isListening ? stopDictation : startDictation}
+                  >
+                    {isListening ? "⏹" : "🎙"}
+                  </button>
 
-                      <button
-                        aria-label="Écouter"
-                        title="Écouter"
-                        style={{
-                          ...styles.secondaryButton,
-                          minHeight: isCompactLayout ? 42 : undefined,
-                          padding: isCompactLayout ? "7px 8px" : undefined,
-                          borderRadius: isCompactLayout ? 14 : undefined,
-                          fontSize: isCompactLayout ? 14 : undefined,
-                          lineHeight: isCompactLayout ? 1.1 : undefined,
-                        }}
-                        onClick={() => speakText(text)}
-                      >
-                        ▶
-                      </button>
+                  <button
+                    aria-label="Écouter"
+                    title="Écouter"
+                    style={{
+                      ...styles.secondaryButton,
+                      minHeight: isCompactLayout ? 34 : undefined,
+                      padding: isCompactLayout ? "5px 6px" : undefined,
+                      borderRadius: isCompactLayout ? 11 : undefined,
+                      fontSize: isCompactLayout ? 13 : undefined,
+                      lineHeight: isCompactLayout ? 1.1 : undefined,
+                    }}
+                    onClick={() => speakText(text)}
+                  >
+                    ▶
+                  </button>
 
-                      <button
-                        aria-label="Stop voix"
-                        title="Stop voix"
-                        style={{
-                          ...styles.secondaryButton,
-                          gridColumn: isCompactLayout ? "1 / -1" : undefined,
-                          minHeight: isCompactLayout ? 42 : undefined,
-                          padding: isCompactLayout ? "7px 8px" : undefined,
-                          borderRadius: isCompactLayout ? 14 : undefined,
-                          fontSize: isCompactLayout ? 14 : undefined,
-                          lineHeight: isCompactLayout ? 1.1 : undefined,
-                        }}
-                        onClick={stopSpeaking}
-                      >
-                        ⏹
-                      </button>
-                    </div>
-                  </>
-                ) : (
-                  <VirtualKeyboard
-                    text={text}
-                    setText={setText}
-                    saveWordToHistory={saveWordToHistory}
-                    speakText={speakText}
-                    stopSpeaking={stopSpeaking}
-                    styles={styles}
-                  />
-                )}
+                  <button
+                    aria-label="Stop voix"
+                    title="Stop voix"
+                    style={{
+                      ...styles.secondaryButton,
+                      minHeight: isCompactLayout ? 34 : undefined,
+                      padding: isCompactLayout ? "5px 6px" : undefined,
+                      borderRadius: isCompactLayout ? 11 : undefined,
+                      fontSize: isCompactLayout ? 13 : undefined,
+                      lineHeight: isCompactLayout ? 1.1 : undefined,
+                    }}
+                    onClick={stopSpeaking}
+                  >
+                    ⏹
+                  </button>
+                </div>
               </div>
 
               <div

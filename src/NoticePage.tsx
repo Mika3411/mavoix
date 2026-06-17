@@ -17,8 +17,7 @@ export type SectionKey =
   | "infos"
   | "aidant"
   | "sauvegarde"
-  | "confidentialite"
-  | "telechargement";
+  | "confidentialite";
 
 type Section = {
   key: SectionKey;
@@ -143,7 +142,6 @@ export default function NoticePage({
                   "9. Téléphone aidant",
                   "10. Sauvegarde, sécurité et données locales",
                   "11. Confidentialité et RGPD",
-                  "12. Téléchargement et installation",
                 ]}
               />
             </NoticeBlock>
@@ -228,7 +226,7 @@ export default function NoticePage({
                   "Communication : accès aux boutons de phrases rapides.",
                   "Parler : saisie libre, dictée, lecture vocale et envoi de messages.",
                   "Infos : fiche récapitulative d'identité, santé, traitements et contacts d'urgence.",
-                  "Menu : accès à Voix, Configurer, Aidants, Dictionnaire, Téléchargement, Notice et Soutenez-moi.",
+                  "Menu : accès à Voix, Configurer, Aidants, Dictionnaire, Notice et Soutenez-moi.",
                   "Le bouton Plein écran permet d'agrandir l'application pour une utilisation plus confortable.",
                   "La cloche orange en bas de l'écran envoie l'appel aidant configuré.",
                 ]}
@@ -733,65 +731,12 @@ export default function NoticePage({
           </>
         ),
       },
-      {
-        key: "telechargement",
-        label: "Téléchargement",
-        title: "Téléchargement et installation",
-        content: (
-          <>
-            <NoticeBlock>
-              <NoticeParagraph>
-                La page Téléchargement est disponible dans la version
-                Windows/Web. Elle propose la version adaptée à l'appareil
-                détecté.
-              </NoticeParagraph>
-            </NoticeBlock>
-
-            <NoticeBlock title="Ordinateur">
-              <NoticeList
-                items={[
-                  "Sur ordinateur, l'application peut être installée comme PWA quand le navigateur le permet.",
-                  "L'installation PWA fonctionne sur Windows, Mac ou Linux selon le navigateur.",
-                  "Le bouton d'installation apparaît seulement quand l'appareil et le navigateur sont compatibles.",
-                ]}
-              />
-            </NoticeBlock>
-
-            <NoticeBlock title="Android">
-              <NoticeList
-                items={[
-                  "Sur Android, la page peut proposer le téléchargement de l'application.",
-                  "Le fichier téléchargé permet d'installer Ma Voix sur smartphone ou tablette Android.",
-                  "Le bouton de téléchargement Android est affiché uniquement depuis un appareil Android.",
-                ]}
-              />
-            </NoticeBlock>
-
-            <NoticeBlock title="Autres appareils">
-              <NoticeParagraph>
-                Si l'appareil n'est pas reconnu comme ordinateur compatible ou
-                Android, les boutons de téléchargement peuvent être masqués.
-                Ouvrez alors la page depuis l'appareil voulu.
-              </NoticeParagraph>
-            </NoticeBlock>
-          </>
-        ),
-      },
     ],
     []
   );
 
   const currentSection =
     sections.find((item) => item.key === section) ?? sections[0];
-
-  const getButtonStyle = (key: SectionKey): React.CSSProperties => ({
-    ...(section === key ? styles.primaryButton : styles.secondaryButton),
-    padding: "10px 16px",
-    borderRadius: 14,
-    fontSize: 16,
-    fontWeight: 700,
-    whiteSpace: "nowrap",
-  });
 
   return (
     <div
@@ -828,27 +773,66 @@ export default function NoticePage({
           ...styles.card,
           display: "flex",
           flexDirection: "column",
-          gap: 16,
+          gap: 10,
         }}
       >
         <h3 style={{ margin: 0, fontSize: 24 }}>Rubriques de la notice</h3>
 
         <div
           style={{
-            display: "flex",
-            flexWrap: "wrap",
-            gap: 12,
+            position: "relative",
+            width: "100%",
           }}
         >
-          {sections.map((item) => (
-            <button
-              key={item.key}
-              onClick={() => setSection(item.key)}
-              style={getButtonStyle(item.key)}
-            >
-              {item.label}
-            </button>
-          ))}
+          <select
+            value={section}
+            onChange={(event) => setSection(event.target.value as SectionKey)}
+            style={{
+              ...styles.input,
+              marginTop: 0,
+              minHeight: 50,
+              padding: "10px 42px 10px 12px",
+              borderRadius: 14,
+              fontSize: 17,
+              fontWeight: 800,
+              appearance: "none",
+              WebkitAppearance: "none",
+            }}
+            aria-label="Choisir une rubrique de la notice"
+          >
+            {sections.map((item) => (
+              <option key={item.key} value={item.key}>
+                {item.label}
+              </option>
+            ))}
+          </select>
+          <span
+            aria-hidden="true"
+            style={{
+              position: "absolute",
+              right: 14,
+              top: "50%",
+              transform: "translateY(-50%)",
+              pointerEvents: "none",
+              fontSize: 16,
+              fontWeight: 900,
+              opacity: 0.72,
+            }}
+          >
+            ▾
+          </span>
+        </div>
+
+        <div
+          style={{
+            ...styles.infoBox,
+            padding: "10px 12px",
+            borderRadius: 14,
+            fontWeight: 800,
+            lineHeight: 1.35,
+          }}
+        >
+          {currentSection.title}
         </div>
       </div>
 

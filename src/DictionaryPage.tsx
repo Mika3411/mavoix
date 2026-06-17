@@ -107,6 +107,25 @@ export default function DictionaryPage({ styles }: { styles: any }) {
       entry.abbreviation === previewAbbreviation &&
       editingAbbreviation !== previewAbbreviation
   );
+  const compactListButtonStyle = {
+    ...styles.secondaryButton,
+    minHeight: 36,
+    padding: "7px 10px",
+    borderRadius: 12,
+    fontSize: 14,
+    lineHeight: 1.1,
+    boxShadow: "none",
+  };
+  const compactDeleteButtonStyle = {
+    ...styles.deleteButton,
+    minHeight: 36,
+    height: 36,
+    minWidth: 86,
+    padding: "7px 10px",
+    borderRadius: 12,
+    fontSize: 13,
+    lineHeight: 1.1,
+  };
 
   return (
     <div style={styles.gridSingle}>
@@ -117,13 +136,15 @@ export default function DictionaryPage({ styles }: { styles: any }) {
           onSubmit={handleSubmit}
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-            gap: 12,
+            gridTemplateColumns: "minmax(92px, 0.42fr) minmax(0, 1fr)",
+            columnGap: 8,
+            rowGap: 12,
             alignItems: "end",
             marginBottom: 16,
+            minWidth: 0,
           }}
         >
-          <div style={styles.formGroup}>
+          <div style={{ ...styles.formGroup, marginBottom: 0, minWidth: 0 }}>
             <label style={styles.label}>Abréviation</label>
             <input
               value={abbreviation}
@@ -136,7 +157,7 @@ export default function DictionaryPage({ styles }: { styles: any }) {
             />
           </div>
 
-          <div style={styles.formGroup}>
+          <div style={{ ...styles.formGroup, marginBottom: 0, minWidth: 0 }}>
             <label style={styles.label}>Texte</label>
             <input
               value={expansion}
@@ -153,7 +174,7 @@ export default function DictionaryPage({ styles }: { styles: any }) {
             type="submit"
             style={{
               ...styles.primaryButton,
-              marginBottom: 12,
+              gridColumn: "1 / -1",
               width: "100%",
             }}
             disabled={!previewAbbreviation || !expansion.trim()}
@@ -206,7 +227,7 @@ export default function DictionaryPage({ styles }: { styles: any }) {
           ) : null}
         </div>
 
-        <div style={{ display: "grid", gap: 10 }}>
+        <div style={{ display: "grid", gap: 8 }}>
           {filteredEntries.length === 0 ? (
             <div style={styles.emptyText}>Aucune entrée trouvée.</div>
           ) : (
@@ -216,41 +237,63 @@ export default function DictionaryPage({ styles }: { styles: any }) {
                 style={{
                   ...styles.categoryManagerBox,
                   display: "grid",
-                  gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-                  gap: 12,
+                  gridTemplateColumns: "minmax(0, 1fr) auto",
+                  gap: 10,
                   alignItems: "center",
+                  padding: "10px 12px",
+                  borderRadius: 16,
+                  minWidth: 0,
                 }}
               >
-                <div>
-                  <div style={{ fontSize: 13, opacity: 0.72 }}>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 12, lineHeight: 1.1, opacity: 0.72 }}>
                     {getSourceLabel(entry.source)}
                   </div>
                   <div
                     style={{
-                      fontSize: 22,
-                      fontWeight: 900,
-                      color: "inherit",
+                      display: "flex",
+                      alignItems: "baseline",
+                      gap: 10,
+                      flexWrap: "wrap",
+                      marginTop: 4,
+                      minWidth: 0,
                     }}
                   >
-                    {entry.abbreviation}
+                    <span
+                      style={{
+                        fontSize: 24,
+                        fontWeight: 900,
+                        color: "inherit",
+                        lineHeight: 1.05,
+                      }}
+                    >
+                      {entry.abbreviation}
+                    </span>
+                    <span
+                      style={{
+                        fontSize: 16,
+                        lineHeight: 1.25,
+                        minWidth: 0,
+                        overflowWrap: "anywhere",
+                      }}
+                    >
+                      {entry.expansion}
+                    </span>
                   </div>
-                </div>
-
-                <div style={{ fontSize: 18, lineHeight: 1.45 }}>
-                  {entry.expansion}
                 </div>
 
                 <div
                   style={{
                     display: "flex",
-                    gap: 8,
+                    gap: 6,
                     justifyContent: "flex-end",
-                    flexWrap: "wrap",
+                    flexWrap: "nowrap",
+                    alignItems: "center",
                   }}
                 >
                   <button
                     type="button"
-                    style={styles.secondaryButton}
+                    style={compactListButtonStyle}
                     onClick={() => handleEdit(entry)}
                   >
                     Modifier
@@ -259,7 +302,7 @@ export default function DictionaryPage({ styles }: { styles: any }) {
                   {entry.source === "modifié" ? (
                     <button
                       type="button"
-                      style={styles.secondaryButton}
+                      style={compactListButtonStyle}
                       onClick={() => handleReset(entry)}
                     >
                       Réinitialiser
@@ -268,7 +311,7 @@ export default function DictionaryPage({ styles }: { styles: any }) {
 
                   <button
                     type="button"
-                    style={styles.deleteButton}
+                    style={compactDeleteButtonStyle}
                     onClick={() => handleDelete(entry)}
                   >
                     {deleteCandidate === entry.abbreviation

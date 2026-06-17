@@ -120,7 +120,6 @@ export default function App() {
 
   const [toastMessage, setToastMessage] = useState("");
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [isNavHidden, setIsNavHidden] = useState(false);
   const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
   const [viewportWidth, setViewportWidth] = useState(getInitialViewportWidth);
   const [isPhraseEditMode, setIsPhraseEditMode] = useState(false);
@@ -132,6 +131,7 @@ export default function App() {
   );
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const moreMenuRef = useRef<HTMLDivElement | null>(null);
 
   const {
     profiles,
@@ -177,6 +177,7 @@ export default function App() {
   const activeTheme = getActiveTheme(currentProfile);
   const styles = createStyles(activeTheme);
   const isCompactLayout = viewportWidth <= 640;
+  const canShowDownloadPage = downloadDevice !== "other";
   const caregiverAlertTargets = useMemo<CaregiverAlertTarget[]>(
     () =>
       ensureCaregiverAlertLinks(
@@ -721,7 +722,47 @@ export default function App() {
     if (page !== "communication") {
       setIsPhraseEditMode(false);
     }
-  }, [page, isNavHidden]);
+  }, [page]);
+
+  useEffect(() => {
+    if (page === "telechargement" && !canShowDownloadPage) {
+      setPage("communication");
+    }
+  }, [canShowDownloadPage, page]);
+
+  useEffect(() => {
+    if (!isMoreMenuOpen) return;
+
+    function closeMenusOnOutsidePointer(event: PointerEvent) {
+      const target = event.target;
+      if (
+        target instanceof Node &&
+        moreMenuRef.current?.contains(target)
+      ) {
+        return;
+      }
+
+      setIsMoreMenuOpen(false);
+    }
+
+    function closeMenusOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setIsMoreMenuOpen(false);
+      }
+    }
+
+    window.addEventListener("pointerdown", closeMenusOnOutsidePointer, true);
+    window.addEventListener("keydown", closeMenusOnEscape);
+
+    return () => {
+      window.removeEventListener(
+        "pointerdown",
+        closeMenusOnOutsidePointer,
+        true
+      );
+      window.removeEventListener("keydown", closeMenusOnEscape);
+    };
+  }, [isMoreMenuOpen]);
 
   useEffect(() => {
     const styleId = "global-button-interactions";
@@ -805,12 +846,6 @@ export default function App() {
             ...styles.header,
             gap: isCompactLayout ? 10 : 16,
             alignItems: isCompactLayout ? "flex-start" : "center",
-            transform: isNavHidden
-              ? isCompactLayout
-                ? "translateY(calc(-100% - 4px))"
-                : "translateY(calc(-100% + 18px))"
-              : "translateY(0)",
-            transition: "transform 0.3s ease",
             position: "relative",
             zIndex: 20,
           }}
@@ -861,7 +896,7 @@ export default function App() {
               width: isCompactLayout ? "100%" : undefined,
               display: isCompactLayout ? "grid" : "flex",
               gridTemplateColumns: isCompactLayout
-                ? "repeat(2, minmax(0, 1fr))"
+                ? "minmax(92px, 1.35fr) minmax(56px, 0.85fr) minmax(48px, 0.7fr) minmax(38px, 0.45fr)"
                 : undefined,
             }}
           >
@@ -870,11 +905,11 @@ export default function App() {
                 ...(page === "communication"
                   ? styles.primaryButton
                   : styles.secondaryButton),
-                padding: isCompactLayout ? "6px 8px" : "6px 18px",
-                fontSize: isCompactLayout ? 13 : 15,
+                padding: isCompactLayout ? "4px 6px" : "6px 18px",
+                fontSize: isCompactLayout ? 12 : 15,
                 width: isCompactLayout ? "100%" : undefined,
-                minHeight: isCompactLayout ? 42 : undefined,
-                borderRadius: isCompactLayout ? 14 : undefined,
+                minHeight: isCompactLayout ? 34 : undefined,
+                borderRadius: isCompactLayout ? 11 : undefined,
                 lineHeight: isCompactLayout ? 1.1 : undefined,
               }}
               onClick={() => setPage("communication")}
@@ -888,11 +923,11 @@ export default function App() {
                   ...(page === "reglages"
                     ? styles.primaryButton
                     : styles.secondaryButton),
-                  padding: isCompactLayout ? "6px 8px" : "12px 14px",
-                  fontSize: isCompactLayout ? 13 : 15,
+                  padding: isCompactLayout ? "4px 6px" : "12px 14px",
+                  fontSize: isCompactLayout ? 12 : 15,
                   width: isCompactLayout ? "100%" : undefined,
-                  minHeight: isCompactLayout ? 42 : undefined,
-                  borderRadius: isCompactLayout ? 14 : undefined,
+                  minHeight: isCompactLayout ? 34 : undefined,
+                  borderRadius: isCompactLayout ? 11 : undefined,
                   lineHeight: isCompactLayout ? 1.1 : undefined,
                 }
               }
@@ -907,11 +942,11 @@ export default function App() {
                   ...(page === "infos"
                     ? styles.primaryButton
                     : styles.secondaryButton),
-                  padding: isCompactLayout ? "6px 8px" : "12px 14px",
-                  fontSize: isCompactLayout ? 13 : 15,
+                  padding: isCompactLayout ? "4px 6px" : "12px 14px",
+                  fontSize: isCompactLayout ? 12 : 15,
                   width: isCompactLayout ? "100%" : undefined,
-                  minHeight: isCompactLayout ? 42 : undefined,
-                  borderRadius: isCompactLayout ? 14 : undefined,
+                  minHeight: isCompactLayout ? 34 : undefined,
+                  borderRadius: isCompactLayout ? 11 : undefined,
                   lineHeight: isCompactLayout ? 1.1 : undefined,
                 }
               }
@@ -921,6 +956,7 @@ export default function App() {
             </button>
 
             <div
+              ref={moreMenuRef}
               style={{
                 position: "relative",
                 width: isCompactLayout ? "100%" : undefined,
@@ -935,11 +971,11 @@ export default function App() {
                 onClick={() => setIsMoreMenuOpen((prev) => !prev)}
                 style={{
                   ...styles.secondaryButton,
-                  padding: isCompactLayout ? "6px 8px" : "6px 18px",
-                  fontSize: isCompactLayout ? 13 : 15,
+                  padding: isCompactLayout ? "4px 6px" : "6px 18px",
+                  fontSize: isCompactLayout ? 12 : 15,
                   width: isCompactLayout ? "100%" : undefined,
-                  minHeight: isCompactLayout ? 42 : undefined,
-                  borderRadius: isCompactLayout ? 14 : undefined,
+                  minHeight: isCompactLayout ? 34 : undefined,
+                  borderRadius: isCompactLayout ? 11 : undefined,
                   lineHeight: isCompactLayout ? 1.1 : undefined,
                 }}
               >
@@ -1010,16 +1046,6 @@ export default function App() {
                   </button>
 
                   <button
-                    style={page === "telechargement" ? styles.primaryButton : styles.secondaryButton}
-                    onClick={() => {
-                      setPage("telechargement");
-                      setIsMoreMenuOpen(false);
-                    }}
-                  >
-                    Téléchargement
-                  </button>
-
-                  <button
                     style={page === "notice" ? styles.primaryButton : styles.secondaryButton}
                     onClick={() => openNoticeSection()}
                   >
@@ -1054,50 +1080,11 @@ export default function App() {
           </div>
         </div>
 
-        <button
-          onClick={() => setIsNavHidden((prev) => !prev)}
-          aria-label={isNavHidden ? "Afficher la barre de navigation" : "Masquer la barre de navigation"}
-          title={isNavHidden ? "Afficher la navigation" : "Masquer la navigation"}
-          style={{
-            position: isCompactLayout && !isNavHidden ? "relative" : "absolute",
-            top: isCompactLayout && !isNavHidden ? "auto" : isNavHidden ? 18 : 108,
-            left: isCompactLayout && !isNavHidden ? "auto" : "50%",
-            transform:
-              isCompactLayout && !isNavHidden ? "none" : "translateX(-50%)",
-            alignSelf: isCompactLayout && !isNavHidden ? "center" : undefined,
-            margin: isCompactLayout && !isNavHidden ? "-2px auto 8px" : undefined,
-            flexShrink: 0,
-            zIndex: 30,
-            width: 56,
-            height: 28,
-            borderRadius:
-              isCompactLayout && !isNavHidden ? "16px" : "0 0 16px 16px",
-            border: "none",
-            background: activeTheme?.cardBackground || "#1e293b",
-            color: activeTheme?.textColor || "#ffffff",
-            fontSize: 18,
-            fontWeight: 700,
-            cursor: "pointer",
-            boxShadow: "0 8px 20px rgba(0,0,0,0.18)",
-            opacity: isMoreMenuOpen ? 0 : 1,
-            pointerEvents: isMoreMenuOpen ? "none" : "auto",
-            transition: "top 0.3s ease, transform 0.2s ease, opacity 0.2s ease",
-          }}
-        >
-          {isNavHidden ? "↓" : "↑"}
-        </button>
-
         <div
           style={{
             flex: 1,
             display: "flex",
             flexDirection: "column",
-            marginTop: isNavHidden
-              ? isCompactLayout
-                ? "-150px"
-                : "-90px"
-              : "0px",
-            transition: "margin-top 0.3s ease",
             minHeight: 0,
             overflow: "hidden",
           }}
@@ -1159,7 +1146,7 @@ export default function App() {
             currentProfile={currentProfile}
             onSpeak={(message) => speakText(message, "default")}
           />
-        ) : page === "telechargement" ? (
+        ) : page === "telechargement" && canShowDownloadPage ? (
           <div
             style={{
               padding: 20,

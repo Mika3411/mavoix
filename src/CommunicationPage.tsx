@@ -115,16 +115,15 @@ export default function CommunicationPage(props: any) {
                   {item.text}
                 </button>
 
-                <div
-                  style={{
-                    ...styles.quickPhraseActions,
-                    gap: 6,
-                    justifyContent: isEditMode ? "space-between" : "flex-end",
-                    flexWrap: "wrap",
-                  }}
-                >
-                  {isEditMode && (
-                    <>
+                {isEditMode && (
+                  <div
+                    style={{
+                      ...styles.quickPhraseActions,
+                      gap: 6,
+                      justifyContent: "space-between",
+                      flexWrap: "wrap",
+                    }}
+                  >
                       <button
                         onClick={() => movePhrase(item.id, "up")}
                         style={{
@@ -154,35 +153,32 @@ export default function CommunicationPage(props: any) {
                       >
                         ⬇
                       </button>
-                    </>
-                  )}
 
-                  <button
-                    onClick={() =>
-                      updatePhrase(item.id, "favorite", !item.favorite)
-                    }
-                    style={{
-                      ...styles.favoriteButton,
-                      width: 44,
-                      minWidth: 44,
-                      height: 44,
-                      fontSize: 18,
-                    }}
-                    title={
-                      item.favorite
-                        ? "Retirer des favoris"
-                        : "Ajouter aux favoris"
-                    }
-                    aria-label={
-                      item.favorite
-                        ? `Retirer ${item.label || item.text} des favoris`
-                        : `Ajouter ${item.label || item.text} aux favoris`
-                    }
-                  >
-                    {item.favorite ? "⭐" : "☆"}
-                  </button>
+                    <button
+                      onClick={() =>
+                        updatePhrase(item.id, "favorite", !item.favorite)
+                      }
+                      style={{
+                        ...styles.favoriteButton,
+                        width: 44,
+                        minWidth: 44,
+                        height: 44,
+                        fontSize: 18,
+                      }}
+                      title={
+                        item.favorite
+                          ? "Retirer des favoris"
+                          : "Ajouter aux favoris"
+                      }
+                      aria-label={
+                        item.favorite
+                          ? `Retirer ${item.label || item.text} des favoris`
+                          : `Ajouter ${item.label || item.text} aux favoris`
+                      }
+                    >
+                      {item.favorite ? "⭐" : "☆"}
+                    </button>
 
-                  {isEditMode && (
                     <button
                       onClick={() => deletePhrase(item.id)}
                       style={{
@@ -195,8 +191,8 @@ export default function CommunicationPage(props: any) {
                     >
                       Supprimer
                     </button>
-                  )}
-                </div>
+                  </div>
+                )}
               </div>
             ))}
           </div>

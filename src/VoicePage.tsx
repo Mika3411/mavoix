@@ -30,10 +30,27 @@ export default function VoicePage(props: any) {
   );
 
   const voicesToDisplay = visibleVoices.length > 0 ? visibleVoices : voices;
+  const voicePageGridStyle: React.CSSProperties = {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(360px, 100%), 1fr))",
+    gap: 10,
+    width: "100%",
+    maxWidth: "100%",
+    minWidth: 0,
+    overflow: "hidden",
+  };
+  const voiceCardStyle: React.CSSProperties = {
+    ...styles.card,
+    width: "100%",
+    maxWidth: "100%",
+    minWidth: 0,
+    boxSizing: "border-box",
+    overflow: "hidden",
+  };
 
   return (
-    <div style={styles.grid}>
-      <div style={styles.card}>
+    <div style={voicePageGridStyle}>
+      <div style={voiceCardStyle}>
         <h2 style={styles.sectionTitle}>Réglages voix</h2>
 
         <div style={styles.formGroup}>
@@ -192,7 +209,7 @@ export default function VoicePage(props: any) {
         </div>
       </div>
 
-      <div style={styles.card}>
+      <div style={voiceCardStyle}>
         <h2 style={styles.sectionTitle}>Voix personnalisées</h2>
 
         {savedPhrases.length === 0 ? (
