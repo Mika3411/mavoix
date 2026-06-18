@@ -162,6 +162,8 @@ export default function App() {
     createNewProfile,
     duplicateCurrentProfile,
     deleteCurrentProfile,
+    exportCurrentProfile,
+    importCurrentProfile,
     exportAllProfiles,
     importAllProfiles,
   } = useProfiles();
@@ -1436,6 +1438,8 @@ export default function App() {
             createNewProfile={() => createNewProfile({ onAfterCreate: () => { setFilter("Toutes"); setCategory("Général"); } })}
             duplicateCurrentProfile={duplicateCurrentProfile}
             deleteCurrentProfile={() => deleteCurrentProfile({ onAfterDelete: () => { setFilter("Toutes"); setCategory("Général"); } })}
+            exportCurrentProfile={exportCurrentProfile}
+            importCurrentProfile={(event) => importCurrentProfile(event, { onAfterImport: () => { setFilter("Toutes"); setCategory("Général"); } })}
             exportAllProfiles={exportAllProfiles}
             importAllProfiles={(event) => importAllProfiles(event, { onAfterImport: () => { setFilter("Toutes"); setCategory("Général"); } })}
             fileInputRef={fileInputRef}

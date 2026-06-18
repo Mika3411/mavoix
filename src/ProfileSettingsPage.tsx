@@ -33,6 +33,8 @@ export default function ProfileSettingsPage(props: any) {
     createNewProfile,
     duplicateCurrentProfile,
     deleteCurrentProfile,
+    exportCurrentProfile,
+    importCurrentProfile,
     exportAllProfiles,
     importAllProfiles,
     fileInputRef,
@@ -1821,13 +1823,31 @@ export default function ProfileSettingsPage(props: any) {
               <button
                 type="button"
                 style={securityActionButtonStyle}
-                onClick={exportAllProfiles}
+                onClick={exportCurrentProfile}
               >
-                Exporter
+                Exporter ce profil
               </button>
 
               <label style={{ ...securityActionButtonStyle, cursor: "pointer" }}>
-                Importer
+                Importer un profil
+                <input
+                  type="file"
+                  accept="application/json"
+                  onChange={importCurrentProfile}
+                  style={{ display: "none" }}
+                />
+              </label>
+
+              <button
+                type="button"
+                style={securityActionButtonStyle}
+                onClick={exportAllProfiles}
+              >
+                Exporter tous les profils
+              </button>
+
+              <label style={{ ...securityActionButtonStyle, cursor: "pointer" }}>
+                Importer tous les profils
                 <input
                   ref={fileInputRef}
                   type="file"

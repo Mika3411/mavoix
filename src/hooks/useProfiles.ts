@@ -22,6 +22,41 @@ import {
   readExportableAbbreviationDictionary,
 } from "../utils/textFormatting";
 
+function normalizeImportedProfile(profile: Partial<Profile>): Profile {
+  return ensureProfile({
+    ...profile,
+    pinProtection: {
+      enabled: Boolean((profile as any)?.pinProtection?.enabled),
+      pin: String((profile as any)?.pinProtection?.pin || "").replace(/\D/g, "").slice(0, 4),
+    },
+  } as Profile);
+}
+
+function safeFilePart(value: string) {
+  return String(value || "profil")
+    .trim()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9_-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60) || "profil";
+}
+
+function saveJsonFile(fileName: string, data: unknown) {
+  const blob = new Blob([JSON.stringify(data, null, 2)], {
+    type: "application/json",
+  });
+
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
 export default function useProfiles() {
   const [initialSnapshot] = useState(() => {
     const fallbackProfiles = [ensureProfile(createProfile() as Profile)];
@@ -500,17 +535,67 @@ export default function useProfiles() {
       abbreviationDictionary: readExportableAbbreviationDictionary(),
     };
 
-    const blob = new Blob([JSON.stringify(data, null, 2)], {
-      type: "application/json",
-    });
+    saveJsonFile(
+      `ma-voix-profils-${new Date().toISOString().slice(0, 10)}.json`,
+      data
+    );
+    alert("Export enregistré avec succès.");
+  }, [
+    currentProfileId,
+    privacyStatus.protectedAtRest,
+    privacyStatus.passwordProtected,
+    privateDataLoaded,
+    profiles,
+  ]);
 
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "ma-voix-profils.json";
-      link.click();
-      URL.revokeObjectURL(url);
-  }, [currentProfileId, privacyStatus.protectedAtRest, privateDataLoaded, profiles]);
+  const exportCurrentProfile = useCallback(() => {
+    if (!privateDataLoaded) {
+      alert("Les données médicales protégées sont encore en cours de chargement.");
+      return;
+    }
+
+    if (!currentProfile) {
+      alert("Aucun profil à exporter.");
+      return;
+    }
+
+    if (
+      typeof window !== "undefined" &&
+      !window.confirm(
+        "L'export contient les informations médicales et personnelles de ce profil en clair. Continuer ?"
+      )
+    ) {
+      return;
+    }
+
+    const data = {
+      appName: "Ma Voix",
+      version: 1,
+      exportType: "profile",
+      exportDate: new Date().toISOString(),
+      privacy: {
+        containsSensitiveMedicalData: true,
+        localStorageProtectedAtRest: privacyStatus.protectedAtRest,
+        passwordProtected: privacyStatus.passwordProtected,
+      },
+      currentProfileId: currentProfile.id,
+      profile: currentProfile,
+      profiles: [currentProfile],
+      abbreviationDictionary: readExportableAbbreviationDictionary(),
+    };
+
+    const date = new Date().toISOString().slice(0, 10);
+    saveJsonFile(
+      `ma-voix-profil-${safeFilePart(currentProfile.name)}-${date}.json`,
+      data
+    );
+    alert("Profil exporté avec succès.");
+  }, [
+    currentProfile,
+    privacyStatus.protectedAtRest,
+    privacyStatus.passwordProtected,
+    privateDataLoaded,
+  ]);
 
   const importAllProfiles = useCallback((event: React.ChangeEvent<HTMLInputElement>, { onAfterImport }: UseProfilesOptions = {}) => {
     const file = event.target.files?.[0];
@@ -525,7 +610,9 @@ export default function useProfiles() {
           throw new Error("Fichier invalide");
         }
 
-        const normalizedProfiles = parsed.profiles.map((profile) => ensureProfile(profile));
+        const normalizedProfiles = parsed.profiles.map((profile) =>
+          normalizeImportedProfile(profile)
+        );
         const abbreviationDictionary =
           parsed.abbreviationDictionary || parsed.dictionary?.abbreviations;
         if (abbreviationDictionary) {
@@ -553,6 +640,77 @@ export default function useProfiles() {
 
     reader.readAsText(file);
   }, []);
+
+  const importCurrentProfile = useCallback((event: React.ChangeEvent<HTMLInputElement>, { onAfterImport }: UseProfilesOptions = {}) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const parsed = JSON.parse(String(reader.result || ""));
+        const rawProfile =
+          parsed.profile ||
+          (Array.isArray(parsed.profiles) && parsed.profiles.length > 0
+            ? parsed.profiles[0]
+            : null);
+
+        if (!rawProfile) {
+          throw new Error("Fichier invalide");
+        }
+
+        const abbreviationDictionary =
+          parsed.abbreviationDictionary || parsed.dictionary?.abbreviations;
+        if (abbreviationDictionary) {
+          importAbbreviationDictionary(abbreviationDictionary);
+        }
+
+        let importedProfile = normalizeImportedProfile(rawProfile);
+        const existingProfile = profiles.find(
+          (profile) => profile.id === importedProfile.id
+        );
+        const replaceExisting =
+          Boolean(existingProfile) &&
+          typeof window !== "undefined" &&
+          window.confirm(
+            "Ce profil existe déjà sur cet appareil. OK pour le remplacer, Annuler pour importer une copie."
+          );
+
+        if (existingProfile && !replaceExisting) {
+          importedProfile = {
+            ...importedProfile,
+            id: generateId(),
+            name: `${importedProfile.name || "Profil importé"} (importé)`,
+          };
+        }
+
+        setProfiles((previousProfiles) => {
+          const existingIndex = previousProfiles.findIndex(
+            (profile) => profile.id === importedProfile.id
+          );
+
+          if (existingIndex !== -1 && replaceExisting) {
+            return previousProfiles.map((profile, index) =>
+              index === existingIndex ? importedProfile : profile
+            );
+          }
+
+          return [...previousProfiles, importedProfile];
+        });
+
+        setCurrentProfileId(importedProfile.id);
+        onAfterImport?.(importedProfile, importedProfile.id);
+        alert("Profil importé avec succès.");
+      } catch (error) {
+        console.error(error);
+        alert("Le fichier de profil importé n'est pas valide.");
+      }
+
+      event.target.value = "";
+    };
+
+    reader.readAsText(file);
+  }, [profiles]);
 
   return {
     profiles,
@@ -584,6 +742,8 @@ export default function useProfiles() {
     createNewProfile,
     duplicateCurrentProfile,
     deleteCurrentProfile,
+    exportCurrentProfile,
+    importCurrentProfile,
     exportAllProfiles,
     importAllProfiles,
   };
