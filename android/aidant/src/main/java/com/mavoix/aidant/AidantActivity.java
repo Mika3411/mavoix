@@ -88,7 +88,10 @@ public class AidantActivity extends Activity {
   private final Set<String> connectedMessageIds = new HashSet<>();
 
   private SharedPreferences prefs;
-  private Spinner sectionSpinner;
+  private LinearLayout connectionTab;
+  private LinearLayout configTab;
+  private LinearLayout messagesTab;
+  private LinearLayout helpTab;
   private LinearLayout connectionPanel;
   private LinearLayout configPanel;
   private LinearLayout messagesPanel;
@@ -146,13 +149,17 @@ public class AidantActivity extends Activity {
   }
 
   private void buildLayout() {
+    LinearLayout screen = new LinearLayout(this);
+    screen.setOrientation(LinearLayout.VERTICAL);
+    screen.setBackgroundColor(COLOR_PAGE);
+
     ScrollView scrollView = new ScrollView(this);
     scrollView.setFillViewport(true);
     scrollView.setBackgroundColor(COLOR_PAGE);
 
     LinearLayout root = new LinearLayout(this);
     root.setOrientation(LinearLayout.VERTICAL);
-    root.setPadding(dp(22), dp(28), dp(22), dp(28));
+    root.setPadding(dp(22), dp(28), dp(22), dp(18));
     scrollView.addView(root);
 
     LinearLayout header = new LinearLayout(this);
@@ -165,19 +172,6 @@ public class AidantActivity extends Activity {
     logo.setScaleType(ImageView.ScaleType.FIT_START);
     LinearLayout.LayoutParams logoParams = new LinearLayout.LayoutParams(0, dp(72), 1);
     header.addView(logo, logoParams);
-
-    sectionSpinner = new Spinner(this);
-    ArrayAdapter<String> adapter = darkSpinnerAdapter(new String[] {
-        "Connexion",
-        "Configurer",
-        "Messages",
-        "Mode d'emploi"
-    });
-    adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-    sectionSpinner.setAdapter(adapter);
-    LinearLayout.LayoutParams menuParams = new LinearLayout.LayoutParams(dp(190), LinearLayout.LayoutParams.WRAP_CONTENT);
-    menuParams.setMargins(dp(12), 0, 0, 0);
-    header.addView(spinnerBox(sectionSpinner), menuParams);
 
     root.addView(header, spacedParams(0, 0, 0, dp(18)));
 
@@ -197,28 +191,18 @@ public class AidantActivity extends Activity {
     buildHelpPanel(helpPanel);
     root.addView(helpPanel, matchWrap());
 
-    sectionSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
-      @Override
-      public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
-        if (position == 1) {
-          showSection("configurer");
-        } else if (position == 2) {
-          showSection("messages");
-        } else if (position == 3) {
-          showSection("aide");
-        } else {
-          showSection("connexion");
-        }
-      }
-
-      @Override
-      public void onNothingSelected(AdapterView<?> parent) {
-        showSection("connexion");
-      }
-    });
+    screen.addView(
+        scrollView,
+        new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            0,
+            1f
+        )
+    );
+    screen.addView(buildBottomNavigation(), matchWrap());
     showSection("connexion");
 
-    setContentView(scrollView);
+    setContentView(screen);
   }
 
   private void buildConnectionPanel(LinearLayout panel) {
@@ -475,6 +459,94 @@ public class AidantActivity extends Activity {
     }
     renderMessages();
     renderUnreadMessages();
+    updateBottomNavigation();
+  }
+
+  private LinearLayout buildBottomNavigation() {
+    LinearLayout nav = new LinearLayout(this);
+    nav.setOrientation(LinearLayout.HORIZONTAL);
+    nav.setGravity(Gravity.CENTER);
+    nav.setPadding(dp(8), dp(6), dp(8), dp(8));
+    nav.setBackground(roundedStroke(COLOR_CARD, COLOR_BORDER, 0, 1));
+
+    connectionTab = bottomNavItem("⌁", "Connexion", "connexion");
+    configTab = bottomNavItem("☷", "Configurer", "configurer");
+    messagesTab = bottomNavItem("●", "Messages", "messages");
+    helpTab = bottomNavItem("?", "Aide", "aide");
+
+    nav.addView(connectionTab, bottomNavItemParams());
+    nav.addView(configTab, bottomNavItemParams());
+    nav.addView(messagesTab, bottomNavItemParams());
+    nav.addView(helpTab, bottomNavItemParams());
+    return nav;
+  }
+
+  private LinearLayout bottomNavItem(String icon, String label, String section) {
+    LinearLayout item = new LinearLayout(this);
+    item.setOrientation(LinearLayout.VERTICAL);
+    item.setGravity(Gravity.CENTER);
+    item.setPadding(dp(4), dp(4), dp(4), dp(4));
+    item.setMinimumHeight(dp(68));
+    item.setClickable(true);
+    item.setFocusable(true);
+    item.setContentDescription(label);
+    item.setOnClickListener(v -> showSection(section));
+
+    TextView iconView = new TextView(this);
+    iconView.setText(icon);
+    iconView.setTextSize(22);
+    iconView.setGravity(Gravity.CENTER);
+    iconView.setIncludeFontPadding(false);
+    item.addView(iconView, matchWrap());
+
+    TextView labelView = new TextView(this);
+    labelView.setText(label);
+    labelView.setTextSize(11);
+    labelView.setGravity(Gravity.CENTER);
+    labelView.setIncludeFontPadding(false);
+    item.addView(labelView, spacedParams(0, dp(4), 0, 0));
+
+    return item;
+  }
+
+  private LinearLayout.LayoutParams bottomNavItemParams() {
+    return new LinearLayout.LayoutParams(
+        0,
+        dp(70),
+        1f
+    );
+  }
+
+  private void updateBottomNavigation() {
+    styleBottomNavItem(connectionTab, "connexion".equals(currentSection));
+    styleBottomNavItem(configTab, "configurer".equals(currentSection));
+    styleBottomNavItem(messagesTab, "messages".equals(currentSection));
+    styleBottomNavItem(helpTab, "aide".equals(currentSection));
+  }
+
+  private void styleBottomNavItem(LinearLayout item, boolean selected) {
+    if (item == null) return;
+
+    int color = selected ? COLOR_PRIMARY : COLOR_MUTED;
+    item.setSelected(selected);
+    item.setBackground(
+        selected
+            ? roundedStroke(Color.rgb(15, 23, 42), Color.rgb(30, 64, 175), 18, 1)
+            : rounded(Color.TRANSPARENT, 18)
+    );
+
+    for (int index = 0; index < item.getChildCount(); index++) {
+      View child = item.getChildAt(index);
+      if (child instanceof TextView) {
+        TextView textView = (TextView) child;
+        textView.setTextColor(color);
+        textView.setTypeface(
+            selected
+                ? android.graphics.Typeface.DEFAULT_BOLD
+                : android.graphics.Typeface.DEFAULT
+        );
+      }
+    }
   }
 
   private Button primaryButton(String label, View.OnClickListener listener) {
