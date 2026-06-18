@@ -190,6 +190,11 @@ function removeCaregiverFcmToken(channel, token) {
   }
 }
 
+function countCaregiverFcmTokens(channel) {
+  const tokens = caregiverFcmTokens.get(channel);
+  return tokens ? tokens.size : 0;
+}
+
 function base64Url(value) {
   return Buffer.from(value)
     .toString("base64")
@@ -2044,6 +2049,43 @@ app.post("/api/caregiver-device-token", (req, res) => {
     platform,
     pushEnabled: isFcmConfigured(),
     tokenCount,
+  });
+});
+
+app.post("/api/caregiver-device-token/remove", (req, res) => {
+  const channel = sanitizeAlertChannel(req.body?.channel);
+  const platform = sanitizePushPlatform(req.body?.platform);
+
+  if (!channel) {
+    res.status(400).json({
+      error: "Canal invalide",
+      details: "Le lien aidant est incomplet ou invalide.",
+    });
+    return;
+  }
+
+  if (platform !== "android") {
+    res.status(400).json({
+      error: "Plateforme non supportee",
+      details: "Ce serveur accepte uniquement les tokens Android FCM.",
+    });
+    return;
+  }
+
+  const token = sanitizeFcmToken(req.body?.token);
+  if (!token) {
+    res.status(400).json({
+      error: "Parametres invalides",
+      details: "Le token Android est invalide.",
+    });
+    return;
+  }
+
+  removeCaregiverFcmToken(channel, token);
+  res.json({
+    success: true,
+    platform,
+    tokenCount: countCaregiverFcmTokens(channel),
   });
 });
 
