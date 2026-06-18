@@ -2,7 +2,8 @@ require("dotenv").config();
 
 const express = require("express");
 const cors = require("cors");
-const { randomUUID } = require("crypto");
+const https = require("https");
+const { createPrivateKey, randomUUID, sign } = require("crypto");
 const fs = require("fs");
 const path = require("path");
 
@@ -89,16 +90,38 @@ function sanitizeAlertChannel(value) {
   return /^[a-zA-Z0-9_-]{12,80}$/.test(cleanValue) ? cleanValue : "";
 }
 
+function sanitizeFcmToken(value) {
+  if (typeof value !== "string") return "";
+  const cleanValue = value.trim();
+  return /^[A-Za-z0-9:_-]{20,4096}$/.test(cleanValue) ? cleanValue : "";
+}
+
+function sanitizePushPlatform(value) {
+  return value === "android" ? "android" : "ios";
+}
+
+function sanitizeAndroidPackageName(value) {
+  if (typeof value !== "string") return "com.mavoix.aidant";
+  const cleanValue = value.trim();
+  return /^[A-Za-z0-9._]{3,160}$/.test(cleanValue)
+    ? cleanValue
+    : "com.mavoix.aidant";
+}
+
 const caregiverAlertClients = new Map();
 const caregiverAlertHistory = new Map();
 const caregiverMessageClients = new Map();
 const caregiverMessageHistory = new Map();
 const CAREGIVER_ALERT_HISTORY_LIMIT = 20;
+const caregiverFcmTokens = new Map();
 const CAREGIVER_MESSAGE_HISTORY_LIMIT = 80;
 const CAREGIVER_MESSAGE_RETENTION_MS = Math.max(
   0,
   Number(process.env.MESSAGE_RETENTION_MS || 24 * 60 * 60 * 1000)
 );
+const FCM_TOKEN_TTL_MS = 50 * 60 * 1000;
+let cachedFcmAccessToken = null;
+let cachedFcmAccessTokenExpiresAt = 0;
 
 function getCaregiverAlertClients(channel) {
   if (!caregiverAlertClients.has(channel)) {
@@ -137,6 +160,280 @@ function saveCaregiverAlert(channel, payload) {
 function getAlertTimestamp(payload) {
   const timestamp = Date.parse(payload?.createdAt || "");
   return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function getCaregiverFcmTokens(channel) {
+  if (!caregiverFcmTokens.has(channel)) {
+    caregiverFcmTokens.set(channel, new Map());
+  }
+
+  return caregiverFcmTokens.get(channel);
+}
+
+function saveCaregiverFcmToken(channel, token, packageName) {
+  const tokens = getCaregiverFcmTokens(channel);
+  tokens.set(token, {
+    token,
+    packageName,
+    updatedAt: new Date().toISOString(),
+  });
+  return tokens.size;
+}
+
+function removeCaregiverFcmToken(channel, token) {
+  const tokens = caregiverFcmTokens.get(channel);
+  if (!tokens) return;
+
+  tokens.delete(token);
+  if (tokens.size === 0) {
+    caregiverFcmTokens.delete(channel);
+  }
+}
+
+function base64Url(value) {
+  return Buffer.from(value)
+    .toString("base64")
+    .replace(/=/g, "")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_");
+}
+
+function getFcmServiceAccount() {
+  const base64Value = String(process.env.FCM_SERVICE_ACCOUNT_BASE64 || "").trim();
+  const rawValue = base64Value
+    ? Buffer.from(base64Value, "base64").toString("utf8")
+    : String(process.env.FCM_SERVICE_ACCOUNT_JSON || "").trim();
+
+  if (!rawValue) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(rawValue);
+  } catch {
+    return null;
+  }
+}
+
+function getFcmProjectId() {
+  const serviceAccount = getFcmServiceAccount();
+  return String(process.env.FCM_PROJECT_ID || serviceAccount?.project_id || "").trim();
+}
+
+function getFcmPrivateKey(serviceAccount) {
+  return String(serviceAccount?.private_key || "")
+    .replace(/\\n/g, "\n")
+    .trim();
+}
+
+function isFcmConfigured() {
+  const serviceAccount = getFcmServiceAccount();
+  return Boolean(
+    getFcmProjectId() &&
+      serviceAccount?.client_email &&
+      getFcmPrivateKey(serviceAccount)
+  );
+}
+
+function httpsRequestText(urlString, options, body) {
+  return new Promise((resolve) => {
+    const request = https.request(urlString, options, (response) => {
+      let responseBody = "";
+      response.setEncoding("utf8");
+      response.on("data", (chunk) => {
+        responseBody += chunk;
+      });
+      response.on("end", () => {
+        resolve({
+          statusCode: Number(response.statusCode || 0),
+          body: responseBody,
+        });
+      });
+    });
+
+    request.setTimeout(10000, () => {
+      request.destroy(new Error("timeout"));
+    });
+    request.on("error", (error) => {
+      resolve({
+        statusCode: 0,
+        body: "",
+        error: error.message || "request_error",
+      });
+    });
+
+    request.end(body);
+  });
+}
+
+async function createFcmAccessToken() {
+  const now = Date.now();
+  if (cachedFcmAccessToken && now < cachedFcmAccessTokenExpiresAt - 60000) {
+    return cachedFcmAccessToken;
+  }
+
+  const serviceAccount = getFcmServiceAccount();
+  if (!serviceAccount) {
+    throw new Error("FCM_SERVICE_ACCOUNT_JSON manquant.");
+  }
+
+  const privateKeyText = getFcmPrivateKey(serviceAccount);
+  if (!serviceAccount.client_email || !privateKeyText) {
+    throw new Error("Compte de service FCM incomplet.");
+  }
+
+  const issuedAt = Math.floor(now / 1000);
+  const header = {
+    alg: "RS256",
+    typ: "JWT",
+  };
+  const claims = {
+    iss: serviceAccount.client_email,
+    scope: "https://www.googleapis.com/auth/firebase.messaging",
+    aud: "https://oauth2.googleapis.com/token",
+    iat: issuedAt,
+    exp: issuedAt + 3600,
+  };
+  const signingInput = `${base64Url(JSON.stringify(header))}.${base64Url(
+    JSON.stringify(claims)
+  )}`;
+  const signature = sign(
+    "RSA-SHA256",
+    Buffer.from(signingInput),
+    createPrivateKey(privateKeyText)
+  );
+  const assertion = `${signingInput}.${base64Url(signature)}`;
+  const formBody =
+    "grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=" +
+    encodeURIComponent(assertion);
+
+  const response = await httpsRequestText(
+    "https://oauth2.googleapis.com/token",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "Content-Length": Buffer.byteLength(formBody),
+      },
+    },
+    formBody
+  );
+
+  let payload = {};
+  try {
+    payload = JSON.parse(response.body || "{}");
+  } catch {}
+
+  if (response.statusCode !== 200 || !payload.access_token) {
+    throw new Error(payload.error_description || payload.error || "OAuth FCM impossible.");
+  }
+
+  cachedFcmAccessToken = payload.access_token;
+  cachedFcmAccessTokenExpiresAt =
+    now + Math.min(Number(payload.expires_in || 0) * 1000 || FCM_TOKEN_TTL_MS, FCM_TOKEN_TTL_MS);
+  return cachedFcmAccessToken;
+}
+
+function buildCaregiverAlertFcmPayload(record, channel, payload) {
+  const profileName = sanitizeText(payload?.profileName, 80);
+  return {
+    message: {
+      token: record.token,
+      data: {
+        type: "caregiver-alert",
+        channel,
+        alertId: payload?.id || "",
+        profileName,
+        message:
+          sanitizeText(payload?.message, 180) ||
+          "J'ai besoin de mon aidant.",
+      },
+      android: {
+        priority: "HIGH",
+        ttl: "3600s",
+      },
+    },
+  };
+}
+
+function getFcmErrorReason(responseBody) {
+  try {
+    const payload = JSON.parse(responseBody || "{}");
+    const error = payload.error || {};
+    const details = Array.isArray(error.details) ? error.details : [];
+    const fcmError = details.find((detail) => detail.errorCode);
+    return fcmError?.errorCode || error.status || error.message || "fcm_error";
+  } catch {
+    return "fcm_error";
+  }
+}
+
+async function sendFcmNotification(record, channel, payload) {
+  if (!isFcmConfigured()) {
+    return { sent: false, reason: "not_configured" };
+  }
+
+  try {
+    const projectId = getFcmProjectId();
+    const accessToken = await createFcmAccessToken();
+    const body = JSON.stringify(buildCaregiverAlertFcmPayload(record, channel, payload));
+    const response = await httpsRequestText(
+      `https://fcm.googleapis.com/v1/projects/${encodeURIComponent(projectId)}/messages:send`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json; charset=utf-8",
+          "Content-Length": Buffer.byteLength(body),
+        },
+      },
+      body
+    );
+
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      return { sent: true };
+    }
+
+    return {
+      sent: false,
+      statusCode: response.statusCode,
+      reason: getFcmErrorReason(response.body),
+    };
+  } catch (error) {
+    return { sent: false, reason: error.message || "send_error" };
+  }
+}
+
+function shouldRemoveFcmToken(result) {
+  return (
+    result.statusCode === 404 ||
+    result.reason === "UNREGISTERED" ||
+    result.reason === "INVALID_ARGUMENT" ||
+    result.reason === "SENDER_ID_MISMATCH"
+  );
+}
+
+async function sendCaregiverAlertFcmPushes(channel, payload) {
+  const records = Array.from((caregiverFcmTokens.get(channel) || new Map()).values());
+  if (records.length === 0) {
+    return { deliveredTo: 0, tokenCount: 0, configured: isFcmConfigured() };
+  }
+
+  const results = await Promise.all(
+    records.map(async (record) => {
+      const result = await sendFcmNotification(record, channel, payload);
+      if (shouldRemoveFcmToken(result)) {
+        removeCaregiverFcmToken(channel, record.token);
+      }
+      return result;
+    })
+  );
+
+  return {
+    deliveredTo: results.filter((result) => result.sent).length,
+    tokenCount: records.length,
+    configured: isFcmConfigured(),
+  };
 }
 
 function broadcastCaregiverAlert(channel, payload) {
@@ -1669,7 +1966,47 @@ app.get("/api/caregiver-messages/stream", (req, res) => {
   });
 });
 
-app.post("/api/caregiver-alert", (req, res) => {
+app.post("/api/caregiver-device-token", (req, res) => {
+  const channel = sanitizeAlertChannel(req.body?.channel);
+  const platform = sanitizePushPlatform(req.body?.platform);
+
+  if (!channel) {
+    res.status(400).json({
+      error: "Canal invalide",
+      details: "Le lien aidant est incomplet ou invalide.",
+    });
+    return;
+  }
+
+  if (platform !== "android") {
+    res.status(400).json({
+      error: "Plateforme non supportee",
+      details: "Ce serveur accepte uniquement les tokens Android FCM.",
+    });
+    return;
+  }
+
+  const token = sanitizeFcmToken(req.body?.token);
+  const packageName = sanitizeAndroidPackageName(req.body?.packageName);
+
+  if (!token) {
+    res.status(400).json({
+      error: "Parametres invalides",
+      details: "Le token Android est invalide.",
+    });
+    return;
+  }
+
+  const tokenCount = saveCaregiverFcmToken(channel, token, packageName);
+  res.json({
+    success: true,
+    platform,
+    pushEnabled: isFcmConfigured(),
+    tokenCount,
+  });
+});
+
+app.post("/api/caregiver-alert", async (req, res) => {
   const channel = sanitizeAlertChannel(req.body?.channel);
 
   if (!channel) {
@@ -1691,13 +2028,20 @@ app.post("/api/caregiver-alert", (req, res) => {
   saveCaregiverAlert(channel, payload);
   const alertDeliveredTo = broadcastCaregiverAlert(channel, payload);
   const messageDeliveredTo = broadcastCaregiverAlertToMessageClients(channel, payload);
-  const deliveredTo = Math.max(alertDeliveredTo, messageDeliveredTo);
+  const fcmPushResult = await sendCaregiverAlertFcmPushes(channel, payload);
+  const deliveredTo = Math.max(alertDeliveredTo, messageDeliveredTo, fcmPushResult.deliveredTo);
 
   res.json({
     success: true,
     deliveredTo,
     alertDeliveredTo,
     messageDeliveredTo,
+    pushDeliveredTo: fcmPushResult.deliveredTo,
+    pushTokenCount: fcmPushResult.tokenCount,
+    pushConfigured: fcmPushResult.configured,
+    fcmPushDeliveredTo: fcmPushResult.deliveredTo,
+    fcmPushTokenCount: fcmPushResult.tokenCount,
+    fcmPushConfigured: fcmPushResult.configured,
   });
 });
 
