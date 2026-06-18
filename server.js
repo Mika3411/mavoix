@@ -336,18 +336,24 @@ async function createFcmAccessToken() {
 
 function buildCaregiverAlertFcmPayload(record, channel, payload) {
   const profileName = sanitizeText(payload?.profileName, 80);
+  const lastUnreadMessage = sanitizeText(payload?.lastUnreadMessage, 240);
+  const data = {
+    type: "caregiver-alert",
+    channel,
+    alertId: payload?.id || "",
+    profileName,
+    message:
+      sanitizeText(payload?.message, 180) ||
+      "J'ai besoin de mon aidant.",
+  };
+  if (lastUnreadMessage) {
+    data.lastUnreadMessage = lastUnreadMessage;
+  }
+
   return {
     message: {
       token: record.token,
-      data: {
-        type: "caregiver-alert",
-        channel,
-        alertId: payload?.id || "",
-        profileName,
-        message:
-          sanitizeText(payload?.message, 180) ||
-          "J'ai besoin de mon aidant.",
-      },
+      data,
       android: {
         priority: "HIGH",
         ttl: "3600s",
@@ -500,6 +506,41 @@ function saveCaregiverMessage(channel, payload) {
   const history = getCaregiverMessageHistory(channel);
   history.push(payload);
   pruneCaregiverMessageHistory(history);
+}
+
+function getLatestUserCaregiverMessage(channel) {
+  const history = getCaregiverMessageHistory(channel);
+  for (let index = history.length - 1; index >= 0; index -= 1) {
+    const item = history[index];
+    if (!item || item.senderRole === "caregiver") continue;
+
+    const message =
+      item.messageType === "audio"
+        ? "Audio recu"
+        : sanitizeText(item.message, 220);
+    if (!message) continue;
+
+    return {
+      id: item.id || "",
+      createdAt: item.createdAt || "",
+      senderName: sanitizeText(item.senderName, 80),
+      messageType: sanitizeMessageType(item.messageType),
+      message,
+    };
+  }
+
+  return null;
+}
+
+function formatLastUnreadCaregiverMessage(channel, profileName) {
+  const latestMessage = getLatestUserCaregiverMessage(channel);
+  if (!latestMessage) return "";
+
+  const name =
+    sanitizeText(profileName, 80) ||
+    latestMessage.senderName ||
+    "Patient";
+  return sanitizeText(`${name} - ${latestMessage.message}`, 240);
 }
 
 function removeCaregiverMessageClient(channel, client) {
@@ -2017,13 +2058,16 @@ app.post("/api/caregiver-alert", async (req, res) => {
     return;
   }
 
+  const profileName = sanitizeText(req.body?.profileName, 80);
+  const lastUnreadMessage = formatLastUnreadCaregiverMessage(channel, profileName);
   const payload = {
     id: randomUUID(),
     createdAt: new Date().toISOString(),
-    profileName: sanitizeText(req.body?.profileName, 80),
+    profileName,
     message:
       sanitizeText(req.body?.message, 180) ||
       "J'ai besoin de mon aidant.",
+    lastUnreadMessage,
   };
   saveCaregiverAlert(channel, payload);
   const alertDeliveredTo = broadcastCaregiverAlert(channel, payload);
