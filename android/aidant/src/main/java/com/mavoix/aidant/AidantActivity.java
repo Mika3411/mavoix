@@ -1568,25 +1568,35 @@ public class AidantActivity extends Activity {
   }
 
   private void disconnectMessages() {
+    ArrayList<HttpURLConnection> connectionsToClose = new ArrayList<>();
     synchronized (messageConnections) {
       for (HttpURLConnection existingConnection : messageConnections.values()) {
         if (existingConnection != null) {
-          existingConnection.disconnect();
+          connectionsToClose.add(existingConnection);
         }
       }
       messageConnections.clear();
     }
+
+    for (HttpURLConnection connection : connectionsToClose) {
+      connection.disconnect();
+    }
   }
 
   private void disconnectMessage(String id, HttpURLConnection expectedConnection) {
+    boolean shouldClose = false;
     synchronized (messageConnections) {
       HttpURLConnection existingConnection = messageConnections.get(id);
       if (existingConnection == expectedConnection) {
         messageConnections.remove(id);
       }
       if (expectedConnection != null) {
-        expectedConnection.disconnect();
+        shouldClose = true;
       }
+    }
+
+    if (shouldClose) {
+      expectedConnection.disconnect();
     }
   }
 

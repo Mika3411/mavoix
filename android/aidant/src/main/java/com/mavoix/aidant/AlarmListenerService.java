@@ -389,23 +389,34 @@ public class AlarmListenerService extends Service {
   }
 
   private void disconnect(String id, HttpURLConnection expectedConnection) {
-    HttpURLConnection existingConnection = connections.get(id);
-    if (existingConnection == expectedConnection) {
-      connections.remove(id);
+    boolean shouldClose = false;
+    synchronized (connections) {
+      HttpURLConnection existingConnection = connections.get(id);
+      if (existingConnection == expectedConnection) {
+        connections.remove(id);
+      }
+      if (expectedConnection != null) {
+        shouldClose = true;
+      }
     }
 
-    if (expectedConnection != null) {
+    if (shouldClose) {
       expectedConnection.disconnect();
     }
   }
 
   private void disconnectAll() {
-    for (HttpURLConnection existingConnection : connections.values()) {
+    ArrayList<HttpURLConnection> connectionsToClose = new ArrayList<>();
+    synchronized (connections) {
+      connectionsToClose.addAll(connections.values());
+      connections.clear();
+    }
+
+    for (HttpURLConnection existingConnection : connectionsToClose) {
       if (existingConnection != null) {
         existingConnection.disconnect();
       }
     }
-    connections.clear();
   }
 
   private void sleep(long millis) {
