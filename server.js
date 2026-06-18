@@ -170,7 +170,7 @@ function getCaregiverFcmTokens(channel) {
   return caregiverFcmTokens.get(channel);
 }
 
-function saveCaregiverFcmToken(channel, token, packageName) {
+function saveCaregiverFcmTokenInMemory(channel, token, packageName) {
   const tokens = getCaregiverFcmTokens(channel);
   tokens.set(token, {
     token,
@@ -180,7 +180,7 @@ function saveCaregiverFcmToken(channel, token, packageName) {
   return tokens.size;
 }
 
-function removeCaregiverFcmToken(channel, token) {
+function removeCaregiverFcmTokenInMemory(channel, token) {
   const tokens = caregiverFcmTokens.get(channel);
   if (!tokens) return;
 
@@ -190,9 +190,58 @@ function removeCaregiverFcmToken(channel, token) {
   }
 }
 
-function countCaregiverFcmTokens(channel) {
-  const tokens = caregiverFcmTokens.get(channel);
-  return tokens ? tokens.size : 0;
+function getCaregiverFcmTokensInMemory(channel) {
+  return Array.from((caregiverFcmTokens.get(channel) || new Map()).values());
+}
+
+function getSupabaseConfig() {
+  const url = String(process.env.SUPABASE_URL || "").trim().replace(/\/+$/, "");
+  const serviceRoleKey = String(process.env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
+  if (!url || !serviceRoleKey) return null;
+  return { url, serviceRoleKey };
+}
+
+function caregiverPushTokenQuery(channel, platform, token) {
+  const filters = [
+    `channel=eq.${encodeURIComponent(channel)}`,
+    `platform=eq.${encodeURIComponent(platform)}`,
+  ];
+  if (token) {
+    filters.push(`token=eq.${encodeURIComponent(token)}`);
+  }
+  return filters.join("&");
+}
+
+function mergeCaregiverTokenRecords(memoryRecords, storedRecords) {
+  const recordsByToken = new Map();
+  for (const record of memoryRecords) {
+    if (record?.token) {
+      recordsByToken.set(record.token, record);
+    }
+  }
+  for (const record of storedRecords || []) {
+    if (record?.token) {
+      recordsByToken.set(record.token, record);
+    }
+  }
+  return Array.from(recordsByToken.values());
+}
+
+function normalizeCaregiverFcmTokenRow(row) {
+  return {
+    token: String(row?.token || ""),
+    packageName: sanitizeAndroidPackageName(row?.package_name),
+    updatedAt: String(row?.updated_at || new Date().toISOString()),
+  };
+}
+
+function logSupabaseTokenWarning(action, response) {
+  const detail = String(response?.body || response?.error || "").slice(0, 240);
+  console.warn(
+    `Supabase caregiver tokens ${action} failed`,
+    response?.statusCode || 0,
+    detail
+  );
 }
 
 function base64Url(value) {
@@ -269,6 +318,135 @@ function httpsRequestText(urlString, options, body) {
 
     request.end(body);
   });
+}
+
+async function supabaseRestRequest(method, pathName, body, extraHeaders = {}) {
+  const config = getSupabaseConfig();
+  if (!config) {
+    return { ok: false, notConfigured: true };
+  }
+
+  const requestBody = body === undefined ? undefined : JSON.stringify(body);
+  const headers = {
+    apikey: config.serviceRoleKey,
+    Authorization: `Bearer ${config.serviceRoleKey}`,
+    Accept: "application/json",
+    ...extraHeaders,
+  };
+  if (requestBody !== undefined) {
+    headers["Content-Type"] = "application/json";
+    headers["Content-Length"] = Buffer.byteLength(requestBody);
+  }
+
+  const response = await httpsRequestText(
+    `${config.url}/rest/v1/${pathName}`,
+    { method, headers },
+    requestBody
+  );
+
+  if (response.statusCode < 200 || response.statusCode >= 300) {
+    return { ok: false, ...response };
+  }
+
+  if (!response.body) {
+    return { ok: true, data: null };
+  }
+
+  try {
+    return { ok: true, data: JSON.parse(response.body) };
+  } catch {
+    return { ok: true, data: null };
+  }
+}
+
+async function fetchStoredCaregiverPushTokens(channel, platform) {
+  const response = await supabaseRestRequest(
+    "GET",
+    `caregiver_push_tokens?${caregiverPushTokenQuery(
+      channel,
+      platform
+    )}&select=token,package_name,environment,bundle_id,updated_at`
+  );
+
+  if (response.notConfigured) return null;
+  if (!response.ok) {
+    logSupabaseTokenWarning("select", response);
+    return null;
+  }
+
+  return Array.isArray(response.data) ? response.data : [];
+}
+
+async function upsertStoredCaregiverPushToken(row) {
+  const response = await supabaseRestRequest(
+    "POST",
+    "caregiver_push_tokens?on_conflict=channel,platform,token",
+    [
+      {
+        channel: row.channel,
+        platform: row.platform,
+        token: row.token,
+        package_name: row.packageName || null,
+        environment: row.environment || null,
+        bundle_id: row.bundleId || null,
+        updated_at: new Date().toISOString(),
+      },
+    ],
+    { Prefer: "resolution=merge-duplicates,return=minimal" }
+  );
+
+  if (response.notConfigured) return false;
+  if (!response.ok) {
+    logSupabaseTokenWarning("upsert", response);
+    return false;
+  }
+
+  return true;
+}
+
+async function deleteStoredCaregiverPushToken(channel, platform, token) {
+  const response = await supabaseRestRequest(
+    "DELETE",
+    `caregiver_push_tokens?${caregiverPushTokenQuery(channel, platform, token)}`,
+    undefined,
+    { Prefer: "return=minimal" }
+  );
+
+  if (response.notConfigured) return false;
+  if (!response.ok) {
+    logSupabaseTokenWarning("delete", response);
+    return false;
+  }
+
+  return true;
+}
+
+async function getCaregiverFcmTokenRecords(channel) {
+  const storedRows = await fetchStoredCaregiverPushTokens(channel, "android");
+  const storedRecords = storedRows
+    ? storedRows.map(normalizeCaregiverFcmTokenRow).filter((record) => record.token)
+    : null;
+  return mergeCaregiverTokenRecords(
+    getCaregiverFcmTokensInMemory(channel),
+    storedRecords || []
+  );
+}
+
+async function saveCaregiverFcmToken(channel, token, packageName) {
+  saveCaregiverFcmTokenInMemory(channel, token, packageName);
+  await upsertStoredCaregiverPushToken({
+    channel,
+    platform: "android",
+    token,
+    packageName,
+  });
+  return (await getCaregiverFcmTokenRecords(channel)).length;
+}
+
+async function removeCaregiverFcmToken(channel, token) {
+  removeCaregiverFcmTokenInMemory(channel, token);
+  await deleteStoredCaregiverPushToken(channel, "android", token);
+  return (await getCaregiverFcmTokenRecords(channel)).length;
 }
 
 async function createFcmAccessToken() {
@@ -425,7 +603,7 @@ function shouldRemoveFcmToken(result) {
 }
 
 async function sendCaregiverAlertFcmPushes(channel, payload) {
-  const records = Array.from((caregiverFcmTokens.get(channel) || new Map()).values());
+  const records = await getCaregiverFcmTokenRecords(channel);
   if (records.length === 0) {
     return { deliveredTo: 0, tokenCount: 0, configured: isFcmConfigured() };
   }
@@ -434,7 +612,7 @@ async function sendCaregiverAlertFcmPushes(channel, payload) {
     records.map(async (record) => {
       const result = await sendFcmNotification(record, channel, payload);
       if (shouldRemoveFcmToken(result)) {
-        removeCaregiverFcmToken(channel, record.token);
+        await removeCaregiverFcmToken(channel, record.token);
       }
       return result;
     })
@@ -2012,7 +2190,7 @@ app.get("/api/caregiver-messages/stream", (req, res) => {
   });
 });
 
-app.post("/api/caregiver-device-token", (req, res) => {
+app.post("/api/caregiver-device-token", async (req, res) => {
   const channel = sanitizeAlertChannel(req.body?.channel);
   const platform = sanitizePushPlatform(req.body?.platform);
 
@@ -2043,7 +2221,7 @@ app.post("/api/caregiver-device-token", (req, res) => {
     return;
   }
 
-  const tokenCount = saveCaregiverFcmToken(channel, token, packageName);
+  const tokenCount = await saveCaregiverFcmToken(channel, token, packageName);
   res.json({
     success: true,
     platform,
@@ -2052,7 +2230,7 @@ app.post("/api/caregiver-device-token", (req, res) => {
   });
 });
 
-app.post("/api/caregiver-device-token/remove", (req, res) => {
+app.post("/api/caregiver-device-token/remove", async (req, res) => {
   const channel = sanitizeAlertChannel(req.body?.channel);
   const platform = sanitizePushPlatform(req.body?.platform);
 
@@ -2081,11 +2259,11 @@ app.post("/api/caregiver-device-token/remove", (req, res) => {
     return;
   }
 
-  removeCaregiverFcmToken(channel, token);
+  const tokenCount = await removeCaregiverFcmToken(channel, token);
   res.json({
     success: true,
     platform,
-    tokenCount: countCaregiverFcmTokens(channel),
+    tokenCount,
   });
 });
 
