@@ -516,6 +516,32 @@ public class AidantActivity extends Activity {
     return button;
   }
 
+  private LinearLayout buttonRow() {
+    LinearLayout row = new LinearLayout(this);
+    row.setOrientation(LinearLayout.HORIZONTAL);
+    return row;
+  }
+
+  private Button rowButton(String label, View.OnClickListener listener) {
+    Button button = button(label, listener);
+    button.setMinHeight(dp(48));
+    button.setTextSize(16);
+    button.setLayoutParams(null);
+    return button;
+  }
+
+  private LinearLayout.LayoutParams rowButtonParams(boolean withLeftMargin) {
+    LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+        0,
+        LinearLayout.LayoutParams.WRAP_CONTENT,
+        1f
+    );
+    if (withLeftMargin) {
+      params.setMargins(dp(8), 0, 0, 0);
+    }
+    return params;
+  }
+
   private void styleInput(EditText input) {
     input.setTextColor(COLOR_TEXT);
     input.setHintTextColor(Color.rgb(148, 163, 184));
@@ -680,8 +706,10 @@ public class AidantActivity extends Activity {
           refreshUi();
         }), matchWrap());
       }
-      card.addView(button("Renommer", v -> renamePatient(link)), matchWrap());
-      card.addView(button("Supprimer", v -> deletePatient(link)), matchWrap());
+      LinearLayout actions = buttonRow();
+      actions.addView(rowButton("Renommer", v -> renamePatient(link)), rowButtonParams(false));
+      actions.addView(rowButton("Supprimer", v -> deletePatient(link)), rowButtonParams(true));
+      card.addView(actions, spacedParams(0, dp(8), 0, 0));
 
       connectionsListContainer.addView(card, spacedParams(0, 0, 0, dp(10)));
     }
