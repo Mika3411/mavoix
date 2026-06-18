@@ -1158,7 +1158,6 @@ function getCaregiverAlertPageHtml() {
           <div class="config-form">
             <label for="connectionLink">Lien de connexion</label>
             <input id="connectionLink" class="connection-link" type="text" readonly />
-            <button id="copyLink" class="secondary" type="button">Copier le lien</button>
           </div>
           <h2>Son d'alarme</h2>
           <p>L'aidant peut importer un son depuis son téléphone. Le fichier reste enregistré localement sur ce téléphone.</p>
@@ -1201,7 +1200,6 @@ function getCaregiverAlertPageHtml() {
       const testSoundButton = document.getElementById("testSound");
       const clearSoundButton = document.getElementById("clearSound");
       const connectionLinkInput = document.getElementById("connectionLink");
-      const copyLinkButton = document.getElementById("copyLink");
       const unreadListElement = document.getElementById("unreadList");
       const messageListElement = document.getElementById("messageList");
       const messageForm = document.getElementById("messageForm");
@@ -1998,14 +1996,6 @@ function getCaregiverAlertPageHtml() {
       });
 
       connectionLinkInput.value = window.location.href;
-      copyLinkButton.addEventListener("click", async () => {
-        try {
-          await navigator.clipboard.writeText(connectionLinkInput.value);
-          setStatus("Lien de connexion copié.");
-        } catch {
-          window.prompt("Lien de connexion", connectionLinkInput.value);
-        }
-      });
 
       updateCustomSoundUi();
       updateConnectionButton();

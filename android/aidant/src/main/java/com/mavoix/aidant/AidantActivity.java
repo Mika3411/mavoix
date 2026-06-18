@@ -266,7 +266,6 @@ public class AidantActivity extends Activity {
     panel.addView(button("Ajouter ce lien patient", v -> {
       if (saveLinkFromInput()) connectMessagesFromPrefs();
     }), matchWrap());
-    panel.addView(button("Copier le lien", v -> copyLink()), matchWrap());
     panel.addView(button("Coller le lien", v -> pasteLink()), matchWrap());
 
     connectionsListContainer = new LinearLayout(this);
@@ -785,24 +784,6 @@ public class AidantActivity extends Activity {
     } catch (Exception ex) {
       toast("Lien invalide.");
       return false;
-    }
-  }
-
-  private void copyLink() {
-    String link = linkInput.getText().toString().trim();
-    if (link.isEmpty()) {
-      link = PatientLinkStore.buildAlertLink(selectedLink());
-    }
-    if (link.isEmpty()) {
-      toast("Aucun lien a copier.");
-      return;
-    }
-
-    ClipboardManager clipboard = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
-    if (clipboard != null) {
-      clipboard.setPrimaryClip(ClipData.newPlainText("Lien Ma Voix aidant", link));
-      PatientLinkStore.Link selected = selectedLink();
-      toast(selected == null ? "Lien copie." : "Lien de " + selected.name + " copie.");
     }
   }
 
