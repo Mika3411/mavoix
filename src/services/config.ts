@@ -18,6 +18,12 @@ export const API_BASE = (
 export const ANDROID_APP_URL =
   import.meta.env.VITE_ANDROID_APP_URL || DEFAULT_ANDROID_APP_URL;
 
+export const APP_VERSION =
+  import.meta.env.VITE_APP_VERSION || __MA_VOIX_APP_VERSION__ || "0.0.0";
+
+export const UPDATE_MANIFEST_URL =
+  import.meta.env.VITE_UPDATE_MANIFEST_URL || `${API_BASE}/ma-voix-update.json`;
+
 export function getCaregiverNetworkErrorMessage(
   error: unknown,
   fallback = "Impossible de joindre le serveur Ma Voix."

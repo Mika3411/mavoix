@@ -234,7 +234,6 @@ export default function NoticePage({
                   "Infos : fiche récapitulative d'identité, santé, traitements et contacts d'urgence.",
                   "Menu : accès à Voix, Configurer, Aidants, Dictionnaire, Notice et Soutenez-moi.",
                   "L'icône enveloppe ouvre directement les messages aidants et affiche le nombre de messages non lus.",
-                  "Le bouton Plein écran permet d'agrandir l'application pour une utilisation plus confortable.",
                   "La cloche orange en bas de l'écran envoie l'appel aidant configuré.",
                   "Les boutons, les champs et les barres de défilement suivent le thème choisi quand l'appareil le permet.",
                 ]}

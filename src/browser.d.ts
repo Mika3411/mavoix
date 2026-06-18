@@ -1,6 +1,8 @@
 export {};
 
 declare global {
+  const __MA_VOIX_APP_VERSION__: string;
+
   interface Navigator {
     standalone?: boolean;
   }

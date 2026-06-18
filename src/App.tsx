@@ -15,7 +15,9 @@ import useProfiles from "./hooks/useProfiles";
 import { normalizePhoneForSms } from "./utils/phone";
 import {
   ANDROID_APP_URL,
+  APP_VERSION,
   API_BASE,
+  UPDATE_MANIFEST_URL,
   getCaregiverNetworkErrorMessage,
 } from "./services/config";
 import {
@@ -31,6 +33,12 @@ import {
   markCaregiverMessagesRead as markCaregiverMessagesReadInStorage,
   mergeCaregiverMessagesIntoStorage,
 } from "./utils/caregiverMessages";
+import {
+  type AvailableAppUpdate,
+  fetchAvailableDesktopUpdate,
+  isUpdateSnoozed,
+  snoozeUpdate,
+} from "./utils/appUpdates";
 import type { CaregiverAlertLink, VoiceEditor } from "./types";
 
 type DownloadDevice = "desktop" | "android" | "other";
@@ -142,7 +150,6 @@ export default function App() {
   });
 
   const [toastMessage, setToastMessage] = useState("");
-  const [isFullscreen, setIsFullscreen] = useState(false);
   const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
   const [viewportWidth, setViewportWidth] = useState(getInitialViewportWidth);
   const [isPhraseEditMode, setIsPhraseEditMode] = useState(false);
@@ -154,6 +161,8 @@ export default function App() {
   const [downloadDevice, setDownloadDevice] = useState<DownloadDevice>(() =>
     detectDownloadDevice()
   );
+  const [availableUpdate, setAvailableUpdate] =
+    useState<AvailableAppUpdate | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const moreMenuRef = useRef<HTMLDivElement | null>(null);
@@ -206,6 +215,8 @@ export default function App() {
   const styles = createStyles(activeTheme);
   const isCompactLayout = viewportWidth <= 640;
   const canShowDownloadPage = downloadDevice !== "other";
+  const updateDownloadUrl =
+    availableUpdate?.setupUrl || availableUpdate?.portableUrl || "";
   const caregiverAlertTargets = useMemo<CaregiverAlertTarget[]>(
     () =>
       ensureCaregiverAlertLinks(
@@ -867,18 +878,20 @@ export default function App() {
     }
   }
 
-  useEffect(() => {
-    const syncFullscreenState = () => {
-      setIsFullscreen(Boolean(document.fullscreenElement));
-    };
+  function openDesktopUpdateDownload() {
+    if (!availableUpdate || !updateDownloadUrl) return;
 
-    document.addEventListener("fullscreenchange", syncFullscreenState);
-    syncFullscreenState();
+    window.open(updateDownloadUrl, "_blank", "noopener,noreferrer");
+    showToast("Téléchargement de la mise à jour ouvert");
+  }
 
-    return () => {
-      document.removeEventListener("fullscreenchange", syncFullscreenState);
-    };
-  }, []);
+  function dismissDesktopUpdate() {
+    if (!availableUpdate) return;
+
+    snoozeUpdate(availableUpdate.version);
+    setAvailableUpdate(null);
+    showToast("Rappel masqué pendant 24 h");
+  }
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -986,6 +999,37 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (window.maVoixDesktopApp?.isDesktopApp !== true) return;
+
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 8000);
+    let isCancelled = false;
+
+    fetchAvailableDesktopUpdate(
+      UPDATE_MANIFEST_URL,
+      APP_VERSION,
+      controller.signal
+    )
+      .then((update) => {
+        if (isCancelled || !update || isUpdateSnoozed(update.version)) return;
+        setAvailableUpdate(update);
+      })
+      .catch(() => {
+        // La mise à jour ne doit jamais empêcher Ma Voix de démarrer.
+      })
+      .finally(() => {
+        window.clearTimeout(timeoutId);
+      });
+
+    return () => {
+      isCancelled = true;
+      controller.abort();
+      window.clearTimeout(timeoutId);
+    };
+  }, []);
+
+  useEffect(() => {
     const styleId = "theme-scrollbar-styles";
     let styleElement = document.getElementById(styleId) as HTMLStyleElement | null;
 
@@ -1050,18 +1094,6 @@ export default function App() {
     activeTheme?.inputBorder,
   ]);
 
-  async function toggleFullscreen() {
-    try {
-      if (!document.fullscreenElement) {
-        await document.documentElement.requestFullscreen();
-      } else {
-        await document.exitFullscreen();
-      }
-    } catch (error) {
-      console.error("Impossible de basculer en plein écran :", error);
-    }
-  }
-
   const unreadCaregiverMessageBadge =
     unreadCaregiverMessageCount > 99
       ? "99+"
@@ -1118,7 +1150,7 @@ export default function App() {
             }}
           >
             <img
-              src="/picturetitle.png"
+              src={`${import.meta.env.BASE_URL}picturetitle.png`}
               alt="Ma Voix"
               style={{
                 height: isCompactLayout ? 64 : 80,
@@ -1412,6 +1444,92 @@ export default function App() {
             </div>
           </div>
         </div>
+
+        {availableUpdate && (
+          <div
+            role="status"
+            aria-live="polite"
+            style={{
+              display: "flex",
+              flexDirection: isCompactLayout ? "column" : "row",
+              alignItems: isCompactLayout ? "stretch" : "center",
+              justifyContent: "space-between",
+              gap: 12,
+              padding: isCompactLayout ? "12px" : "14px 16px",
+              marginBottom: 12,
+              borderRadius: 18,
+              border: `2px solid ${activeTheme?.accentColor || "#3b82f6"}`,
+              background:
+                activeTheme?.infoBoxBackground ||
+                "rgba(30, 41, 59, 0.95)",
+              color: activeTheme?.textColor || "#e5eefc",
+              boxShadow: "0 12px 30px rgba(0,0,0,0.24)",
+              flexShrink: 0,
+            }}
+          >
+            <div style={{ minWidth: 0 }}>
+              <div
+                style={{
+                  color: activeTheme?.titleColor || "#ffffff",
+                  fontSize: isCompactLayout ? 18 : 20,
+                  fontWeight: 900,
+                  lineHeight: 1.2,
+                }}
+              >
+                Mise à jour disponible
+              </div>
+              <div
+                style={{
+                  marginTop: 4,
+                  color: activeTheme?.subtitleColor || "#cbd5e1",
+                  fontSize: isCompactLayout ? 15 : 16,
+                  lineHeight: 1.4,
+                }}
+              >
+                Version {availableUpdate.version}. {availableUpdate.message}
+              </div>
+            </div>
+
+            <div
+              style={{
+                display: "flex",
+                flexDirection: isCompactLayout ? "column" : "row",
+                gap: 10,
+                alignItems: "stretch",
+                flexShrink: 0,
+              }}
+            >
+              <button
+                type="button"
+                onClick={openDesktopUpdateDownload}
+                style={{
+                  ...styles.primaryButton,
+                  minHeight: 56,
+                  padding: "12px 18px",
+                  fontSize: 17,
+                  borderRadius: 18,
+                  whiteSpace: "nowrap",
+                }}
+              >
+                Mettre à jour
+              </button>
+              <button
+                type="button"
+                onClick={dismissDesktopUpdate}
+                style={{
+                  ...styles.secondaryButton,
+                  minHeight: 56,
+                  padding: "12px 18px",
+                  fontSize: 17,
+                  borderRadius: 18,
+                  whiteSpace: "nowrap",
+                }}
+              >
+                Plus tard
+              </button>
+            </div>
+          </div>
+        )}
 
         <div
           style={{
@@ -1827,7 +1945,7 @@ export default function App() {
               flexShrink: 0,
               display: "flex",
               alignItems: "center",
-              justifyContent: "space-between",
+              justifyContent: "flex-end",
               gap: 12,
               padding: "10px 4px 0",
               borderTop: `1px solid ${activeTheme?.inputBorder || "#334155"}`,
@@ -1837,23 +1955,6 @@ export default function App() {
               zIndex: 40,
             }}
           >
-            <button
-              onClick={toggleFullscreen}
-              style={{
-                padding: "12px 16px",
-                borderRadius: "18px",
-                background: isFullscreen ? "#475569" : "#0f766e",
-                color: "white",
-                border: "none",
-                fontWeight: "600",
-                cursor: "pointer",
-                boxShadow: "0 8px 25px rgba(0,0,0,0.24)",
-                minHeight: 48,
-              }}
-            >
-              {isFullscreen ? "Quitter" : "Plein écran"}
-            </button>
-
             <button
               onClick={sendCaregiverAlert}
               disabled={caregiverAlertSending}
@@ -1898,28 +1999,6 @@ export default function App() {
           </div>
         )}
       </div>
-
-      {!isCompactLayout && (
-        <button
-          onClick={toggleFullscreen}
-          style={{
-            position: "fixed",
-            left: 20,
-            bottom: 20,
-            zIndex: 9999,
-            padding: "14px 18px",
-            borderRadius: "18px",
-            background: isFullscreen ? "#475569" : "#0f766e",
-            color: "white",
-            border: "none",
-            fontWeight: "600",
-            cursor: "pointer",
-            boxShadow: "0 8px 25px rgba(0,0,0,0.3)",
-          }}
-        >
-          {isFullscreen ? "Quitter" : "Plein écran"}
-        </button>
-      )}
 
       {!isCompactLayout && (
         <button
