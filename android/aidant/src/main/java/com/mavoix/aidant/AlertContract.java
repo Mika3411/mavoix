@@ -18,6 +18,7 @@ final class AlertContract {
   static final String EXTRA_API_BASE = "apiBase";
   static final String EXTRA_CHANNEL = "channel";
   static final String EXTRA_PATIENT_NAME = "patientName";
+  static final String EXTRA_LAST_UNREAD_MESSAGE = "lastUnreadMessage";
 
   private AlertContract() {}
 }
