@@ -1,11 +1,15 @@
 {
-  "name": "react-typescript",
+  "name": "ma-voix",
   "version": "1.0.0",
-  "description": "React and TypeScript example starter project",
+  "description": "Application Ma Voix pour Windows, web et mobile.",
+  "author": "Ma Voix",
+  "main": "electron/main.cjs",
   "keywords": [
-    "typescript",
+    "accessibility",
+    "communication",
+    "electron",
     "react",
-    "starter"
+    "typescript"
   ],
   "dependencies": {
     "@capacitor-community/speech-recognition": "^7.0.1",
@@ -24,10 +28,15 @@
     "react-dom": "18.2.0"
   },
   "devDependencies": {
+    "@electron/get": "^5.0.0",
     "@types/react": "18.2.38",
     "@types/react-dom": "18.2.15",
     "@vitejs/plugin-react": "^6.0.2",
+    "electron": "^42.4.1",
+    "electron-builder": "^26.15.3",
+    "png-to-ico": "^3.0.1",
     "typescript": "4.9.5",
+    "unzipper": "^0.12.3",
     "vite": "^8.0.16"
   },
   "scripts": {
@@ -35,7 +44,54 @@
     "dev": "vite --host 0.0.0.0",
     "server": "node server.js",
     "build": "vite build",
-    "preview": "vite preview --host 0.0.0.0"
+    "preview": "vite preview --host 0.0.0.0",
+    "desktop:icon": "node scripts/create-windows-icon.cjs",
+    "desktop:electron-dist": "node scripts/prepare-electron-dist.cjs",
+    "desktop:run": "npm run desktop:icon && npm run build && electron .",
+    "desktop:build": "npm run desktop:icon && npm run desktop:electron-dist && npm run build && electron-builder --win"
+  },
+  "build": {
+    "appId": "com.mavoix.windows",
+    "productName": "Ma Voix",
+    "electronDist": "electron-dist/win32-x64",
+    "directories": {
+      "buildResources": "build-resources",
+      "output": "dist-desktop"
+    },
+    "files": [
+      "build/**/*",
+      "electron/**/*",
+      "public/icon-512.png",
+      "package.json"
+    ],
+    "win": {
+      "icon": "build-resources/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "artifactName": "${productName}-${version}-setup-${arch}.${ext}",
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Ma Voix"
+    },
+    "portable": {
+      "artifactName": "${productName}-${version}-portable-${arch}.${ext}"
+    }
   },
   "overrides": {
     "get-blob-duration": {

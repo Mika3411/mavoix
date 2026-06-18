@@ -16,9 +16,11 @@ root.render(
   </React.StrictMode>
 );
 
-if (import.meta.env.PROD && "serviceWorker" in navigator) {
+const isDesktopApp = window.maVoixDesktopApp?.isDesktopApp === true;
+
+if (import.meta.env.PROD && !isDesktopApp && "serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("/sw.js").catch((error) => {
+    navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`).catch((error) => {
       console.warn("Impossible d'enregistrer le service worker :", error);
     });
   });

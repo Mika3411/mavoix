@@ -12,6 +12,40 @@ const CONFIG_SECTIONS = [
   { id: "securite", label: "Sécurité" },
 ];
 
+const VIRTUAL_KEYBOARD_ROWS = [
+  ["A", "Z", "E", "R", "T", "Y", "U", "I", "O", "P"],
+  ["Q", "S", "D", "F", "G", "H", "J", "K", "L", "M"],
+  ["Maj", "W", "X", "C", "V", "B", "N", "Retour", "Mot", "Entrée"],
+  ["'", "-", ".", "Espace", ",", "?", "!"],
+];
+const VIRTUAL_KEYBOARD_LONG_PRESS_DELAY_MS = 460;
+const VIRTUAL_KEYBOARD_NUMBER_LABELS: Record<string, string> = {
+  A: "1",
+  Z: "2",
+  E: "3",
+  R: "4",
+  T: "5",
+  Y: "6",
+  U: "7",
+  I: "8",
+  O: "9",
+  P: "0",
+};
+const VIRTUAL_KEYBOARD_VARIANTS: Record<string, string[]> = {
+  A: ["1", "à", "â", "ä", "æ", "@"],
+  C: ["ç"],
+  E: ["3", "é", "è", "ê", "ë", "€"],
+  I: ["8", "î", "ï"],
+  N: ["ñ"],
+  O: ["9", "ô", "ö", "œ"],
+  P: ["0"],
+  R: ["4"],
+  S: ["$", "ś", "š", "ş"],
+  T: ["5"],
+  U: ["7", "ù", "û", "ü"],
+  Y: ["6", "ÿ"],
+  Z: ["2"],
+};
 
 export default function ProfileSettingsPage(props: any) {
   const {
@@ -78,8 +112,16 @@ export default function ProfileSettingsPage(props: any) {
   const [showDeleteConfirm, setShowDeleteConfirm] = React.useState(false);
   const [configSection, setConfigSection] = React.useState("identite");
   const standardTextAreaRef = React.useRef<HTMLTextAreaElement | null>(null);
+  const virtualKeyboardLongPressTimerRef = React.useRef<number | null>(null);
+  const virtualKeyboardSuppressClickRef = React.useRef("");
+  const virtualKeyboardHoveredVariantRef = React.useRef("");
   const isCompactLayout =
     typeof window !== "undefined" && window.innerWidth <= 640;
+  const virtualKeyboardActionSize = isCompactLayout ? 44 : 48;
+  const virtualKeyboardActionPadding = isCompactLayout ? "8px 6px" : "10px 10px";
+  const virtualKeyboardKeyMinHeight = isCompactLayout ? 48 : 52;
+  const virtualKeyboardKeyPadding = isCompactLayout ? "8px 4px" : "10px 6px";
+  const virtualKeyboardVariantSize = isCompactLayout ? 44 : 48;
 
   const [sendMode, setSendMode] = React.useState("sms");
   const [selectedSendContactId, setSelectedSendContactId] = React.useState(
@@ -90,6 +132,13 @@ export default function ProfileSettingsPage(props: any) {
   const [privacyUnlockPassword, setPrivacyUnlockPassword] = React.useState("");
   const [privacyActionMessage, setPrivacyActionMessage] = React.useState("");
   const [privacyActionLoading, setPrivacyActionLoading] = React.useState(false);
+  const [isVirtualKeyboardOpen, setIsVirtualKeyboardOpen] = React.useState(false);
+  const [isVirtualKeyboardShiftActive, setIsVirtualKeyboardShiftActive] =
+    React.useState(false);
+  const [virtualKeyboardVariantMenu, setVirtualKeyboardVariantMenu] =
+    React.useState<{ key: string } | null>(null);
+  const [virtualKeyboardHoveredVariant, setVirtualKeyboardHoveredVariant] =
+    React.useState("");
   const availableCaregiverAlertLinks = React.useMemo(
     () => (caregiverAlertLinks || []).filter((link) => link.enabled),
     [caregiverAlertLinks]
@@ -198,6 +247,19 @@ export default function ProfileSettingsPage(props: any) {
     });
   }
 
+  function rememberLastTypedWord(value) {
+    const typedWords = String(value || "")
+      .trim()
+      .toLowerCase()
+      .split(/\s+/)
+      .filter(Boolean);
+    const lastTypedWord = typedWords[typedWords.length - 1];
+
+    if (lastTypedWord) {
+      saveWordToHistory(lastTypedWord);
+    }
+  }
+
   function focusStandardTextArea(nextCursorStart = null, nextCursorEnd = null) {
     window.requestAnimationFrame(() => {
       const textarea = standardTextAreaRef.current;
@@ -220,6 +282,219 @@ export default function ProfileSettingsPage(props: any) {
     });
   }
 
+  function applyTextInput(nextValue, nextCursorStart = null, nextCursorEnd = null) {
+    setText(formatTextSmart(nextValue));
+    focusStandardTextArea(nextCursorStart, nextCursorEnd);
+  }
+
+  function handleTextAreaChange(value) {
+    setText(formatTextSmart(value));
+
+    if (/\s$/.test(value)) {
+      rememberLastTypedWord(value);
+    }
+  }
+
+  function insertVirtualKeyboardText(value) {
+    const textarea = standardTextAreaRef.current;
+    const currentText = String(text || "");
+    const selectionStart = textarea?.selectionStart ?? currentText.length;
+    const selectionEnd = textarea?.selectionEnd ?? selectionStart;
+    const nextText = `${currentText.slice(0, selectionStart)}${value}${currentText.slice(selectionEnd)}`;
+    const nextCursor = selectionStart + value.length;
+
+    if (/\s$/.test(value)) {
+      rememberLastTypedWord(currentText.slice(0, selectionStart));
+    }
+
+    applyTextInput(nextText, nextCursor, nextCursor);
+  }
+
+  function deleteVirtualKeyboardText() {
+    const textarea = standardTextAreaRef.current;
+    const currentText = String(text || "");
+    const selectionStart = textarea?.selectionStart ?? currentText.length;
+    const selectionEnd = textarea?.selectionEnd ?? selectionStart;
+
+    if (selectionStart !== selectionEnd) {
+      const nextText = `${currentText.slice(0, selectionStart)}${currentText.slice(selectionEnd)}`;
+      applyTextInput(nextText, selectionStart, selectionStart);
+      return;
+    }
+
+    if (selectionStart <= 0) {
+      focusStandardTextArea(0, 0);
+      return;
+    }
+
+    const nextText = `${currentText.slice(0, selectionStart - 1)}${currentText.slice(selectionStart)}`;
+    applyTextInput(nextText, selectionStart - 1, selectionStart - 1);
+  }
+
+  function deleteVirtualKeyboardWord() {
+    const textarea = standardTextAreaRef.current;
+    const currentText = String(text || "");
+    const selectionStart = textarea?.selectionStart ?? currentText.length;
+    const selectionEnd = textarea?.selectionEnd ?? selectionStart;
+
+    if (selectionStart !== selectionEnd) {
+      const nextText = `${currentText.slice(0, selectionStart)}${currentText.slice(selectionEnd)}`;
+      applyTextInput(nextText, selectionStart, selectionStart);
+      return;
+    }
+
+    if (selectionStart <= 0) {
+      focusStandardTextArea(0, 0);
+      return;
+    }
+
+    const beforeCursor = currentText.slice(0, selectionStart);
+    const trimmedEndLength = beforeCursor.replace(/\s+$/, "").length;
+    const wordMatch = beforeCursor.slice(0, trimmedEndLength).match(/\S+$/);
+    const deleteFrom = wordMatch
+      ? trimmedEndLength - wordMatch[0].length
+      : trimmedEndLength;
+    const nextText = `${currentText.slice(0, deleteFrom)}${currentText.slice(selectionStart)}`;
+
+    applyTextInput(nextText, deleteFrom, deleteFrom);
+  }
+
+  function isVirtualKeyboardLetter(key) {
+    return /^[A-Z]$/.test(key);
+  }
+
+  function getVirtualKeyboardKeyValue(key) {
+    if (!isVirtualKeyboardLetter(key)) {
+      return key;
+    }
+
+    return isVirtualKeyboardShiftActive ? key : key.toLowerCase();
+  }
+
+  function getVirtualKeyboardKeyLabel(key, displayedKey) {
+    if (key === "Retour") return "⌫";
+    if (key === "Entrée") return "↵";
+    if (key === "Mot") return "Mot";
+    return displayedKey;
+  }
+
+  function getVirtualKeyboardKeyVariants(key) {
+    if (!isVirtualKeyboardLetter(key)) {
+      return [];
+    }
+
+    const variants = VIRTUAL_KEYBOARD_VARIANTS[key] || [];
+
+    return variants.map((variant) =>
+      isVirtualKeyboardShiftActive ? variant.toUpperCase() : variant
+    );
+  }
+
+  function getVirtualKeyboardVariantFromPoint(clientX, clientY) {
+    const target = document.elementFromPoint(clientX, clientY);
+
+    if (!(target instanceof Element)) {
+      return "";
+    }
+
+    return (
+      target
+        .closest("[data-virtual-keyboard-variant]")
+        ?.getAttribute("data-virtual-keyboard-variant") || ""
+    );
+  }
+
+  function setVirtualKeyboardHoveredVariantValue(variant) {
+    virtualKeyboardHoveredVariantRef.current = variant;
+    setVirtualKeyboardHoveredVariant(variant);
+  }
+
+  function clearVirtualKeyboardLongPressTimer() {
+    if (virtualKeyboardLongPressTimerRef.current === null) {
+      return;
+    }
+
+    window.clearTimeout(virtualKeyboardLongPressTimerRef.current);
+    virtualKeyboardLongPressTimerRef.current = null;
+  }
+
+  function startVirtualKeyboardLongPress(key) {
+    const variants = getVirtualKeyboardKeyVariants(key);
+
+    if (!variants.length) {
+      return;
+    }
+
+    clearVirtualKeyboardLongPressTimer();
+    virtualKeyboardSuppressClickRef.current = "";
+    setVirtualKeyboardHoveredVariantValue("");
+    virtualKeyboardLongPressTimerRef.current = window.setTimeout(() => {
+      virtualKeyboardLongPressTimerRef.current = null;
+      virtualKeyboardSuppressClickRef.current = key;
+      setVirtualKeyboardVariantMenu({ key });
+      focusStandardTextArea();
+    }, VIRTUAL_KEYBOARD_LONG_PRESS_DELAY_MS);
+  }
+
+  function cancelVirtualKeyboardLongPress() {
+    clearVirtualKeyboardLongPressTimer();
+  }
+
+  function closeVirtualKeyboardVariantMenu() {
+    setVirtualKeyboardHoveredVariantValue("");
+    setVirtualKeyboardVariantMenu(null);
+  }
+
+  function insertVirtualKeyboardVariant(variant) {
+    virtualKeyboardSuppressClickRef.current = "";
+    closeVirtualKeyboardVariantMenu();
+    insertVirtualKeyboardText(variant);
+  }
+
+  function handleVirtualKeyboardKey(key) {
+    closeVirtualKeyboardVariantMenu();
+
+    if (key === "Maj") {
+      setIsVirtualKeyboardShiftActive((prev) => !prev);
+      focusStandardTextArea();
+      return;
+    }
+
+    if (key === "Espace") {
+      insertVirtualKeyboardText(" ");
+      return;
+    }
+
+    if (key === "Retour") {
+      deleteVirtualKeyboardText();
+      return;
+    }
+
+    if (key === "Mot") {
+      deleteVirtualKeyboardWord();
+      return;
+    }
+
+    if (key === "Entrée") {
+      insertVirtualKeyboardText("\n");
+      return;
+    }
+
+    insertVirtualKeyboardText(getVirtualKeyboardKeyValue(key));
+  }
+
+  function handleVirtualKeyboardButtonClick(key) {
+    cancelVirtualKeyboardLongPress();
+
+    if (virtualKeyboardSuppressClickRef.current === key) {
+      virtualKeyboardSuppressClickRef.current = "";
+      return;
+    }
+
+    virtualKeyboardSuppressClickRef.current = "";
+    handleVirtualKeyboardKey(key);
+  }
+
   function getWordBoundaries(value, selectionStart, selectionEnd) {
     let start = selectionStart;
     let end = selectionEnd;
@@ -234,6 +509,69 @@ export default function ProfileSettingsPage(props: any) {
 
     return { start, end };
   }
+
+  React.useEffect(
+    () => () => {
+      clearVirtualKeyboardLongPressTimer();
+    },
+    []
+  );
+
+  React.useEffect(() => {
+    if (!virtualKeyboardVariantMenu) {
+      return;
+    }
+
+    function handleVariantPointerMove(event) {
+      const variant = getVirtualKeyboardVariantFromPoint(
+        event.clientX,
+        event.clientY
+      );
+
+      if (variant !== virtualKeyboardHoveredVariantRef.current) {
+        setVirtualKeyboardHoveredVariantValue(variant);
+      }
+    }
+
+    function handleVariantPointerUp(event) {
+      const variant =
+        getVirtualKeyboardVariantFromPoint(event.clientX, event.clientY) ||
+        virtualKeyboardHoveredVariantRef.current;
+
+      virtualKeyboardSuppressClickRef.current = virtualKeyboardVariantMenu.key;
+
+      if (variant) {
+        insertVirtualKeyboardVariant(variant);
+      } else {
+        closeVirtualKeyboardVariantMenu();
+        focusStandardTextArea();
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+    }
+
+    function handleVariantPointerCancel(event) {
+      virtualKeyboardSuppressClickRef.current = virtualKeyboardVariantMenu.key;
+      closeVirtualKeyboardVariantMenu();
+      event.preventDefault();
+      event.stopPropagation();
+    }
+
+    window.addEventListener("pointermove", handleVariantPointerMove, true);
+    window.addEventListener("pointerup", handleVariantPointerUp, true);
+    window.addEventListener("pointercancel", handleVariantPointerCancel, true);
+
+    return () => {
+      window.removeEventListener("pointermove", handleVariantPointerMove, true);
+      window.removeEventListener("pointerup", handleVariantPointerUp, true);
+      window.removeEventListener(
+        "pointercancel",
+        handleVariantPointerCancel,
+        true
+      );
+    };
+  }, [virtualKeyboardVariantMenu]);
 
   React.useEffect(() => {
     if (!sendableContacts.length) {
@@ -351,12 +689,8 @@ export default function ProfileSettingsPage(props: any) {
     const compactViewportWidth = isCompactLayout
       ? "calc(100vw - 52px)"
       : "100%";
-    const caregiverPanelWidth = isCompactLayout
-      ? "calc(100vw - 86px)"
-      : "100%";
-    const caregiverControlsWidth = isCompactLayout
-      ? "calc(100vw - 112px)"
-      : "100%";
+    const caregiverPanelWidth = "100%";
+    const caregiverControlsWidth = "100%";
     const compactCard = createCompactCardStyle(styles.card, {
       marginBottom: 20,
       minWidth: 0,
@@ -370,6 +704,9 @@ export default function ProfileSettingsPage(props: any) {
       inlineSize: compactViewportWidth,
       maxInlineSize: compactViewportWidth,
       justifySelf: "start",
+      boxSizing: "border-box",
+      minWidth: 0,
+      overflow: "hidden",
     };
     const configContentGrid: CSSProperties = {
       display: "grid",
@@ -411,6 +748,7 @@ export default function ProfileSettingsPage(props: any) {
       display: "grid",
       gap: 12,
       padding: 12,
+      justifyItems: "stretch",
       borderRadius: 18,
       border: `1px solid ${styles.input.borderColor || "rgba(148, 163, 184, 0.32)"}`,
       background: "rgba(15, 23, 42, 0.20)",
@@ -430,6 +768,16 @@ export default function ProfileSettingsPage(props: any) {
       flexWrap: "wrap",
       minWidth: 0,
       maxWidth: "100%",
+      overflow: "hidden",
+    };
+    const caregiverFieldGroupStyle: CSSProperties = {
+      ...styles.formGroup,
+      marginBottom: 0,
+      width: "100%",
+      maxWidth: "100%",
+      minWidth: 0,
+      overflow: "hidden",
+      boxSizing: "border-box",
     };
     const caregiverToggleStyle: CSSProperties = {
       display: "inline-flex",
@@ -483,6 +831,7 @@ export default function ProfileSettingsPage(props: any) {
       inlineSize: caregiverControlsWidth,
       maxInlineSize: caregiverControlsWidth,
       overflow: "hidden",
+      boxSizing: "border-box",
     };
     const compactCaregiverButtonStyle: CSSProperties = {
       ...styles.secondaryButton,
@@ -564,6 +913,52 @@ export default function ProfileSettingsPage(props: any) {
       justifyContent: "center",
       textAlign: "center",
       boxSizing: "border-box",
+    };
+    const profileActionGridStyle: CSSProperties = {
+      display: "grid",
+      gridTemplateColumns:
+        "minmax(0, 1.12fr) minmax(0, 0.9fr) minmax(0, 1.08fr)",
+      gap: 10,
+      alignItems: "stretch",
+      width: "100%",
+      maxWidth: "100%",
+      minWidth: 0,
+      overflow: "hidden",
+    };
+    const profileActionButtonStyle: CSSProperties = {
+      ...styles.secondaryButton,
+      width: "100%",
+      minWidth: 0,
+      maxWidth: "100%",
+      minHeight: 56,
+      padding: "10px 10px",
+      borderRadius: 18,
+      fontSize: 16,
+      fontWeight: 800,
+      lineHeight: 1.1,
+      boxSizing: "border-box",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      textAlign: "center",
+      whiteSpace: "nowrap",
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+    };
+    const profilePrimaryActionButtonStyle: CSSProperties = {
+      ...profileActionButtonStyle,
+      ...styles.primaryButton,
+      borderRadius: 18,
+      padding: "10px 10px",
+    };
+    const profileDeleteActionButtonStyle: CSSProperties = {
+      ...profileActionButtonStyle,
+      ...styles.deleteButton,
+      minHeight: 56,
+      padding: "10px 10px",
+      borderRadius: 18,
+      fontSize: 15,
+      border: styles.deleteButton.border,
     };
 
     if (privacyStatus?.passwordProtected && privacyStatus?.locked) {
@@ -1516,7 +1911,7 @@ export default function ProfileSettingsPage(props: any) {
                   </label>
                 </div>
 
-                <div style={{ ...styles.formGroup, marginBottom: 0 }}>
+                <div style={caregiverFieldGroupStyle}>
                   <label style={styles.label}>Nom de l'aidant</label>
                   <input
                     value={link.name || ""}
@@ -1537,7 +1932,7 @@ export default function ProfileSettingsPage(props: any) {
                   />
                 </div>
 
-                <div style={{ ...styles.formGroup, marginBottom: 0 }}>
+                <div style={caregiverFieldGroupStyle}>
                   <label style={styles.label}>Lien d'alarme</label>
                   <div style={caregiverLinkBoxStyle}>
                     <span
@@ -1678,20 +2073,26 @@ export default function ProfileSettingsPage(props: any) {
             </select>
           </div>
 
-          <div style={styles.inlineButtons}>
-            <button style={styles.primaryButton} onClick={createNewProfile}>
+          <div style={profileActionGridStyle}>
+            <button
+              type="button"
+              style={profilePrimaryActionButtonStyle}
+              onClick={createNewProfile}
+            >
               Ajouter un profil
             </button>
 
             <button
-              style={styles.secondaryButton}
+              type="button"
+              style={profileActionButtonStyle}
               onClick={duplicateCurrentProfile}
             >
               Dupliquer
             </button>
 
             <button
-              style={styles.deleteButton}
+              type="button"
+              style={profileDeleteActionButtonStyle}
               onClick={() => setShowDeleteConfirm(true)}
             >
               Supprimer ce profil
@@ -1967,23 +2368,7 @@ export default function ProfileSettingsPage(props: any) {
                 <textarea
                   ref={standardTextAreaRef}
                   value={text}
-                  onChange={(e) => {
-                    const nextValue = e.target.value;
-                    setText(formatTextSmart(nextValue));
-
-                    if (/\s$/.test(nextValue)) {
-                      const typedWords = nextValue
-                        .trim()
-                        .toLowerCase()
-                        .split(/\s+/)
-                        .filter(Boolean);
-
-                      const lastTypedWord = typedWords[typedWords.length - 1];
-                      if (lastTypedWord) {
-                        saveWordToHistory(lastTypedWord);
-                      }
-                    }
-                  }}
+                  onChange={(e) => handleTextAreaChange(e.target.value)}
                   style={styles.textarea}
                   placeholder="Écrire ici..."
                 />
@@ -1994,13 +2379,46 @@ export default function ProfileSettingsPage(props: any) {
                     display: "grid",
                     gridTemplateColumns:
                       window.innerWidth > 900
-                        ? "repeat(3, minmax(0, 1fr))"
+                        ? "repeat(4, minmax(0, 1fr))"
                         : isCompactLayout
-                          ? "repeat(3, minmax(0, 1fr))"
+                          ? "repeat(4, minmax(0, 1fr))"
                           : "1fr",
                     gap: isCompactLayout ? 6 : 12,
                   }}
                 >
+                  <button
+                    aria-label={
+                      isVirtualKeyboardOpen
+                        ? "Masquer le clavier virtuel"
+                        : "Afficher le clavier virtuel"
+                    }
+                    title={
+                      isVirtualKeyboardOpen
+                        ? "Masquer le clavier virtuel"
+                        : "Afficher le clavier virtuel"
+                    }
+                    style={{
+                      ...(isVirtualKeyboardOpen
+                        ? styles.primaryButton
+                        : styles.secondaryButton),
+                      height: virtualKeyboardActionSize,
+                      minHeight: virtualKeyboardActionSize,
+                      padding: virtualKeyboardActionPadding,
+                      borderRadius: isCompactLayout ? 14 : 18,
+                      fontSize: isCompactLayout ? 13 : undefined,
+                      lineHeight: 1.1,
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                    onClick={() => {
+                      setIsVirtualKeyboardOpen((prev) => !prev);
+                      focusStandardTextArea();
+                    }}
+                  >
+                    ⌨
+                  </button>
+
                   <button
                     aria-label={isListening ? "Arrêter la dictée" : "Dicter"}
                     title={isListening ? "Arrêter la dictée" : "Dicter"}
@@ -2008,11 +2426,15 @@ export default function ProfileSettingsPage(props: any) {
                       ...(isListening
                         ? styles.recordingButton
                         : styles.primaryButton),
-                      minHeight: isCompactLayout ? 34 : undefined,
-                      padding: isCompactLayout ? "5px 6px" : undefined,
-                      borderRadius: isCompactLayout ? 11 : undefined,
+                      height: virtualKeyboardActionSize,
+                      minHeight: virtualKeyboardActionSize,
+                      padding: virtualKeyboardActionPadding,
+                      borderRadius: isCompactLayout ? 14 : 18,
                       fontSize: isCompactLayout ? 13 : undefined,
-                      lineHeight: isCompactLayout ? 1.1 : undefined,
+                      lineHeight: 1.1,
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
                     }}
                     onClick={isListening ? stopDictation : startDictation}
                   >
@@ -2024,11 +2446,15 @@ export default function ProfileSettingsPage(props: any) {
                     title="Écouter"
                     style={{
                       ...styles.secondaryButton,
-                      minHeight: isCompactLayout ? 34 : undefined,
-                      padding: isCompactLayout ? "5px 6px" : undefined,
-                      borderRadius: isCompactLayout ? 11 : undefined,
+                      height: virtualKeyboardActionSize,
+                      minHeight: virtualKeyboardActionSize,
+                      padding: virtualKeyboardActionPadding,
+                      borderRadius: isCompactLayout ? 14 : 18,
                       fontSize: isCompactLayout ? 13 : undefined,
-                      lineHeight: isCompactLayout ? 1.1 : undefined,
+                      lineHeight: 1.1,
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
                     }}
                     onClick={() => speakText(text)}
                   >
@@ -2040,17 +2466,250 @@ export default function ProfileSettingsPage(props: any) {
                     title="Stop voix"
                     style={{
                       ...styles.secondaryButton,
-                      minHeight: isCompactLayout ? 34 : undefined,
-                      padding: isCompactLayout ? "5px 6px" : undefined,
-                      borderRadius: isCompactLayout ? 11 : undefined,
+                      height: virtualKeyboardActionSize,
+                      minHeight: virtualKeyboardActionSize,
+                      padding: virtualKeyboardActionPadding,
+                      borderRadius: isCompactLayout ? 14 : 18,
                       fontSize: isCompactLayout ? 13 : undefined,
-                      lineHeight: isCompactLayout ? 1.1 : undefined,
+                      lineHeight: 1.1,
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
                     }}
                     onClick={stopSpeaking}
                   >
                     ⏹
                   </button>
                 </div>
+
+                {isVirtualKeyboardOpen ? (
+                  <div
+                    style={{
+                      marginTop: 12,
+                      padding: isCompactLayout ? 10 : 14,
+                      borderRadius: 18,
+                      background: styles.input.background || "rgba(15,23,42,0.62)",
+                      border:
+                        styles.input.border || "1px solid rgba(148,163,184,0.28)",
+                      display: "grid",
+                      gap: isCompactLayout ? 6 : 8,
+                    }}
+                  >
+                    {VIRTUAL_KEYBOARD_ROWS.map((row, rowIndex) => (
+                      <div
+                        key={`keyboard-row-${rowIndex}`}
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "repeat(10, minmax(0, 1fr))",
+                          gap: isCompactLayout ? 5 : 7,
+                          width: "100%",
+                        }}
+                      >
+                        {row.map((key, keyIndex) => {
+                          const displayedKey = getVirtualKeyboardKeyValue(key);
+                          const keyLabel = getVirtualKeyboardKeyLabel(
+                            key,
+                            displayedKey
+                          );
+                          const keyVariants = getVirtualKeyboardKeyVariants(key);
+                          const numberLabel =
+                            VIRTUAL_KEYBOARD_NUMBER_LABELS[key] || "";
+                          const hasVariants = keyVariants.length > 0;
+                          const isVariantMenuOpen =
+                            virtualKeyboardVariantMenu?.key === key;
+                          const isVariantMenuNearLeftEdge = keyIndex <= 1;
+                          const isVariantMenuNearRightEdge =
+                            keyIndex >= 8 || keyIndex >= row.length - 2;
+
+                          return (
+                            <div
+                              key={`${rowIndex}-${key}`}
+                              style={{
+                                gridColumn:
+                                  key === "Espace" ? "4 / span 4" : undefined,
+                                minWidth: 0,
+                                position: "relative",
+                              }}
+                            >
+                              <button
+                                type="button"
+                                aria-label={
+                                  key === "Maj"
+                                    ? isVirtualKeyboardShiftActive
+                                      ? "Désactiver les majuscules"
+                                      : "Activer les majuscules"
+                                    : key === "Retour"
+                                      ? "Effacer une lettre"
+                                      : key === "Mot"
+                                        ? "Effacer le mot précédent"
+                                        : key === "Entrée"
+                                          ? "Insérer un retour à la ligne"
+                                          : key === "Espace"
+                                            ? "Insérer un espace"
+                                            : hasVariants
+                                              ? `Touche ${displayedKey}${
+                                                  numberLabel
+                                                    ? `, chiffre ${numberLabel}`
+                                                    : ""
+                                                }, appui long pour variantes`
+                                              : `Touche ${displayedKey}`
+                                }
+                                title={
+                                  key === "Maj"
+                                    ? "Majuscules"
+                                    : key === "Retour"
+                                      ? "Effacer"
+                                      : key === "Mot"
+                                        ? "Effacer le mot précédent"
+                                        : key === "Entrée"
+                                          ? "Retour à la ligne"
+                                          : key === "Espace"
+                                            ? "Espace"
+                                            : hasVariants
+                                              ? `${displayedKey} - appui long`
+                                              : displayedKey
+                                }
+                                style={{
+                                  ...(key === "Maj" && isVirtualKeyboardShiftActive
+                                    ? styles.primaryButton
+                                    : styles.secondaryButton),
+                                  width: "100%",
+                                  minWidth: 0,
+                                  minHeight: virtualKeyboardKeyMinHeight,
+                                  padding: virtualKeyboardKeyPadding,
+                                  borderRadius: 14,
+                                  fontSize:
+                                    key === "Maj" ||
+                                    key === "Retour" ||
+                                    key === "Mot" ||
+                                    key === "Entrée" ||
+                                    key === "Espace"
+                                      ? 13
+                                      : 16,
+                                  fontWeight: 900,
+                                  lineHeight: 1,
+                                  whiteSpace: "nowrap",
+                                  position: "relative",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  touchAction: "manipulation",
+                                }}
+                                onPointerDown={() =>
+                                  startVirtualKeyboardLongPress(key)
+                                }
+                                onPointerUp={cancelVirtualKeyboardLongPress}
+                                onPointerLeave={cancelVirtualKeyboardLongPress}
+                                onPointerCancel={cancelVirtualKeyboardLongPress}
+                                onClick={() => handleVirtualKeyboardButtonClick(key)}
+                              >
+                                {numberLabel ? (
+                                  <span
+                                    aria-hidden="true"
+                                    style={{
+                                      position: "absolute",
+                                      top: isCompactLayout ? 4 : 5,
+                                      right: isCompactLayout ? 6 : 8,
+                                      fontSize: isCompactLayout ? 9 : 11,
+                                      fontWeight: 950,
+                                      lineHeight: 1,
+                                      opacity: 0.95,
+                                      pointerEvents: "none",
+                                    }}
+                                  >
+                                    {numberLabel}
+                                  </span>
+                                ) : null}
+                                <span style={{ pointerEvents: "none" }}>
+                                  {keyLabel}
+                                </span>
+                              </button>
+
+                              {isVariantMenuOpen ? (
+                                <div
+                                  role="menu"
+                                  aria-label={`Variantes de ${displayedKey}`}
+                                  style={{
+                                    position: "absolute",
+                                    left: isVariantMenuNearLeftEdge
+                                      ? 0
+                                      : isVariantMenuNearRightEdge
+                                        ? undefined
+                                        : "50%",
+                                    right: isVariantMenuNearRightEdge
+                                      ? 0
+                                      : undefined,
+                                    bottom: "calc(100% + 8px)",
+                                    transform:
+                                      isVariantMenuNearLeftEdge ||
+                                      isVariantMenuNearRightEdge
+                                        ? undefined
+                                        : "translateX(-50%)",
+                                    zIndex: 30,
+                                    display: "grid",
+                                    gridTemplateColumns: `repeat(4, ${virtualKeyboardVariantSize}px)`,
+                                    gap: 6,
+                                    padding: 6,
+                                    borderRadius: 14,
+                                    background:
+                                      styles.card.background ||
+                                      styles.input.background ||
+                                      "rgba(15,23,42,0.96)",
+                                    border:
+                                      styles.input.border ||
+                                      "1px solid rgba(148,163,184,0.38)",
+                                    boxShadow: "0 14px 32px rgba(0,0,0,0.32)",
+                                  }}
+                                  onPointerDown={(event) => {
+                                    event.stopPropagation();
+                                  }}
+                                >
+                                  {keyVariants.map((variant) => (
+                                    <button
+                                      key={`${key}-${variant}`}
+                                      type="button"
+                                      role="menuitem"
+                                      data-virtual-keyboard-variant={variant}
+                                      aria-label={`Insérer ${variant}`}
+                                      title={variant}
+                                      style={{
+                                        ...(virtualKeyboardHoveredVariant ===
+                                        variant
+                                          ? styles.primaryButton
+                                          : styles.secondaryButton),
+                                        width: virtualKeyboardVariantSize,
+                                        minWidth: virtualKeyboardVariantSize,
+                                        height: virtualKeyboardVariantSize,
+                                        minHeight: virtualKeyboardVariantSize,
+                                        padding: 0,
+                                        borderRadius: 12,
+                                        fontSize: 17,
+                                        fontWeight: 900,
+                                        lineHeight: 1,
+                                      }}
+                                      onPointerEnter={() =>
+                                        setVirtualKeyboardHoveredVariantValue(
+                                          variant
+                                        )
+                                      }
+                                      onClick={(event) => {
+                                        event.preventDefault();
+                                        event.stopPropagation();
+                                        insertVirtualKeyboardVariant(variant);
+                                      }}
+                                    >
+                                      {variant}
+                                    </button>
+                                  ))}
+                                </div>
+                              ) : null}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
               </div>
 
               <div

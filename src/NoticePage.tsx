@@ -153,6 +153,12 @@ export default function NoticePage({
                 apparaître différemment selon l'appareil, mais le principe
                 reste le même.
               </NoticeParagraph>
+              <NoticeParagraph>
+                Elle tient aussi compte des derniers réglages d'interface :
+                boutons et champs contenus dans leurs cartes, actions de profil
+                regroupées, navigation arrondie et barres de défilement
+                harmonisées avec le thème choisi.
+              </NoticeParagraph>
             </NoticeBlock>
           </>
         ),
@@ -227,8 +233,10 @@ export default function NoticePage({
                   "Parler : saisie libre, dictée, lecture vocale et envoi de messages.",
                   "Infos : fiche récapitulative d'identité, santé, traitements et contacts d'urgence.",
                   "Menu : accès à Voix, Configurer, Aidants, Dictionnaire, Notice et Soutenez-moi.",
+                  "L'icône enveloppe ouvre directement les messages aidants et affiche le nombre de messages non lus.",
                   "Le bouton Plein écran permet d'agrandir l'application pour une utilisation plus confortable.",
                   "La cloche orange en bas de l'écran envoie l'appel aidant configuré.",
+                  "Les boutons, les champs et les barres de défilement suivent le thème choisi quand l'appareil le permet.",
                 ]}
               />
             </NoticeBlock>
@@ -242,6 +250,7 @@ export default function NoticePage({
                   "Aidants ouvre la conversation avec les téléphones aidants connectés.",
                   "Le menu Profil regroupe Infos et Profil.",
                   "Le menu secondaire donne accès à Voix, Configurer, Aidants, Dictionnaire, Notice et Soutenez-moi.",
+                  "L'icône enveloppe ouvre directement les messages aidants et affiche le nombre de messages non lus.",
                   "La cloche orange en bas de l'écran envoie l'appel aidant configuré.",
                   "Si un code PIN est activé, il peut être demandé avant d'ouvrir Infos ou Profil.",
                 ]}
@@ -327,7 +336,9 @@ export default function NoticePage({
                   "Le bouton Écouter lit le texte avec la voix du profil.",
                   "Le bouton Stop voix interrompt une lecture en cours.",
                   "La dictée vocale peut remplir le texte quand le navigateur ou l'appareil la prend en charge.",
-                  "Sur Windows/Web, le clavier virtuel peut aider à écrire sans clavier physique.",
+                  "Sur Windows/Web, le bouton ⌨ ouvre le clavier virtuel pour écrire sans clavier physique.",
+                  "Sur le clavier virtuel Windows/Web, gardez une lettre appuyée, glissez vers une variante, puis relâchez pour l'insérer.",
+                  "Sur ce clavier, Mot efface le mot précédent et ↵ ajoute un retour à la ligne.",
                 ]}
               />
             </NoticeBlock>
@@ -502,6 +513,7 @@ export default function NoticePage({
                   "Langue du profil.",
                   "Besoins principaux de la personne.",
                   "Thème d'affichage de l'application.",
+                  "Le thème choisi règle aussi l'apparence des cartes, boutons, champs et barres de défilement.",
                 ]}
               />
             </NoticeBlock>
@@ -535,6 +547,7 @@ export default function NoticePage({
                   "Ajouter un profil crée un espace séparé.",
                   "Dupliquer le profil reprend la base existante pour gagner du temps.",
                   "Supprimer un profil efface définitivement ses informations locales.",
+                  "Les actions Ajouter, Dupliquer et Supprimer restent groupées dans le bloc Profils ; sur petit écran, elles peuvent passer à la ligne.",
                 ]}
               />
             </NoticeBlock>
@@ -609,6 +622,8 @@ export default function NoticePage({
                   "Ouvrez Profil ou Configurer.",
                   "Repérez la section Téléphone aidant.",
                   "Ajoutez un aidant si plusieurs téléphones doivent avoir leur propre lien.",
+                  "Le nom d'un aidant sert de repère ; il peut être laissé vide ou effacé sans casser son lien d'alarme.",
+                  "Les champs et boutons de chaque aidant restent dans sa carte, même avec un lien long.",
                   "Cochez Disponible pour Appel aidant pour chaque aidant qui doit apparaître dans la liste de choix.",
                   "Dans Aidant appelé par la cloche, choisissez l'aidant qui doit recevoir l'alarme.",
                   "Copiez le lien d'alarme ou ouvrez le mode aidant quand il est proposé.",
@@ -656,7 +671,8 @@ export default function NoticePage({
               <NoticeList
                 items={[
                   "Sur Android, un code PIN peut protéger l'accès aux pages Infos et Profil.",
-                  "Sur Windows/Web, un mot de passe local peut protéger les informations médicales et d'identité.",
+                  "Les informations médicales, d'identité et le code PIN sont chiffrés dans le stockage local quand le chiffrement de l'appareil est disponible.",
+                  "Un mot de passe local peut renforcer ce coffre chiffré sans être stocké dans l'application.",
                   "Le mot de passe local n'est pas stocké : si vous le perdez, les données protégées ne pourront pas être récupérées.",
                   "La protection concerne l'appareil et le profil utilisés.",
                 ]}

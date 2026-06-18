@@ -1,5 +1,12 @@
 import React from "react";
 import { API_BASE, getCaregiverNetworkErrorMessage } from "./services/config";
+import {
+  type CaregiverMessage,
+  type CaregiverMessageStore,
+  mergeCaregiverMessages,
+  readCaregiverMessages,
+  writeCaregiverMessages,
+} from "./utils/caregiverMessages";
 import { formatTextSmart } from "./utils/textFormatting";
 
 type CaregiverTarget = {
@@ -8,22 +15,11 @@ type CaregiverTarget = {
   channel: string;
 };
 
-type CaregiverMessage = {
-  id: string;
-  channel: string;
-  createdAt: string;
-  senderRole: "user" | "caregiver";
-  senderName: string;
-  message: string;
-  messageType?: "text" | "audio";
-};
-
 type MessageStore = {
   key: string;
-  data: Record<string, CaregiverMessage[]>;
+  data: CaregiverMessageStore;
 };
 
-const MESSAGE_HISTORY_LIMIT = 80;
 const INCOMING_MESSAGE_SOUND_URL = "/message-bip.mp3";
 
 type MessageNotificationPermission = NotificationPermission | "unsupported";
@@ -87,7 +83,7 @@ async function showIncomingMessageNotification(
   const title = `Message de ${caregiverName || message.senderName || "l'aidant"}`;
   const options: NotificationOptions = {
     body: truncateNotificationText(message.message),
-    icon: "/icon-192.png",
+    icon: `${import.meta.env.BASE_URL}icon-192.png`,
     tag: `ma-voix-message-${message.channel || "aidant"}`,
     renotify: true,
     data: {
@@ -96,7 +92,7 @@ async function showIncomingMessageNotification(
   };
 
   try {
-    if ("serviceWorker" in navigator) {
+    if (!window.maVoixDesktopApp?.isDesktopApp && "serviceWorker" in navigator) {
       const registration = await navigator.serviceWorker.ready;
       await registration.showNotification(title, options);
       return;
@@ -106,37 +102,6 @@ async function showIncomingMessageNotification(
   try {
     new window.Notification(title, options);
   } catch {}
-}
-
-function readMessages(storageKey: string) {
-  if (typeof window === "undefined") return {};
-
-  try {
-    const saved = window.localStorage.getItem(storageKey);
-    const parsed = saved ? JSON.parse(saved) : {};
-    return parsed && typeof parsed === "object" ? parsed : {};
-  } catch {
-    return {};
-  }
-}
-
-function mergeMessages(
-  currentMessages: CaregiverMessage[] = [],
-  incomingMessages: CaregiverMessage[] = []
-) {
-  const messageMap = new Map<string, CaregiverMessage>();
-
-  [...currentMessages, ...incomingMessages].forEach((message) => {
-    if (!message?.id || (!message?.message && message?.messageType !== "audio")) return;
-    messageMap.set(message.id, message);
-  });
-
-  return Array.from(messageMap.values())
-    .sort(
-      (a, b) =>
-        new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-    )
-    .slice(-MESSAGE_HISTORY_LIMIT);
 }
 
 function buildMessageStreamUrl(channel: string) {
@@ -173,6 +138,8 @@ export default function CaregiverMessagesPage(props: any) {
     startDictation,
     speakText,
     showToast,
+    onCaregiverMessagesChanged,
+    markCaregiverMessagesRead,
   } = props;
 
   const caregiverTargets = React.useMemo<CaregiverTarget[]>(
@@ -201,7 +168,7 @@ export default function CaregiverMessagesPage(props: any) {
   const [selectedCaregiverId, setSelectedCaregiverId] = React.useState("");
   const [messageStore, setMessageStore] = React.useState<MessageStore>(() => ({
     key: storageKey,
-    data: readMessages(storageKey),
+    data: readCaregiverMessages(storageKey),
   }));
   const [connectedCaregivers, setConnectedCaregivers] = React.useState<
     Record<string, number>
@@ -221,7 +188,7 @@ export default function CaregiverMessagesPage(props: any) {
   React.useEffect(() => {
     setMessageStore({
       key: storageKey,
-      data: readMessages(storageKey),
+      data: readCaregiverMessages(storageKey),
     });
   }, [storageKey]);
 
@@ -230,8 +197,9 @@ export default function CaregiverMessagesPage(props: any) {
       return;
     }
 
-    window.localStorage.setItem(storageKey, JSON.stringify(messageStore.data));
-  }, [messageStore, storageKey]);
+    writeCaregiverMessages(storageKey, messageStore.data);
+    onCaregiverMessagesChanged?.();
+  }, [messageStore, storageKey, onCaregiverMessagesChanged]);
 
   React.useEffect(() => {
     if (caregiverTargets.length === 0) {
@@ -253,7 +221,7 @@ export default function CaregiverMessagesPage(props: any) {
         key: prev.key,
         data: {
           ...prev.data,
-          [channel]: mergeMessages(prev.data[channel], incomingMessages),
+          [channel]: mergeCaregiverMessages(prev.data[channel], incomingMessages),
         },
       }));
     },
@@ -335,6 +303,25 @@ export default function CaregiverMessagesPage(props: any) {
   const selectedConnectedCount = selectedCaregiver
     ? connectedCaregivers[selectedCaregiver.channel] || 0
     : 0;
+
+  React.useEffect(() => {
+    markCaregiverMessagesRead?.(
+      caregiverTargets.map((target) => target.channel)
+    );
+    onCaregiverMessagesChanged?.();
+  }, [caregiverChannelKey, markCaregiverMessagesRead, onCaregiverMessagesChanged]);
+
+  React.useEffect(() => {
+    if (!selectedCaregiver?.channel) return;
+
+    markCaregiverMessagesRead?.([selectedCaregiver.channel]);
+    onCaregiverMessagesChanged?.();
+  }, [
+    lastSelectedMessageId,
+    selectedCaregiver?.channel,
+    markCaregiverMessagesRead,
+    onCaregiverMessagesChanged,
+  ]);
 
   React.useEffect(() => {
     const messageList = messageListRef.current;

@@ -7,6 +7,11 @@ export default function InstallButton(props: any) {
   const [showHelp, setShowHelp] = useState(false);
 
   useEffect(() => {
+    if (window.maVoixDesktopApp?.isDesktopApp) {
+      setIsInstalled(true);
+      return;
+    }
+
     const handleBeforeInstallPrompt = (e) => {
       e.preventDefault();
       setDeferredPrompt(e);

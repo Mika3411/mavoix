@@ -6,6 +6,10 @@ declare global {
   }
 
   interface Window {
+    maVoixDesktopApp?: {
+      isDesktopApp: boolean;
+      platform: string;
+    };
     webkitSpeechRecognition?: new () => SpeechRecognition;
     SpeechRecognition?: new () => SpeechRecognition;
   }

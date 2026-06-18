@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import useAudioRecording from "./hooks/useAudioRecording";
 import useSpeech from "./hooks/useSpeech";
 import CommunicationPage from "./CommunicationPage";
@@ -22,6 +22,15 @@ import {
   createCaregiverAlertLink,
   ensureCaregiverAlertLinks,
 } from "./utils/caregiverAlerts";
+import {
+  type CaregiverMessage,
+  countUnreadCaregiverMessages,
+  getCaregiverMessageReadStorageKey,
+  getCaregiverMessageStorageKey,
+  initializeCaregiverReadState,
+  markCaregiverMessagesRead as markCaregiverMessagesReadInStorage,
+  mergeCaregiverMessagesIntoStorage,
+} from "./utils/caregiverMessages";
 import type { CaregiverAlertLink, VoiceEditor } from "./types";
 
 type DownloadDevice = "desktop" | "android" | "other";
@@ -43,6 +52,13 @@ function buildCaregiverAlertAppLink(channel: string) {
   const url = new URL("mavoix-aidant://open");
   url.searchParams.set("apiBase", API_BASE);
   url.searchParams.set("channel", channel);
+  return url.href;
+}
+
+function buildCaregiverMessageStreamUrl(channel: string) {
+  const url = new URL("/api/caregiver-messages/stream", API_BASE);
+  url.searchParams.set("channel", channel);
+  url.searchParams.set("role", "user");
   return url.href;
 }
 
@@ -71,6 +87,13 @@ function detectDownloadDevice(): DownloadDevice {
   if (isAndroid) return "android";
   if (!isMobileOrTablet) return "desktop";
   return "other";
+}
+
+function getSafeCssColor(value: unknown, fallback: string) {
+  const color = typeof value === "string" ? value.trim() : "";
+  if (!color) return fallback;
+
+  return /^[#(),.%\w\s-]+$/.test(color) ? color : fallback;
 }
 
 function getInitialViewportWidth() {
@@ -124,6 +147,8 @@ export default function App() {
   const [viewportWidth, setViewportWidth] = useState(getInitialViewportWidth);
   const [isPhraseEditMode, setIsPhraseEditMode] = useState(false);
   const [caregiverAlertSending, setCaregiverAlertSending] = useState(false);
+  const [unreadCaregiverMessageCount, setUnreadCaregiverMessageCount] =
+    useState(0);
   const [noticeInitialSection, setNoticeInitialSection] =
     useState<SectionKey>("sommaire");
   const [downloadDevice, setDownloadDevice] = useState<DownloadDevice>(() =>
@@ -132,6 +157,7 @@ export default function App() {
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const moreMenuRef = useRef<HTMLDivElement | null>(null);
+  const pageRef = useRef(page);
 
   const {
     profiles,
@@ -195,6 +221,31 @@ export default function App() {
       })),
     [currentProfile?.caregiverAlertLinks, currentProfileId, downloadDevice]
   );
+  const caregiverMessageChannels = useMemo(
+    () =>
+      caregiverAlertTargets
+        .map((target) => target.channel)
+        .filter((channel): channel is string => Boolean(channel)),
+    [caregiverAlertTargets]
+  );
+  const caregiverMessageChannelKey = useMemo(
+    () => caregiverMessageChannels.join("|"),
+    [caregiverMessageChannels]
+  );
+  const caregiverMessageStorageKey = useMemo(
+    () =>
+      getCaregiverMessageStorageKey(
+        currentProfileId || currentProfile?.id || "default"
+      ),
+    [currentProfileId, currentProfile?.id]
+  );
+  const caregiverMessageReadStorageKey = useMemo(
+    () =>
+      getCaregiverMessageReadStorageKey(
+        currentProfileId || currentProfile?.id || "default"
+      ),
+    [currentProfileId, currentProfile?.id]
+  );
   const enabledCaregiverAlertTargets = useMemo(
     () => caregiverAlertTargets.filter((link) => link.enabled),
     [caregiverAlertTargets]
@@ -209,6 +260,40 @@ export default function App() {
       enabledCaregiverAlertTargets[0] ||
       null,
     [enabledCaregiverAlertTargets, selectedCaregiverAlertTargetId]
+  );
+  const refreshCaregiverUnreadCount = useCallback(() => {
+    setUnreadCaregiverMessageCount(
+      countUnreadCaregiverMessages(
+        caregiverMessageStorageKey,
+        caregiverMessageReadStorageKey,
+        caregiverMessageChannels
+      )
+    );
+  }, [
+    caregiverMessageChannels,
+    caregiverMessageReadStorageKey,
+    caregiverMessageStorageKey,
+  ]);
+  const markCaregiverMessagesRead = useCallback(
+    (channels = caregiverMessageChannels) => {
+      markCaregiverMessagesReadInStorage(
+        caregiverMessageStorageKey,
+        caregiverMessageReadStorageKey,
+        channels
+      );
+      setUnreadCaregiverMessageCount(
+        countUnreadCaregiverMessages(
+          caregiverMessageStorageKey,
+          caregiverMessageReadStorageKey,
+          caregiverMessageChannels
+        )
+      );
+    },
+    [
+      caregiverMessageChannels,
+      caregiverMessageReadStorageKey,
+      caregiverMessageStorageKey,
+    ]
   );
 
   useEffect(() => {
@@ -230,6 +315,97 @@ export default function App() {
     enabledCaregiverAlertTargets,
     selectedCaregiverAlertTargetId,
     updateCurrentProfile,
+  ]);
+
+  useEffect(() => {
+    pageRef.current = page;
+  }, [page]);
+
+  useEffect(() => {
+    initializeCaregiverReadState(
+      caregiverMessageStorageKey,
+      caregiverMessageReadStorageKey,
+      caregiverMessageChannels
+    );
+    refreshCaregiverUnreadCount();
+  }, [
+    caregiverMessageChannels,
+    caregiverMessageReadStorageKey,
+    caregiverMessageStorageKey,
+    refreshCaregiverUnreadCount,
+  ]);
+
+  useEffect(() => {
+    if (page === "aidants") {
+      markCaregiverMessagesRead();
+    }
+  }, [markCaregiverMessagesRead, page]);
+
+  useEffect(() => {
+    if (
+      typeof window === "undefined" ||
+      typeof EventSource === "undefined" ||
+      caregiverMessageChannels.length === 0
+    ) {
+      setUnreadCaregiverMessageCount(0);
+      return;
+    }
+
+    const sources = caregiverAlertTargets
+      .filter((target) => target.channel)
+      .map((target) => {
+        const source = new EventSource(
+          buildCaregiverMessageStreamUrl(target.channel)
+        );
+
+        const syncUnreadCount = () => {
+          if (pageRef.current === "aidants") {
+            markCaregiverMessagesRead([target.channel]);
+            return;
+          }
+
+          refreshCaregiverUnreadCount();
+        };
+
+        source.addEventListener("caregiver-message-history", (event) => {
+          try {
+            const payload = JSON.parse((event as MessageEvent).data || "{}");
+            const messages = Array.isArray(payload.messages)
+              ? (payload.messages as CaregiverMessage[])
+              : [];
+            mergeCaregiverMessagesIntoStorage(
+              caregiverMessageStorageKey,
+              target.channel,
+              messages
+            );
+            syncUnreadCount();
+          } catch {}
+        });
+
+        source.addEventListener("caregiver-message", (event) => {
+          try {
+            const payload = JSON.parse((event as MessageEvent).data || "{}");
+            mergeCaregiverMessagesIntoStorage(
+              caregiverMessageStorageKey,
+              target.channel,
+              [payload as CaregiverMessage]
+            );
+            syncUnreadCount();
+          } catch {}
+        });
+
+        return source;
+      });
+
+    return () => {
+      sources.forEach((source) => source.close());
+    };
+  }, [
+    caregiverAlertTargets,
+    caregiverMessageChannelKey,
+    caregiverMessageStorageKey,
+    markCaregiverMessagesRead,
+    refreshCaregiverUnreadCount,
   ]);
 
   function selectCaregiverAlertTarget(linkId: string) {
@@ -809,6 +985,71 @@ export default function App() {
     };
   }, []);
 
+  useEffect(() => {
+    const styleId = "theme-scrollbar-styles";
+    let styleElement = document.getElementById(styleId) as HTMLStyleElement | null;
+
+    if (!styleElement) {
+      styleElement = document.createElement("style");
+      styleElement.id = styleId;
+      document.head.appendChild(styleElement);
+    }
+
+    const track = getSafeCssColor(activeTheme?.inputBackground, "#0a1020");
+    const thumb = getSafeCssColor(activeTheme?.accentColor, "#3b82f6");
+    const thumbHover = getSafeCssColor(
+      activeTheme?.inputBorder || activeTheme?.accentColor,
+      thumb
+    );
+
+    styleElement.textContent = `
+      :root {
+        --ma-voix-scrollbar-track: ${track};
+        --ma-voix-scrollbar-thumb: ${thumb};
+        --ma-voix-scrollbar-thumb-hover: ${thumbHover};
+      }
+
+      * {
+        scrollbar-color: var(--ma-voix-scrollbar-thumb) var(--ma-voix-scrollbar-track);
+        scrollbar-width: thin;
+      }
+
+      *::-webkit-scrollbar {
+        width: 12px;
+        height: 12px;
+      }
+
+      *::-webkit-scrollbar-track {
+        background: var(--ma-voix-scrollbar-track);
+        border-radius: 999px;
+      }
+
+      *::-webkit-scrollbar-thumb {
+        background: var(--ma-voix-scrollbar-thumb);
+        border: 3px solid var(--ma-voix-scrollbar-track);
+        border-radius: 999px;
+      }
+
+      *::-webkit-scrollbar-thumb:hover {
+        background: var(--ma-voix-scrollbar-thumb-hover);
+      }
+
+      *::-webkit-scrollbar-corner {
+        background: var(--ma-voix-scrollbar-track);
+      }
+    `;
+
+    return () => {
+      if (styleElement?.parentNode) {
+        styleElement.parentNode.removeChild(styleElement);
+      }
+    };
+  }, [
+    activeTheme?.accentColor,
+    activeTheme?.inputBackground,
+    activeTheme?.inputBorder,
+  ]);
+
   async function toggleFullscreen() {
     try {
       if (!document.fullscreenElement) {
@@ -820,6 +1061,21 @@ export default function App() {
       console.error("Impossible de basculer en plein écran :", error);
     }
   }
+
+  const unreadCaregiverMessageBadge =
+    unreadCaregiverMessageCount > 99
+      ? "99+"
+      : String(unreadCaregiverMessageCount);
+  const caregiverMessagesButtonLabel =
+    unreadCaregiverMessageCount > 0
+      ? `Messages aidants, ${unreadCaregiverMessageCount} message${
+          unreadCaregiverMessageCount > 1 ? "s" : ""
+        } non lu${unreadCaregiverMessageCount > 1 ? "s" : ""}`
+      : "Messages aidants";
+  const compactTopNavMinHeight = 48;
+  const regularTopNavMinHeight = 48;
+  const compactTopNavPadding = "8px 6px";
+  const compactTopNavFontSize = 13;
 
   return (
     <div
@@ -898,7 +1154,7 @@ export default function App() {
               width: isCompactLayout ? "100%" : undefined,
               display: isCompactLayout ? "grid" : "flex",
               gridTemplateColumns: isCompactLayout
-                ? "minmax(92px, 1.35fr) minmax(56px, 0.85fr) minmax(48px, 0.7fr) minmax(38px, 0.45fr)"
+                ? "minmax(80px, 1.28fr) minmax(46px, 0.82fr) minmax(42px, 0.66fr) minmax(48px, 0.5fr) minmax(48px, 0.5fr)"
                 : undefined,
             }}
           >
@@ -907,11 +1163,13 @@ export default function App() {
                 ...(page === "communication"
                   ? styles.primaryButton
                   : styles.secondaryButton),
-                padding: isCompactLayout ? "4px 6px" : "6px 18px",
-                fontSize: isCompactLayout ? 12 : 15,
+                padding: isCompactLayout ? compactTopNavPadding : "6px 18px",
+                fontSize: isCompactLayout ? compactTopNavFontSize : 15,
                 width: isCompactLayout ? "100%" : undefined,
-                minHeight: isCompactLayout ? 34 : undefined,
-                borderRadius: isCompactLayout ? 11 : undefined,
+                minHeight: isCompactLayout
+                  ? compactTopNavMinHeight
+                  : regularTopNavMinHeight,
+                borderRadius: 18,
                 lineHeight: isCompactLayout ? 1.1 : undefined,
               }}
               onClick={() => setPage("communication")}
@@ -925,11 +1183,13 @@ export default function App() {
                   ...(page === "reglages"
                     ? styles.primaryButton
                     : styles.secondaryButton),
-                  padding: isCompactLayout ? "4px 6px" : "12px 14px",
-                  fontSize: isCompactLayout ? 12 : 15,
+                  padding: isCompactLayout ? compactTopNavPadding : "12px 14px",
+                  fontSize: isCompactLayout ? compactTopNavFontSize : 15,
                   width: isCompactLayout ? "100%" : undefined,
-                  minHeight: isCompactLayout ? 34 : undefined,
-                  borderRadius: isCompactLayout ? 11 : undefined,
+                  minHeight: isCompactLayout
+                    ? compactTopNavMinHeight
+                    : regularTopNavMinHeight,
+                  borderRadius: 18,
                   lineHeight: isCompactLayout ? 1.1 : undefined,
                 }
               }
@@ -944,11 +1204,13 @@ export default function App() {
                   ...(page === "infos"
                     ? styles.primaryButton
                     : styles.secondaryButton),
-                  padding: isCompactLayout ? "4px 6px" : "12px 14px",
-                  fontSize: isCompactLayout ? 12 : 15,
+                  padding: isCompactLayout ? compactTopNavPadding : "12px 14px",
+                  fontSize: isCompactLayout ? compactTopNavFontSize : 15,
                   width: isCompactLayout ? "100%" : undefined,
-                  minHeight: isCompactLayout ? 34 : undefined,
-                  borderRadius: isCompactLayout ? 11 : undefined,
+                  minHeight: isCompactLayout
+                    ? compactTopNavMinHeight
+                    : regularTopNavMinHeight,
+                  borderRadius: 18,
                   lineHeight: isCompactLayout ? 1.1 : undefined,
                 }
               }
@@ -956,6 +1218,73 @@ export default function App() {
             >
               Infos
             </button>
+
+            <div
+              style={{
+                position: "relative",
+                width: isCompactLayout ? "100%" : undefined,
+              }}
+            >
+              <button
+                type="button"
+                aria-label={caregiverMessagesButtonLabel}
+                title={caregiverMessagesButtonLabel}
+                onClick={() => {
+                  setPage("aidants");
+                  setIsMoreMenuOpen(false);
+                  markCaregiverMessagesRead();
+                }}
+                style={{
+                  ...(page === "aidants"
+                    ? styles.primaryButton
+                    : styles.secondaryButton),
+                  padding: isCompactLayout ? compactTopNavPadding : "6px 18px",
+                  fontSize: isCompactLayout ? 20 : 20,
+                  width: isCompactLayout ? "100%" : undefined,
+                  minWidth: isCompactLayout ? undefined : 64,
+                  minHeight: isCompactLayout
+                    ? compactTopNavMinHeight
+                    : regularTopNavMinHeight,
+                  borderRadius: 18,
+                  lineHeight: 1,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  position: "relative",
+                }}
+              >
+                <span aria-hidden="true">✉</span>
+                {unreadCaregiverMessageCount > 0 ? (
+                  <span
+                    aria-hidden="true"
+                    style={{
+                      position: "absolute",
+                      top: isCompactLayout ? -7 : -8,
+                      right: isCompactLayout ? -7 : -8,
+                      minWidth: 21,
+                      height: 21,
+                      padding: "0 5px",
+                      borderRadius: 999,
+                      background: "#ef4444",
+                      color: "white",
+                      border: `2px solid ${
+                        activeTheme?.pageBackground || "#0b1220"
+                      }`,
+                      boxSizing: "border-box",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: 11,
+                      fontWeight: 900,
+                      lineHeight: 1,
+                      boxShadow: "0 6px 14px rgba(0,0,0,0.28)",
+                    }}
+                  >
+                    {unreadCaregiverMessageBadge}
+                  </span>
+                ) : null}
+              </button>
+            </div>
 
             <div
               ref={moreMenuRef}
@@ -973,11 +1302,13 @@ export default function App() {
                 onClick={() => setIsMoreMenuOpen((prev) => !prev)}
                 style={{
                   ...styles.secondaryButton,
-                  padding: isCompactLayout ? "4px 6px" : "6px 18px",
-                  fontSize: isCompactLayout ? 12 : 15,
+                  padding: isCompactLayout ? compactTopNavPadding : "6px 18px",
+                  fontSize: isCompactLayout ? 18 : 15,
                   width: isCompactLayout ? "100%" : undefined,
-                  minHeight: isCompactLayout ? 34 : undefined,
-                  borderRadius: isCompactLayout ? 11 : undefined,
+                  minHeight: isCompactLayout
+                    ? compactTopNavMinHeight
+                    : regularTopNavMinHeight,
+                  borderRadius: 18,
                   lineHeight: isCompactLayout ? 1.1 : undefined,
                 }}
               >
@@ -1418,6 +1749,8 @@ export default function App() {
             startDictation={startDictation}
             speakText={speakText}
             showToast={showToast}
+            onCaregiverMessagesChanged={refreshCaregiverUnreadCount}
+            markCaregiverMessagesRead={markCaregiverMessagesRead}
           />
         ) : (
           <ProfileSettingsPage

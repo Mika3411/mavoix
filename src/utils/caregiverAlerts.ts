@@ -70,7 +70,7 @@ export function ensureCaregiverAlertLink(
 
   return {
     id: link?.id || fallback.id,
-    name: String(link?.name || fallback.name),
+    name: link?.name == null ? fallback.name : String(link.name),
     channel: String(link?.channel || fallback.channel),
     enabled: link?.enabled ?? true,
   };
