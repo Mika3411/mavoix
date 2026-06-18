@@ -279,8 +279,18 @@ public class AidantActivity extends Activity {
     reliabilityText.setText("Autorise Android a laisser Ma Voix Aidant active en veille pour recevoir les alarmes meme telephone verrouille.");
     panel.addView(reliabilityText, matchWrap());
 
-    panel.addView(button("Autoriser les alertes en veille", v -> requestBatteryOptimizationIfNeeded(true)), matchWrap());
-    panel.addView(button("Autoriser la notification plein ecran", v -> requestFullScreenIntentPermission(true)), matchWrap());
+    panel.addView(permissionButton(
+        "Autoriser les alertes en veille",
+        v -> requestBatteryOptimizationIfNeeded(true),
+        COLOR_SUCCESS,
+        Color.rgb(74, 222, 128)
+    ), matchWrap());
+    panel.addView(permissionButton(
+        "Autoriser la notification plein ecran",
+        v -> requestFullScreenIntentPermission(true),
+        COLOR_PRIMARY,
+        Color.rgb(147, 197, 253)
+    ), matchWrap());
 
     TextView soundTitle = sectionTitle("Son de l'aidant");
     panel.addView(soundTitle, spacedParams(0, dp(24), 0, dp(8)));
@@ -471,6 +481,23 @@ public class AidantActivity extends Activity {
     Button button = button(label, listener);
     button.setTextColor(COLOR_TEXT);
     button.setBackground(rounded(COLOR_PRIMARY, 18));
+    return button;
+  }
+
+  private Button permissionButton(
+      String label,
+      View.OnClickListener listener,
+      int fillColor,
+      int strokeColor
+  ) {
+    Button button = button(label, listener);
+    button.setTextSize(18);
+    button.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+    button.setMinHeight(dp(64));
+    button.setBackground(roundedStroke(fillColor, strokeColor, 20, 2));
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+      button.setElevation(dp(4));
+    }
     return button;
   }
 
