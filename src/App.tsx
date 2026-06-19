@@ -215,6 +215,12 @@ export default function App() {
   const activeTheme = getActiveTheme(currentProfile);
   const styles = createStyles(activeTheme);
   const isCompactLayout = viewportWidth <= 640;
+  const pageSafeAreaPadding = {
+    paddingTop: "calc(12px + env(safe-area-inset-top, 0px))",
+    paddingRight: "calc(12px + env(safe-area-inset-right, 0px))",
+    paddingBottom: "calc(12px + env(safe-area-inset-bottom, 0px))",
+    paddingLeft: "calc(12px + env(safe-area-inset-left, 0px))",
+  };
   const canShowDownloadPage = downloadDevice !== "other";
   const updateDownloadUrl =
     availableUpdate?.setupUrl || availableUpdate?.portableUrl || "";
@@ -1118,6 +1124,7 @@ export default function App() {
     <div
       style={{
         ...styles.page,
+        ...pageSafeAreaPadding,
         minHeight: "100vh",
         height: "100dvh",
         boxSizing: "border-box",
