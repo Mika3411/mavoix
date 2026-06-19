@@ -91,6 +91,7 @@ const APK_FILE_ALIASES = {
   "ma-voix-aidant.apk": "ma-voix-aidant.apk",
   "ma-voix-aidant-stable-2c3ba01.apk": "ma-voix-aidant.apk",
   "ma-voix-aidant-1751-d5504ee9.apk": "ma-voix-aidant.apk",
+  "ma-voix-aidant-20260619-b124fef7.apk": "ma-voix-aidant.apk",
 };
 
 function sanitizeText(value, maxLength = 140) {
