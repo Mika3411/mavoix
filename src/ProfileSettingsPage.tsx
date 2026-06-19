@@ -1082,9 +1082,8 @@ export default function ProfileSettingsPage(props: any) {
     };
     const profileActionGridStyle: CSSProperties = {
       display: "grid",
-      gridTemplateColumns:
-        "minmax(0, 1.12fr) minmax(0, 0.9fr) minmax(0, 1.08fr)",
-      gap: 10,
+      gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+      gap: isCompactLayout ? 8 : 10,
       alignItems: "stretch",
       width: "100%",
       maxWidth: "100%",
@@ -1097,9 +1096,9 @@ export default function ProfileSettingsPage(props: any) {
       minWidth: 0,
       maxWidth: "100%",
       minHeight: 56,
-      padding: "10px 10px",
+      padding: isCompactLayout ? "10px 8px" : "10px 10px",
       borderRadius: 18,
-      fontSize: 16,
+      fontSize: isCompactLayout ? 15 : 16,
       fontWeight: 800,
       lineHeight: 1.1,
       boxSizing: "border-box",
@@ -2227,14 +2226,18 @@ export default function ProfileSettingsPage(props: any) {
           <div style={profileActionGridStyle}>
             <button
               type="button"
+              aria-label="Ajouter un profil"
+              title="Ajouter un profil"
               style={profilePrimaryActionButtonStyle}
               onClick={createNewProfile}
             >
-              Ajouter un profil
+              Ajouter
             </button>
 
             <button
               type="button"
+              aria-label="Dupliquer le profil"
+              title="Dupliquer le profil"
               style={profileActionButtonStyle}
               onClick={duplicateCurrentProfile}
             >
@@ -2243,10 +2246,12 @@ export default function ProfileSettingsPage(props: any) {
 
             <button
               type="button"
+              aria-label="Supprimer le profil"
+              title="Supprimer le profil"
               style={profileDeleteActionButtonStyle}
               onClick={() => setShowDeleteConfirm(true)}
             >
-              Supprimer ce profil
+              Supprimer
             </button>
           </div>
 
