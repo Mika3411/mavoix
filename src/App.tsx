@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Capacitor } from "@capacitor/core";
 import useAudioRecording from "./hooks/useAudioRecording";
 import useSpeech from "./hooks/useSpeech";
 import CommunicationPage from "./CommunicationPage";
@@ -526,6 +527,10 @@ export default function App() {
 
     const detectedDevice = detectDownloadDevice();
     setDownloadDevice(detectedDevice);
+
+    if (Capacitor.isNativePlatform()) {
+      return;
+    }
 
     if (detectedDevice !== "desktop") {
       const targetUrl = new URL(ANDROID_APP_URL, window.location.href);
