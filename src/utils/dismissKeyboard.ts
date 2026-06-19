@@ -33,7 +33,11 @@ export function installDismissKeyboardOnOutsideTap(): void {
     activeElement.blur();
   };
 
-  if ("PointerEvent" in window) {
+  const supportsPointerEvents =
+    typeof (window as Window & { PointerEvent?: unknown }).PointerEvent !==
+    "undefined";
+
+  if (supportsPointerEvents) {
     window.addEventListener("pointerdown", dismissKeyboard, {
       capture: true,
       passive: true,

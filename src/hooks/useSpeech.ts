@@ -3,7 +3,20 @@ import { Capacitor, registerPlugin } from "@capacitor/core";
 import { QueueStrategy, TextToSpeech } from "@capacitor-community/text-to-speech";
 import type { Phrase, VoiceSettings } from "../types";
 
-const NativeSpeech = registerPlugin("NativeSpeech");
+type NativeSpeechOptions = {
+  text: string;
+  lang: string;
+  rate: number;
+  pitch: number;
+  volume: number;
+};
+
+type NativeSpeechPlugin = {
+  speak(options: NativeSpeechOptions): Promise<void>;
+  stop?(): Promise<void>;
+};
+
+const NativeSpeech = registerPlugin<NativeSpeechPlugin>("NativeSpeech");
 
 export default function useSpeech({
   language = "fr-FR",

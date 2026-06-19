@@ -1874,22 +1874,6 @@ export default function App() {
                 </div>
               </div>
             </div>
-
-            {downloadDevice === "other" && (
-              <div
-                style={{
-                  background: "rgba(255,255,255,0.04)",
-                  border: "1px solid rgba(255,255,255,0.08)",
-                  borderRadius: 22,
-                  padding: 18,
-                  fontSize: 16,
-                  lineHeight: 1.6,
-                  opacity: 0.86,
-                }}
-              >
-                Sur cet appareil, les boutons de téléchargement sont masqués. Ouvre cette page depuis un PC pour l'installation ordinateur, ou depuis un appareil Android pour l'application Android.
-              </div>
-            )}
           </div>
         ) : page === "notice" ? (
           <NoticePage

@@ -96,6 +96,7 @@ public class AidantActivity extends Activity {
   private LinearLayout configPanel;
   private LinearLayout messagesPanel;
   private LinearLayout helpPanel;
+  private ScrollView contentScrollView;
   private Button connectionButton;
   private EditText linkInput;
   private EditText messageInput;
@@ -109,7 +110,7 @@ public class AidantActivity extends Activity {
   private LinearLayout messageListContainer;
   private Spinner messagePatientSpinner;
   private TextToSpeech textToSpeech;
-  private MediaPlayer testSoundPlayer;
+  private AlarmSoundPlayer.Session testSoundSession;
   private boolean textToSpeechReady;
   private boolean isRefreshingPatientUi;
   private boolean isRefreshingSoundUi;
@@ -153,14 +154,17 @@ public class AidantActivity extends Activity {
     screen.setOrientation(LinearLayout.VERTICAL);
     screen.setBackgroundColor(COLOR_PAGE);
 
-    ScrollView scrollView = new ScrollView(this);
-    scrollView.setFillViewport(true);
-    scrollView.setBackgroundColor(COLOR_PAGE);
+    contentScrollView = new ScrollView(this);
+    contentScrollView.setFillViewport(true);
+    contentScrollView.setBackgroundColor(COLOR_PAGE);
 
     LinearLayout root = new LinearLayout(this);
     root.setOrientation(LinearLayout.VERTICAL);
     root.setPadding(dp(22), dp(28), dp(22), dp(18));
-    scrollView.addView(root);
+    contentScrollView.addView(root, new ScrollView.LayoutParams(
+        ScrollView.LayoutParams.MATCH_PARENT,
+        ScrollView.LayoutParams.WRAP_CONTENT
+    ));
 
     LinearLayout header = new LinearLayout(this);
     header.setOrientation(LinearLayout.HORIZONTAL);
@@ -192,7 +196,7 @@ public class AidantActivity extends Activity {
     root.addView(helpPanel, matchWrap());
 
     screen.addView(
-        scrollView,
+            contentScrollView,
         new LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT,
             0,
@@ -460,6 +464,12 @@ public class AidantActivity extends Activity {
     renderMessages();
     renderUnreadMessages();
     updateBottomNavigation();
+    resetContentScroll();
+  }
+
+  private void resetContentScroll() {
+    if (contentScrollView == null) return;
+    contentScrollView.post(() -> contentScrollView.scrollTo(0, 0));
   }
 
   private LinearLayout buildBottomNavigation() {
@@ -598,7 +608,6 @@ public class AidantActivity extends Activity {
     Button button = button(label, listener);
     button.setMinHeight(dp(48));
     button.setTextSize(16);
-    button.setLayoutParams(null);
     return button;
   }
 
@@ -915,26 +924,58 @@ public class AidantActivity extends Activity {
   }
 
   private void pasteLink() {
+    try {
+      String clipboardText = readClipboardText();
+      if (clipboardText == null || clipboardText.trim().isEmpty()) {
+        toast("Aucun texte a coller.");
+        return;
+      }
+
+      linkInput.setText(clipboardText.trim());
+      if (saveLinkFromInput()) connectMessagesFromPrefs();
+    } catch (Exception error) {
+      toast("Impossible de lire le presse-papiers.");
+    }
+  }
+
+  private String readClipboardText() {
     ClipboardManager clipboard = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
     if (clipboard == null || !clipboard.hasPrimaryClip()) {
       toast("Presse-papiers vide.");
-      return;
+      return null;
     }
 
     ClipData clip = clipboard.getPrimaryClip();
     if (clip == null || clip.getItemCount() == 0) {
       toast("Presse-papiers vide.");
-      return;
+      return null;
     }
 
-    CharSequence text = clip.getItemAt(0).coerceToText(this);
-    if (text == null) {
-      toast("Aucun texte a coller.");
-      return;
+    ClipData.Item item = clip.getItemAt(0);
+    if (item == null) {
+      return null;
     }
 
-    linkInput.setText(text.toString());
-    if (saveLinkFromInput()) connectMessagesFromPrefs();
+    CharSequence directText = item.getText();
+    if (directText != null) {
+      return directText.toString();
+    }
+
+    CharSequence htmlText = item.getHtmlText();
+    if (htmlText != null) {
+      return htmlText.toString();
+    }
+
+    if (item.getUri() != null) {
+      return item.getUri().toString();
+    }
+
+    if (item.getIntent() != null) {
+      return item.getIntent().toUri(Intent.URI_INTENT_SCHEME);
+    }
+
+    CharSequence coercedText = item.coerceToText(this);
+    return coercedText == null ? null : coercedText.toString();
   }
 
   private void startListening() {
@@ -951,6 +992,7 @@ public class AidantActivity extends Activity {
     connectMessagesFromPrefs();
     toast("Connexion lancee pour " + patientCountLabel(patientLinks.size()) + ".");
     requestBatteryOptimizationIfNeeded(false);
+    requestFullScreenIntentPermission(false);
   }
 
   private void requestBatteryOptimizationIfNeeded(boolean force) {
@@ -1030,6 +1072,14 @@ public class AidantActivity extends Activity {
       return;
     }
 
+    if (!force && prefs.getBoolean(AlertContract.KEY_FULL_SCREEN_INTENT_PROMPTED, false)) {
+      return;
+    }
+
+    if (!force) {
+      prefs.edit().putBoolean(AlertContract.KEY_FULL_SCREEN_INTENT_PROMPTED, true).apply();
+    }
+
     new AlertDialog.Builder(this)
         .setTitle("Notification plein ecran")
         .setMessage("Pour afficher le bouton STOP sur l'ecran verrouille, autorise Ma Voix Aidant a envoyer des notifications plein ecran.")
@@ -1078,49 +1128,41 @@ public class AidantActivity extends Activity {
     stopTestSoundPlayback();
     setTestingAlarmSound(true);
     try {
-      testSoundPlayer = new MediaPlayer();
-      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-        testSoundPlayer.setAudioAttributes(new AudioAttributes.Builder()
-            .setUsage(AudioAttributes.USAGE_ALARM)
-            .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
-            .build());
-      }
-      testSoundPlayer.setDataSource(this, AlarmSounds.selectedUri(this, prefs));
-      testSoundPlayer.setLooping(true);
-      testSoundPlayer.setOnErrorListener((player, what, extra) -> {
+      testSoundSession = AlarmSoundPlayer.startSelected(this, prefs, true);
+      testSoundSession.setOnErrorListener((player, what, extra) -> {
         stopTestSoundPlayback();
         setTestingAlarmSound(false);
         toast("Impossible de tester le son.");
         return true;
       });
-      testSoundPlayer.prepare();
-      testSoundPlayer.start();
+      if (testSoundSession.raisedAlarmVolume()) {
+        toast("Volume alarme augmente pendant le test.");
+      }
     } catch (Exception error) {
       stopTestSoundPlayback();
-      setTestingAlarmSound(false);
-      toast("Impossible de tester le son.");
+      try {
+        testSoundSession = AlarmSoundPlayer.startSystemFallback(this, true);
+        testSoundSession.setOnErrorListener((player, what, extra) -> {
+          stopTestSoundPlayback();
+          setTestingAlarmSound(false);
+          toast("Impossible de tester le son.");
+          return true;
+        });
+        toast("Son de secours du telephone utilise.");
+      } catch (Exception fallbackError) {
+        setTestingAlarmSound(false);
+        toast("Impossible de tester le son.");
+      }
     }
   }
 
   private void stopTestSoundPlayback() {
-    if (testSoundPlayer == null) {
+    if (testSoundSession == null) {
       return;
     }
 
-    try {
-      if (testSoundPlayer.isPlaying()) {
-        testSoundPlayer.stop();
-      }
-    } catch (Exception ignored) {
-      // The player is being released anyway.
-    }
-
-    try {
-      testSoundPlayer.release();
-    } catch (Exception ignored) {
-      // Nothing else to clean up.
-    }
-    testSoundPlayer = null;
+    testSoundSession.stopAndRelease();
+    testSoundSession = null;
   }
 
   private void setTestingAlarmSound(boolean testing) {

@@ -60,6 +60,10 @@ final class AlarmSounds {
     return Uri.parse("android.resource://" + context.getPackageName() + "/" + choice.resourceId);
   }
 
+  static int selectedResourceId(SharedPreferences prefs) {
+    return selectedChoice(prefs).resourceId;
+  }
+
   private static String selectedId(SharedPreferences prefs) {
     String id = prefs == null ? null : prefs.getString(AlertContract.KEY_SOUND_ID, DEFAULT_ID);
     return id == null || id.trim().isEmpty() ? DEFAULT_ID : id;

@@ -9,15 +9,13 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.media.AudioAttributes;
-import android.media.MediaPlayer;
-import android.net.Uri;
 import android.os.Build;
+import android.os.Handler;
 import android.os.IBinder;
+import android.os.Looper;
 import android.os.PowerManager;
 import android.os.VibrationEffect;
 import android.os.Vibrator;
-import android.provider.Settings;
-import android.media.RingtoneManager;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
@@ -32,15 +30,17 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class AlarmListenerService extends Service {
-  private static final String NOTIFICATION_CHANNEL_ID = "ma_voix_aidant_alerts";
+  private static final String NOTIFICATION_CHANNEL_ID = "ma_voix_aidant_urgent_alerts_v2";
   private static final int NOTIFICATION_ID = 4108;
+  private static final long FULL_SCREEN_FALLBACK_DELAY_MS = 350L;
 
   private final ExecutorService executor = Executors.newCachedThreadPool();
   private final Map<String, HttpURLConnection> connections = new ConcurrentHashMap<>();
+  private final Handler mainHandler = new Handler(Looper.getMainLooper());
   private SharedPreferences prefs;
   private volatile boolean shouldListen;
   private volatile int listenVersion;
-  private MediaPlayer mediaPlayer;
+  private AlarmSoundPlayer.Session alarmSoundSession;
   private PowerManager.WakeLock wakeLock;
 
   @Override
@@ -62,6 +62,11 @@ public class AlarmListenerService extends Service {
     if (AlertContract.ACTION_TEST_ALARM.equals(action)) {
       ensureForeground("Test du son", "Apercu du son aidant.");
       triggerAlarm("test", false);
+      return START_STICKY;
+    }
+
+    if (AlertContract.ACTION_TEST_FULL_SCREEN_ALARM.equals(action)) {
+      triggerAlarm("test", true);
       return START_STICKY;
     }
 
@@ -162,49 +167,21 @@ public class AlarmListenerService extends Service {
         : patientName.trim();
     if (showCallNotification) {
       ensureForeground("Appel aidant", "Ma Voix demande de l'aide pour " + label + ".", true, label);
+      scheduleFullScreenAlarmLaunch(label);
     }
     vibrate();
 
-    Uri uri = getAlarmUri();
     try {
-      mediaPlayer = new MediaPlayer();
-      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-        mediaPlayer.setAudioAttributes(new AudioAttributes.Builder()
-            .setUsage(AudioAttributes.USAGE_ALARM)
-            .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
-            .build());
-      }
-      mediaPlayer.setDataSource(this, uri);
-      mediaPlayer.setLooping(true);
-      mediaPlayer.prepare();
-      mediaPlayer.start();
+      alarmSoundSession = AlarmSoundPlayer.startSelected(this, prefs, true);
     } catch (Exception ex) {
       stopAlarmPlaybackOnly();
       trySystemFallbackTone();
     }
   }
 
-  private Uri getAlarmUri() {
-    return AlarmSounds.selectedUri(this, prefs);
-  }
-
-  private Uri getSystemFallbackAlarmUri() {
-    Uri defaultAlarm = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM);
-    if (defaultAlarm != null) {
-      return defaultAlarm;
-    }
-
-    Uri defaultNotification = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION);
-    return defaultNotification != null ? defaultNotification : Settings.System.DEFAULT_ALARM_ALERT_URI;
-  }
-
   private void trySystemFallbackTone() {
     try {
-      mediaPlayer = MediaPlayer.create(this, getSystemFallbackAlarmUri());
-      if (mediaPlayer != null) {
-        mediaPlayer.setLooping(true);
-        mediaPlayer.start();
-      }
+      alarmSoundSession = AlarmSoundPlayer.startSystemFallback(this, true);
     } catch (Exception ignored) {
       // The vibration and notification still signal the call if audio playback fails.
     }
@@ -218,24 +195,12 @@ public class AlarmListenerService extends Service {
   }
 
   private void stopAlarmPlaybackOnly() {
-    if (mediaPlayer == null) {
+    if (alarmSoundSession == null) {
       return;
     }
 
-    try {
-      if (mediaPlayer.isPlaying()) {
-        mediaPlayer.stop();
-      }
-    } catch (Exception ignored) {
-      // The player is being released anyway.
-    }
-
-    try {
-      mediaPlayer.release();
-    } catch (Exception ignored) {
-      // Nothing else to clean up.
-    }
-    mediaPlayer = null;
+    alarmSoundSession.stopAndRelease();
+    alarmSoundSession = null;
   }
 
   private void vibrate() {
@@ -296,9 +261,7 @@ public class AlarmListenerService extends Service {
         pendingIntentFlags()
     );
 
-    Intent alarmIntent = new Intent(this, FullScreenAlarmActivity.class);
-    alarmIntent.putExtra(AlertContract.EXTRA_PATIENT_NAME, patientName);
-    alarmIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+    Intent alarmIntent = fullScreenAlarmIntent(patientName);
     PendingIntent alarmPendingIntent = PendingIntent.getActivity(
         this,
         3,
@@ -320,6 +283,8 @@ public class AlarmListenerService extends Service {
         .setContentText(content)
         .setContentIntent(fullScreenAlarm ? alarmPendingIntent : openPendingIntent)
         .setOngoing(true)
+        .setShowWhen(true)
+        .setWhen(System.currentTimeMillis())
         .setPriority(fullScreenAlarm ? Notification.PRIORITY_MAX : Notification.PRIORITY_HIGH)
         .setCategory(fullScreenAlarm ? Notification.CATEGORY_ALARM : Notification.CATEGORY_SERVICE)
         .setVisibility(Notification.VISIBILITY_PUBLIC)
@@ -327,11 +292,40 @@ public class AlarmListenerService extends Service {
 
     if (fullScreenAlarm) {
       builder.setFullScreenIntent(alarmPendingIntent, true);
+      builder.setOnlyAlertOnce(false);
+      builder.setSound(null);
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        builder.setForegroundServiceBehavior(Notification.FOREGROUND_SERVICE_IMMEDIATE);
+      }
     }
 
     Notification notification = builder.build();
 
     startForeground(NOTIFICATION_ID, notification);
+  }
+
+  private Intent fullScreenAlarmIntent(String patientName) {
+    Intent alarmIntent = new Intent(this, FullScreenAlarmActivity.class);
+    alarmIntent.putExtra(AlertContract.EXTRA_PATIENT_NAME, patientName);
+    alarmIntent.addFlags(
+        Intent.FLAG_ACTIVITY_NEW_TASK
+            | Intent.FLAG_ACTIVITY_CLEAR_TOP
+            | Intent.FLAG_ACTIVITY_SINGLE_TOP
+            | Intent.FLAG_ACTIVITY_NO_USER_ACTION
+    );
+    return alarmIntent;
+  }
+
+  private void scheduleFullScreenAlarmLaunch(String patientName) {
+    mainHandler.postDelayed(() -> launchFullScreenAlarm(patientName), FULL_SCREEN_FALLBACK_DELAY_MS);
+  }
+
+  private void launchFullScreenAlarm(String patientName) {
+    try {
+      startActivity(fullScreenAlarmIntent(patientName));
+    } catch (Exception ignored) {
+      // Android may block direct background launches; the full-screen notification remains active.
+    }
   }
 
   private PendingIntent serviceStopPendingIntent() {
@@ -373,10 +367,19 @@ public class AlarmListenerService extends Service {
     NotificationChannel channel = new NotificationChannel(
         NOTIFICATION_CHANNEL_ID,
         "Alertes Ma Voix",
-        NotificationManager.IMPORTANCE_HIGH
+        NotificationManager.IMPORTANCE_MAX
     );
     channel.setDescription("Connexion et alarme pour le telephone aidant.");
     channel.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
+    channel.enableVibration(true);
+    channel.setVibrationPattern(new long[] { 0, 900, 400, 900, 400 });
+    channel.setSound(
+        null,
+        new AudioAttributes.Builder()
+            .setUsage(AudioAttributes.USAGE_ALARM)
+            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+            .build()
+    );
 
     NotificationManager manager = getSystemService(NotificationManager.class);
     if (manager != null) {
@@ -434,6 +437,7 @@ public class AlarmListenerService extends Service {
     stopAlarmPlaybackOnly();
     stopVibration();
     releaseWakeLock();
+    mainHandler.removeCallbacksAndMessages(null);
     executor.shutdownNow();
     super.onDestroy();
   }
