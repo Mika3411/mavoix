@@ -18,6 +18,17 @@ type NativeSpeechPlugin = {
 
 const NativeSpeech = registerPlugin<NativeSpeechPlugin>("NativeSpeech");
 
+type VoiceStatus = Record<string, "ok" | "failed" | undefined>;
+
+type UseSpeechOptions = {
+  language?: string;
+  defaultVoice?: string;
+  defaultVoiceSettings?: VoiceSettings;
+  savedPhrases?: Phrase[];
+  audioMap?: Record<string, string>;
+  setText?: (value: string) => void;
+};
+
 export default function useSpeech({
   language = "fr-FR",
   defaultVoice = "default",
@@ -25,10 +36,10 @@ export default function useSpeech({
   savedPhrases = [],
   audioMap = {},
   setText,
-}) {
-  const recognitionRef = useRef(null);
-  const [voices, setVoices] = useState([]);
-  const [voiceStatus, setVoiceStatus] = useState({});
+}: UseSpeechOptions) {
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [voiceStatus, setVoiceStatus] = useState<VoiceStatus>({});
   const [isListening, setIsListening] = useState(false);
 
   const normalizedLanguage = useMemo(() => language || "fr-FR", [language]);
@@ -38,7 +49,10 @@ export default function useSpeech({
   );
 
   const speakWithNativeTextToSpeech = useCallback(
-    async (phrase, settings = defaultVoiceSettings) => {
+    async (
+      phrase: string,
+      settings: Partial<VoiceSettings> = defaultVoiceSettings
+    ) => {
       const textToSpeak = String(phrase || "").replace(/\s+/g, " ").trim();
       if (!textToSpeak) return;
 
@@ -97,7 +111,8 @@ export default function useSpeech({
     };
   }, []);
 
-  const markVoiceStatus = useCallback((voiceURI, status) => {
+  const markVoiceStatus = useCallback(
+    (voiceURI: string | null | undefined, status: "ok" | "failed") => {
     if (!voiceURI) return;
 
     setVoiceStatus((prev) => {
@@ -107,10 +122,12 @@ export default function useSpeech({
         [voiceURI]: status,
       };
     });
-  }, []);
+    },
+    []
+  );
 
   const getReliableFallbackVoice = useCallback(
-    (preferredLang = normalizedLanguage) => {
+    (preferredLang = normalizedLanguage): SpeechSynthesisVoice | null => {
       const normalizedLang = String(preferredLang || "fr-FR").toLowerCase();
 
       const healthyVoices = voices.filter(
@@ -138,7 +155,7 @@ export default function useSpeech({
   );
 
   const resolveVoiceByURI = useCallback(
-    (voiceURI) => {
+    (voiceURI?: string | null): SpeechSynthesisVoice | null => {
       if (!voiceURI || voiceURI === "default") {
         return getReliableFallbackVoice();
       }
@@ -159,8 +176,8 @@ export default function useSpeech({
   );
 
   const testVoice = useCallback(
-    (voiceURI, sampleText = "Bonjour, ceci est un test de voix.") => {
-      return new Promise((resolve) => {
+    (voiceURI?: string | null, sampleText = "Bonjour, ceci est un test de voix.") => {
+      return new Promise<boolean>((resolve) => {
         if (shouldUseNativeTextToSpeech) {
           speakWithNativeTextToSpeech(sampleText)
             .then(() => resolve(true))
@@ -188,7 +205,7 @@ export default function useSpeech({
 
         let finished = false;
 
-        const finalize = (success) => {
+        const finalize = (success: boolean) => {
           if (finished) return;
           finished = true;
 
@@ -242,7 +259,12 @@ export default function useSpeech({
   );
 
   const speakText = useCallback(
-    async (phrase, voiceURI = defaultVoice, phraseId = null, overrideSettings = null) => {
+    async (
+      phrase: string,
+      voiceURI: string | null = defaultVoice,
+      phraseId: string | null = null,
+      overrideSettings: Partial<VoiceSettings> | null = null
+    ) => {
       if (phraseId && audioMap[phraseId]) {
         const audio = new Audio(audioMap[phraseId]);
         await audio.play();

@@ -3,10 +3,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { Profile } from "../types";
 
 export default function useAudioRecording({ updateCurrentProfile }: { updateCurrentProfile: (updater: (profile: Profile) => Profile) => void }) {
-  const mediaRecorderRef = useRef(null);
-  const streamRef = useRef(null);
-  const chunksRef = useRef([]);
-  const [recordingPhraseId, setRecordingPhraseId] = useState(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const [recordingPhraseId, setRecordingPhraseId] = useState<string | null>(null);
 
   const cleanupStream = useCallback(() => {
     if (streamRef.current) {

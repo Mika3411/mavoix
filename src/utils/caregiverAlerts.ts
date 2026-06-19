@@ -15,6 +15,27 @@ export function createCaregiverAlertChannel() {
     .slice(2, 14)}`;
 }
 
+export function createCaregiverAccessKey() {
+  if (typeof crypto !== "undefined" && "getRandomValues" in crypto) {
+    const bytes = new Uint8Array(32);
+    crypto.getRandomValues(bytes);
+    let binary = "";
+    bytes.forEach((byte) => {
+      binary += String.fromCharCode(byte);
+    });
+    return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+  }
+
+  return `key-${Date.now().toString(36)}-${Math.random()
+    .toString(36)
+    .slice(2, 24)}`;
+}
+
+function sanitizeCaregiverAccessKey(value: unknown) {
+  const key = typeof value === "string" ? value.trim() : "";
+  return /^[a-zA-Z0-9_-]{22,160}$/.test(key) ? key : "";
+}
+
 function getCaregiverAlertChannelStorageKey(profileId: string) {
   return `${CAREGIVER_ALERT_CHANNEL_KEY}:${profileId || "default"}`;
 }
@@ -57,6 +78,7 @@ export function createCaregiverAlertLink(
         ? getLegacyCaregiverAlertChannelForProfile(profileId) ||
           createCaregiverAlertChannel()
         : createCaregiverAlertChannel(),
+    accessKey: createCaregiverAccessKey(),
     enabled: true,
   };
 }
@@ -67,11 +89,16 @@ export function ensureCaregiverAlertLink(
   profileId = ""
 ): CaregiverAlertLink {
   const fallback = createCaregiverAlertLink(index, profileId);
+  const existingChannel = String(link?.channel || "");
+  const accessKey = sanitizeCaregiverAccessKey(link?.accessKey);
 
   return {
     id: link?.id || fallback.id,
     name: link?.name == null ? fallback.name : String(link.name),
-    channel: String(link?.channel || fallback.channel),
+    channel: existingChannel || fallback.channel,
+    ...(accessKey || !existingChannel
+      ? { accessKey: accessKey || fallback.accessKey }
+      : {}),
     enabled: link?.enabled ?? true,
   };
 }

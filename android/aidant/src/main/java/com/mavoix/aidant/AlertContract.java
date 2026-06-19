@@ -5,6 +5,7 @@ final class AlertContract {
   static final String PREFS = "ma_voix_aidant_alert";
   static final String KEY_API_BASE = "apiBase";
   static final String KEY_CHANNEL = "channel";
+  static final String KEY_ACCESS_KEY = "accessKey";
   static final String KEY_CONNECTIONS = "connections";
   static final String KEY_SELECTED_CONNECTION_ID = "selectedConnectionId";
   static final String KEY_SOUND_ID = "soundId";
@@ -19,6 +20,7 @@ final class AlertContract {
 
   static final String EXTRA_API_BASE = "apiBase";
   static final String EXTRA_CHANNEL = "channel";
+  static final String EXTRA_ACCESS_KEY = "accessKey";
   static final String EXTRA_PATIENT_NAME = "patientName";
   static final String EXTRA_LAST_UNREAD_MESSAGE = "lastUnreadMessage";
 

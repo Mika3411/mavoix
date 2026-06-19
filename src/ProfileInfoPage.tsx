@@ -1,53 +1,9 @@
 import React from "react";
 import type { CSSProperties } from "react";
 import { createStyles, getActiveTheme } from "./themes";
+import type { Profile } from "./types";
 
-type Treatment = {
-  id?: string;
-  name?: string;
-  dosage?: string;
-  frequency?: string;
-};
-
-type EmergencyContact = {
-  id?: string;
-  name?: string;
-  phone?: string;
-  relation?: string;
-  usage?: string;
-};
-
-type DoctorInfo = {
-  name?: string;
-  phone?: string;
-};
-
-type MedicalInfo = {
-  bloodType?: string;
-  allergies?: string;
-  medicalHistory?: string;
-  condition?: string;
-  treatments?: Treatment[];
-};
-
-type ProfileLike = {
-  id?: string;
-  categories?: unknown[];
-  phrases?: unknown[];
-  audioMap?: Record<string, unknown>;
-  profilePhoto?: string;
-  photo?: string;
-  firstName?: string;
-  lastName?: string;
-  name?: string;
-  birthDate?: string;
-  address?: string;
-  language?: string;
-  socialSecurityNumber?: string;
-  medicalInfo?: MedicalInfo;
-  emergencyContacts?: EmergencyContact[];
-  doctorInfo?: DoctorInfo;
-};
+type ProfileLike = Partial<Profile>;
 
 type ProfileInfoPageProps = {
   profile?: ProfileLike;
@@ -64,7 +20,7 @@ export default function ProfileInfoPage(props: ProfileInfoPageProps) {
 
   if (!profile) return null;
 
-  const theme = getActiveTheme(profile as any);
+  const theme = getActiveTheme(profile);
   const styles = createStyles(theme);
 
   const compactSectionTitle: CSSProperties = {
@@ -117,7 +73,13 @@ export default function ProfileInfoPage(props: ProfileInfoPageProps) {
     [profile.firstName, profile.lastName].filter(Boolean).join(" ") ||
     profile.name ||
     "";
-  const medicalInfo = profile.medicalInfo || {};
+  const medicalInfo = profile.medicalInfo || {
+    bloodType: "",
+    allergies: "",
+    medicalHistory: "",
+    condition: "",
+    treatments: [],
+  };
   const treatments = medicalInfo.treatments || [];
   const emergencyContacts = (profile.emergencyContacts || []).filter(
     (c) => c && (c.usage === "urgence" || c.usage === "both")
@@ -125,7 +87,7 @@ export default function ProfileInfoPage(props: ProfileInfoPageProps) {
   const emergencySpeakContacts = emergencyContacts.filter(
     (c) => c && (c.usage === "urgence" || c.usage === "both")
   );
-  const doctorInfo = profile.doctorInfo || {};
+  const doctorInfo = profile.doctorInfo || { name: "", phone: "" };
 
   const columnCount =
     typeof window !== "undefined"

@@ -40,7 +40,7 @@ import {
   isUpdateSnoozed,
   snoozeUpdate,
 } from "./utils/appUpdates";
-import type { CaregiverAlertLink, VoiceEditor } from "./types";
+import type { CaregiverAlertLink, Phrase, VoiceEditor } from "./types";
 
 type DownloadDevice = "desktop" | "android" | "other";
 type CaregiverAlertTarget = CaregiverAlertLink & {
@@ -51,22 +51,31 @@ type CaregiverAlertTarget = CaregiverAlertLink & {
 const APK_DOWNLOAD_URL = "/ma-voix.apk";
 const AIDANT_APK_DOWNLOAD_URL = "/ma-voix-aidant.apk";
 
-function buildCaregiverAlertWebLink(channel: string) {
+function appendCaregiverAccessKey(url: URL, accessKey?: string) {
+  if (accessKey) {
+    url.searchParams.set("key", accessKey);
+  }
+}
+
+function buildCaregiverAlertWebLink(channel: string, accessKey?: string) {
   const url = new URL("/aidant-alerte", API_BASE);
   url.searchParams.set("channel", channel);
+  appendCaregiverAccessKey(url, accessKey);
   return url.href;
 }
 
-function buildCaregiverAlertAppLink(channel: string) {
+function buildCaregiverAlertAppLink(channel: string, accessKey?: string) {
   const url = new URL("mavoix-aidant://open");
   url.searchParams.set("apiBase", API_BASE);
   url.searchParams.set("channel", channel);
+  appendCaregiverAccessKey(url, accessKey);
   return url.href;
 }
 
-function buildCaregiverMessageStreamUrl(channel: string) {
+function buildCaregiverMessageStreamUrl(channel: string, accessKey?: string) {
   const url = new URL("/api/caregiver-messages/stream", API_BASE);
   url.searchParams.set("channel", channel);
+  appendCaregiverAccessKey(url, accessKey);
   url.searchParams.set("role", "user");
   return url.href;
 }
@@ -224,6 +233,7 @@ export default function App() {
   const isLandscapeMobileLayout =
     viewportWidth > viewportHeight && viewportHeight <= 520 && viewportWidth <= 960;
   const isFooterNavLayout = isCompactLayout || isLandscapeMobileLayout;
+  const isNativeApp = Capacitor.isNativePlatform();
   const pageSafeAreaPadding = {
     paddingTop: "calc(12px + env(safe-area-inset-top, 0px))",
     paddingRight: "calc(12px + env(safe-area-inset-right, 0px))",
@@ -240,10 +250,10 @@ export default function App() {
         currentProfileId
       ).map((link) => ({
         ...link,
-        alertLink: buildCaregiverAlertWebLink(link.channel),
+        alertLink: buildCaregiverAlertWebLink(link.channel, link.accessKey),
         appLink:
           downloadDevice === "android"
-            ? buildCaregiverAlertAppLink(link.channel)
+            ? buildCaregiverAlertAppLink(link.channel, link.accessKey)
             : "",
       })),
     [currentProfile?.caregiverAlertLinks, currentProfileId, downloadDevice]
@@ -256,8 +266,11 @@ export default function App() {
     [caregiverAlertTargets]
   );
   const caregiverMessageChannelKey = useMemo(
-    () => caregiverMessageChannels.join("|"),
-    [caregiverMessageChannels]
+    () =>
+      caregiverAlertTargets
+        .map((target) => `${target.channel}:${target.accessKey || ""}`)
+        .join("|"),
+    [caregiverAlertTargets]
   );
   const caregiverMessageStorageKey = useMemo(
     () =>
@@ -302,7 +315,7 @@ export default function App() {
     caregiverMessageStorageKey,
   ]);
   const markCaregiverMessagesRead = useCallback(
-    (channels = caregiverMessageChannels) => {
+    (channels: string[] = caregiverMessageChannels) => {
       markCaregiverMessagesReadInStorage(
         caregiverMessageStorageKey,
         caregiverMessageReadStorageKey,
@@ -382,7 +395,7 @@ export default function App() {
       .filter((target) => target.channel)
       .map((target) => {
         const source = new EventSource(
-          buildCaregiverMessageStreamUrl(target.channel)
+          buildCaregiverMessageStreamUrl(target.channel, target.accessKey)
         );
 
         const syncUnreadCount = () => {
@@ -606,7 +619,7 @@ export default function App() {
   function savePhrase() {
     if (!text.trim()) return;
 
-    const newPhrase = {
+    const newPhrase: Phrase = {
       id: generateId(),
       label: label.trim() || text.trim().slice(0, 30),
       text: text.trim(),
@@ -653,7 +666,7 @@ export default function App() {
     window.location.href = smsUrl;
   }
 
-  function updatePhrase(id, field, value) {
+  function updatePhrase(id: string, field: keyof Phrase, value: unknown) {
     updateCurrentProfile((profile) => ({
       ...profile,
       phrases: profile.phrases.map((item) =>
@@ -688,7 +701,7 @@ export default function App() {
     }));
   }
 
-  function deletePhrase(id) {
+  function deletePhrase(id: string) {
     const phraseToDelete = savedPhrases.find((item) => item.id === id);
     const phraseLabel = phraseToDelete?.label || phraseToDelete?.text || "cette phrase";
 
@@ -711,7 +724,7 @@ export default function App() {
     });
   }
 
-  function movePhrase(id, direction) {
+  function movePhrase(id: string, direction: "up" | "down") {
     updateCurrentProfile((profile) => {
       const index = profile.phrases.findIndex((item) => item.id === id);
       if (index === -1) return profile;
@@ -758,7 +771,7 @@ export default function App() {
     setNewCategoryIcon("💬");
   }
 
-  function deleteCategory(categoryName) {
+  function deleteCategory(categoryName: string) {
     const protectedCategories = ["Général", "Urgence"];
     if (protectedCategories.includes(categoryName)) {
       alert("Cette catégorie de base ne peut pas être supprimée.");
@@ -832,6 +845,38 @@ export default function App() {
     });
   }
 
+  function regenerateCaregiverAlertLink(linkId: string) {
+    if (
+      typeof window !== "undefined" &&
+      !window.confirm(
+        "Regénérer ce lien ? L'ancien lien aidant ne recevra plus les nouvelles alertes."
+      )
+    ) {
+      return;
+    }
+
+    updateCurrentProfile((profile) => {
+      const links = ensureCaregiverAlertLinks(
+        profile.caregiverAlertLinks,
+        profile.id
+      );
+
+      return {
+        ...profile,
+        caregiverAlertLinks: links.map((link, index) => {
+          if (link.id !== linkId) return link;
+
+          const refreshedLink = createCaregiverAlertLink(index, profile.id);
+          return {
+            ...link,
+            channel: refreshedLink.channel,
+            accessKey: refreshedLink.accessKey,
+          };
+        }),
+      };
+    });
+  }
+
   async function copyCaregiverAlertLink(linkId: string) {
     const target = caregiverAlertTargets.find((link) => link.id === linkId);
     if (!target) return;
@@ -867,6 +912,7 @@ export default function App() {
         },
         body: JSON.stringify({
           channel: selectedCaregiverAlertTarget.channel,
+          accessKey: selectedCaregiverAlertTarget.accessKey || "",
           profileName: currentProfile?.firstName || currentProfile?.name || "",
           message: "J'ai besoin de mon aidant.",
         }),
@@ -1157,6 +1203,8 @@ export default function App() {
   const footerNavFontSize = isLandscapeMobileLayout ? 13 : 11;
   const footerNavIconFontSize = isLandscapeMobileLayout ? 16 : 18;
   const footerAlertSize = 50;
+  const nativeHeaderAlertSize = isLandscapeMobileLayout ? 56 : 62;
+  const shouldShowFooterAlertButton = isFooterNavLayout && !isNativeApp;
   const footerNavGridColumns = isLandscapeMobileLayout
     ? "minmax(104px, 1fr) minmax(58px, 0.7fr) minmax(54px, 0.62fr) minmax(42px, 0.45fr) minmax(42px, 0.45fr)"
     : "minmax(96px, 1.35fr) minmax(54px, 0.68fr) minmax(48px, 0.58fr) minmax(38px, 0.42fr) minmax(38px, 0.42fr)";
@@ -1201,7 +1249,11 @@ export default function App() {
               alignItems: "center",
               gap: isCompactLayout ? 10 : isLandscapeMobileLayout ? 8 : 16,
               minWidth: 0,
-              width: isCompactLayout ? "100%" : undefined,
+              width: isCompactLayout
+                ? isNativeApp
+                  ? `calc(100% - ${nativeHeaderAlertSize + 12}px)`
+                  : "100%"
+                : undefined,
               maxWidth: isLandscapeMobileLayout ? "min(40vw, 300px)" : undefined,
               flexShrink: isLandscapeMobileLayout ? 1 : undefined,
             }}
@@ -1233,6 +1285,54 @@ export default function App() {
               : ""}
             </div>
           </div>
+
+          {isNativeApp && (
+            <button
+              onClick={sendCaregiverAlert}
+              disabled={caregiverAlertSending}
+              aria-label={
+                caregiverAlertSending
+                  ? "Envoi de l'appel aidant"
+                  : selectedCaregiverAlertTarget
+                  ? `Appel aidant : ${
+                      selectedCaregiverAlertTarget.name || "aidant"
+                    }`
+                  : "Appel aidant"
+              }
+              title={
+                caregiverAlertSending
+                  ? "Envoi de l'appel aidant"
+                  : selectedCaregiverAlertTarget
+                  ? `Appel aidant : ${
+                      selectedCaregiverAlertTarget.name || "aidant"
+                    }`
+                  : "Appel aidant"
+              }
+              style={{
+                position: "absolute",
+                top: isLandscapeMobileLayout ? 0 : 4,
+                right: 0,
+                zIndex: 30,
+                width: nativeHeaderAlertSize,
+                height: nativeHeaderAlertSize,
+                padding: 0,
+                borderRadius: 20,
+                background: caregiverAlertSending ? "#92400e" : "#f59e0b",
+                color: "#111827",
+                border: "none",
+                fontSize: isLandscapeMobileLayout ? "26px" : "29px",
+                fontWeight: 900,
+                cursor: caregiverAlertSending ? "wait" : "pointer",
+                boxShadow: "0 10px 28px rgba(0,0,0,0.30)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                lineHeight: 1,
+              }}
+            >
+              🔔
+            </button>
+          )}
 
           {!isFooterNavLayout && (
           <div
@@ -1917,9 +2017,9 @@ export default function App() {
             duplicateCurrentProfile={duplicateCurrentProfile}
             deleteCurrentProfile={() => deleteCurrentProfile({ onAfterDelete: () => { setFilter("Toutes"); setCategory("Général"); } })}
             exportCurrentProfile={exportCurrentProfile}
-            importCurrentProfile={(event) => importCurrentProfile(event, { onAfterImport: () => { setFilter("Toutes"); setCategory("Général"); } })}
+            importCurrentProfile={(event: React.ChangeEvent<HTMLInputElement>) => importCurrentProfile(event, { onAfterImport: () => { setFilter("Toutes"); setCategory("Général"); } })}
             exportAllProfiles={exportAllProfiles}
-            importAllProfiles={(event) => importAllProfiles(event, { onAfterImport: () => { setFilter("Toutes"); setCategory("Général"); } })}
+            importAllProfiles={(event: React.ChangeEvent<HTMLInputElement>) => importAllProfiles(event, { onAfterImport: () => { setFilter("Toutes"); setCategory("Général"); } })}
             fileInputRef={fileInputRef}
             privacyStatus={privacyStatus}
             enablePrivacyPassword={enablePrivacyPassword}
@@ -1929,6 +2029,7 @@ export default function App() {
             addCaregiverAlertLink={addCaregiverAlertLink}
             updateCaregiverAlertLink={updateCaregiverAlertLink}
             deleteCaregiverAlertLink={deleteCaregiverAlertLink}
+            regenerateCaregiverAlertLink={regenerateCaregiverAlertLink}
             copyCaregiverAlertLink={copyCaregiverAlertLink}
             selectedCaregiverAlertLinkId={selectedCaregiverAlertTargetId}
             selectCaregiverAlertTarget={selectCaregiverAlertTarget}
@@ -1970,8 +2071,10 @@ export default function App() {
           <div
             style={{
               flexShrink: 0,
-              display: "grid",
-              gridTemplateColumns: `minmax(0, 1fr) ${footerAlertSize}px`,
+              display: shouldShowFooterAlertButton ? "grid" : "block",
+              gridTemplateColumns: shouldShowFooterAlertButton
+                ? `minmax(0, 1fr) ${footerAlertSize}px`
+                : undefined,
               alignItems: "center",
               gap: isLandscapeMobileLayout ? 8 : 6,
               padding: isLandscapeMobileLayout ? "8px 0 0" : "10px 0 0",
@@ -2219,52 +2322,54 @@ export default function App() {
               </div>
             </div>
 
-            <button
-              onClick={sendCaregiverAlert}
-              disabled={caregiverAlertSending}
-              aria-label={
-                caregiverAlertSending
-                  ? "Envoi de l'appel aidant"
-                  : selectedCaregiverAlertTarget
-                  ? `Appel aidant : ${
-                      selectedCaregiverAlertTarget.name || "aidant"
-                    }`
-                  : "Appel aidant"
-              }
-              title={
-                caregiverAlertSending
-                  ? "Envoi de l'appel aidant"
-                  : selectedCaregiverAlertTarget
-                  ? `Appel aidant : ${
-                      selectedCaregiverAlertTarget.name || "aidant"
-                    }`
-                  : "Appel aidant"
-              }
-              style={{
-                width: footerAlertSize,
-                height: footerAlertSize,
-                padding: 0,
-                borderRadius: "18px",
-                background: caregiverAlertSending ? "#92400e" : "#f59e0b",
-                color: "#111827",
-                border: "none",
-                fontSize: isLandscapeMobileLayout ? "21px" : "23px",
-                fontWeight: 800,
-                cursor: caregiverAlertSending ? "wait" : "pointer",
-                boxShadow: "0 8px 25px rgba(0,0,0,0.24)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                lineHeight: 1,
-              }}
-            >
-              🔔
-            </button>
+            {shouldShowFooterAlertButton && (
+              <button
+                onClick={sendCaregiverAlert}
+                disabled={caregiverAlertSending}
+                aria-label={
+                  caregiverAlertSending
+                    ? "Envoi de l'appel aidant"
+                    : selectedCaregiverAlertTarget
+                    ? `Appel aidant : ${
+                        selectedCaregiverAlertTarget.name || "aidant"
+                      }`
+                    : "Appel aidant"
+                }
+                title={
+                  caregiverAlertSending
+                    ? "Envoi de l'appel aidant"
+                    : selectedCaregiverAlertTarget
+                    ? `Appel aidant : ${
+                        selectedCaregiverAlertTarget.name || "aidant"
+                      }`
+                    : "Appel aidant"
+                }
+                style={{
+                  width: footerAlertSize,
+                  height: footerAlertSize,
+                  padding: 0,
+                  borderRadius: "18px",
+                  background: caregiverAlertSending ? "#92400e" : "#f59e0b",
+                  color: "#111827",
+                  border: "none",
+                  fontSize: isLandscapeMobileLayout ? "21px" : "23px",
+                  fontWeight: 800,
+                  cursor: caregiverAlertSending ? "wait" : "pointer",
+                  boxShadow: "0 8px 25px rgba(0,0,0,0.24)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  lineHeight: 1,
+                }}
+              >
+                🔔
+              </button>
+            )}
           </div>
         )}
       </div>
 
-      {!isFooterNavLayout && (
+      {!isFooterNavLayout && !isNativeApp && (
         <button
           onClick={sendCaregiverAlert}
           disabled={caregiverAlertSending}

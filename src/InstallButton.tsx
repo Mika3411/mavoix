@@ -1,8 +1,13 @@
 import React, { useEffect, useState } from "react";
+import type { StyleMap } from "./types";
 
-export default function InstallButton(props: any) {
-  const { styles } = props;
-  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+type InstallButtonProps = {
+  styles: StyleMap;
+};
+
+export default function InstallButton({ styles }: InstallButtonProps) {
+  const [deferredPrompt, setDeferredPrompt] =
+    useState<BeforeInstallPromptEvent | null>(null);
   const [isInstalled, setIsInstalled] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
 
@@ -12,7 +17,7 @@ export default function InstallButton(props: any) {
       return;
     }
 
-    const handleBeforeInstallPrompt = (e) => {
+    const handleBeforeInstallPrompt = (e: BeforeInstallPromptEvent) => {
       e.preventDefault();
       setDeferredPrompt(e);
     };

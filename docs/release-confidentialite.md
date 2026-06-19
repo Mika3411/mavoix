@@ -5,7 +5,7 @@
 - Ne pas placer de clé API, token, mot de passe ou keystore dans le code source.
 - Utiliser `.env` localement et les variables d'environnement de l'hébergeur en production.
 - Les fichiers `.env`, `*.jks`, `*.keystore` et `android/keystore.properties` sont ignorés par Git.
-- `ma-voix-android/.env.example` et `ma-voix-windows/.env.example` documentent les variables attendues.
+- `.env.example` documente les variables attendues.
 
 Variables utiles :
 
@@ -18,13 +18,13 @@ MESSAGE_RETENTION_MS=86400000
 
 ## Signature release Android
 
-La signature release est lue depuis `ma-voix-android/android/keystore.properties` ou depuis les variables d'environnement `MA_VOIX_RELEASE_*`.
+La signature release est lue depuis `android/keystore.properties` ou depuis les variables d'environnement `MA_VOIX_RELEASE_*`.
 Sans ce fichier ou ces variables, Gradle peut produire un APK release non signé pour test local, mais il ne faut pas le diffuser.
 
 Exemple de génération d'une clé d'upload :
 
 ```powershell
-cd E:\ma-voix-sms-gratuit-patch\ma-voix-android\android
+cd E:\ma-voix-sms-gratuit-patch\ma-voix-windows\android
 New-Item -ItemType Directory -Force -Path release
 keytool -genkeypair -v -keystore release\ma-voix-release.jks -alias ma-voix -keyalg RSA -keysize 2048 -validity 10000
 Copy-Item keystore.properties.example keystore.properties

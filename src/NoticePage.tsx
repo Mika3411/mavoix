@@ -731,8 +731,9 @@ export default function NoticePage({
             <NoticeBlock title="Données transitant par le serveur">
               <NoticeList
                 items={[
-                  "Les alertes aidant utilisent un canal technique généré par l'application.",
+                  "Les alertes aidant utilisent un lien technique avec canal et clé générés par l'application.",
                   "Les messages aidant transitent par le serveur pour être remis à l'autre appareil.",
+                  "Si un lien aidant a été partagé au mauvais endroit, régénérez-le dans Configurer > Sécurité.",
                   "L'historique serveur est temporaire, limité en volume et destiné à la remise récente des messages.",
                   "Aucune clé API personnelle ne doit être placée dans le code source public.",
                 ]}

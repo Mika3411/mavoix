@@ -1,4 +1,5 @@
 import React from "react";
+import type { Category, Phrase, SpeakText, StateSetter, StyleMap } from "./types";
 
 function isIconOnlyPhraseText(value: unknown) {
   const text = String(value ?? "").trim();
@@ -11,7 +12,22 @@ function isIconOnlyPhraseText(value: unknown) {
   );
 }
 
-export default function CommunicationPage(props: any) {
+type CommunicationPageProps = {
+  styles: StyleMap;
+  categoryOptions: Category[];
+  filter: string;
+  setFilter: StateSetter<string>;
+  filteredPhrases: Phrase[];
+  getCategoryBackground: (categoryName: string) => string;
+  speakText: SpeakText;
+  movePhrase: (id: string, direction: "up" | "down") => void;
+  updatePhrase: (id: string, field: keyof Phrase, value: unknown) => void;
+  deletePhrase: (id: string) => void;
+  isEditMode: boolean;
+  setIsEditMode: StateSetter<boolean>;
+};
+
+export default function CommunicationPage(props: CommunicationPageProps) {
   const {
     styles,
     categoryOptions,

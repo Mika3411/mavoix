@@ -2,6 +2,8 @@ import type React from "react";
 
 export type StyleMap = Record<string, React.CSSProperties>;
 
+export type StateSetter<T> = React.Dispatch<React.SetStateAction<T>>;
+
 export type Category = {
   name: string;
   icon: string;
@@ -42,7 +44,13 @@ export type CaregiverAlertLink = {
   id: string;
   name: string;
   channel: string;
+  accessKey?: string;
   enabled: boolean;
+};
+
+export type CaregiverAlertTarget = CaregiverAlertLink & {
+  alertLink?: string;
+  appLink?: string;
 };
 
 export type DoctorInfo = {
@@ -58,6 +66,11 @@ export type MedicalInfo = {
   treatments: Treatment[];
 };
 
+export type PinProtection = {
+  enabled: boolean;
+  pin: string;
+};
+
 export type Profile = {
   id: string;
   name: string;
@@ -69,6 +82,7 @@ export type Profile = {
   profilePhoto?: string;
   photo?: string;
   socialSecurityNumber?: string;
+  mainNeeds?: string;
   themeMode?: string;
   customTheme?: Record<string, string>;
   categories: Category[];
@@ -79,6 +93,7 @@ export type Profile = {
   medicalInfo?: MedicalInfo;
   doctorInfo?: DoctorInfo;
   emergencyContacts?: EmergencyContact[];
+  pinProtection?: PinProtection;
   caregiverAlertLinks?: CaregiverAlertLink[];
   selectedCaregiverAlertLinkId?: string;
 };
@@ -90,6 +105,32 @@ export type VoiceEditor = {
   assignedVoice: string;
   useProfileVoiceSettings: boolean;
   voiceSettings: VoiceSettings;
+};
+
+export type SpeakText = (
+  phrase: string,
+  voiceURI?: string | null,
+  phraseId?: string | null,
+  overrideSettings?: Partial<VoiceSettings> | null
+) => void | Promise<void>;
+
+export type ProfileFieldUpdater = (
+  field: keyof Profile | string,
+  value: unknown
+) => void;
+
+export type NestedProfileFieldUpdater = (
+  parentField: keyof Profile | string,
+  childField: string,
+  value: unknown
+) => void;
+
+export type PrivacyStatus = {
+  privateDataLoaded: boolean;
+  protectedAtRest: boolean;
+  passwordProtected: boolean;
+  locked: boolean;
+  error: string;
 };
 
 export type UseProfilesOptions = {

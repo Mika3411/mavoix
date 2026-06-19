@@ -1,6 +1,43 @@
 import React from "react";
+import type {
+  Phrase,
+  Profile,
+  ProfileFieldUpdater,
+  SpeakText,
+  StateSetter,
+  StyleMap,
+  VoiceEditor,
+  VoiceSettings,
+} from "./types";
 
-export default function VoicePage(props: any) {
+type VoiceStatus = Record<string, "ok" | "failed" | undefined>;
+
+type VoicePageProps = {
+  styles: StyleMap;
+  defaultVoice: string;
+  defaultVoiceSettings: VoiceSettings;
+  voices: SpeechSynthesisVoice[];
+  voiceStatus: VoiceStatus;
+  testVoice: (voiceURI?: string | null, sampleText?: string) => Promise<boolean>;
+  updateCurrentProfileField: ProfileFieldUpdater;
+  currentProfile: Profile;
+  savedPhrases: Phrase[];
+  selectedPhraseId: string | null;
+  setSelectedPhraseId: StateSetter<string | null>;
+  selectedPhrase?: Phrase | null;
+  voiceEditor: VoiceEditor;
+  setVoiceEditor: StateSetter<VoiceEditor>;
+  categories: string[];
+  saveSelectedPhraseVoiceSettings: () => void;
+  speakText: SpeakText;
+  recordingPhraseId: string | null;
+  stopRecording: () => void;
+  startRecording: (phraseId: string) => void | Promise<void>;
+  audioMap: Record<string, string>;
+  deleteRecording: (phraseId: string) => void;
+};
+
+export default function VoicePage(props: VoicePageProps) {
   const {
     styles,
     defaultVoice,

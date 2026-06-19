@@ -8,6 +8,10 @@ import type {
   Treatment,
 } from "../types";
 
+type LegacyProfileInput = Partial<Profile> & {
+  emergencyContact?: string;
+};
+
 export function ensureTreatment(treatment?: Partial<Treatment>): Treatment {
   return {
     id: treatment?.id ?? generateId(),
@@ -46,6 +50,15 @@ export function ensureEmergencyContact(
   };
 }
 
+export function ensurePinProtection(
+  pinProtection?: Partial<Profile["pinProtection"]>
+) {
+  return {
+    enabled: Boolean(pinProtection?.enabled),
+    pin: String(pinProtection?.pin || "").replace(/\D/g, "").slice(0, 4),
+  };
+}
+
 export function createEmptyEmergencyContact(): EmergencyContact {
   return {
     id: generateId(),
@@ -56,7 +69,7 @@ export function createEmptyEmergencyContact(): EmergencyContact {
   };
 }
 
-export function ensureProfile(profile?: Partial<Profile>): Profile {
+export function ensureProfile(profile?: LegacyProfileInput): Profile {
   const base = createProfile(profile?.name || "Profil importé") as Profile;
   const profileId = profile?.id ?? base.id;
 
@@ -101,9 +114,10 @@ export function ensureProfile(profile?: Partial<Profile>): Profile {
     emergencyContacts:
       profile?.emergencyContacts?.length && profile.emergencyContacts.length > 0
         ? profile.emergencyContacts.map(ensureEmergencyContact)
-        : profile && "emergencyContact" in profile && typeof (profile as any).emergencyContact === "string"
-          ? [ensureEmergencyContact({ name: (profile as any).emergencyContact })]
+        : profile && typeof profile.emergencyContact === "string"
+          ? [ensureEmergencyContact({ name: profile.emergencyContact })]
           : [createEmptyEmergencyContact()],
+    pinProtection: ensurePinProtection(profile?.pinProtection),
     caregiverAlertLinks: ensureCaregiverAlertLinks(
       profile?.caregiverAlertLinks,
       profileId

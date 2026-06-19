@@ -1,5 +1,8 @@
 apply plugin: 'com.android.application'
 
+def aidantVersionCode = 111
+def aidantVersionName = "1.1.1-s24"
+
 def releaseSigningProperties = new Properties()
 def releaseSigningPropertiesFile = rootProject.file('keystore.properties')
 if (releaseSigningPropertiesFile.exists()) {
@@ -21,9 +24,9 @@ android {
         applicationId "com.mavoix.aidant"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
-        archivesBaseName = "aidant"
+        versionCode aidantVersionCode
+        versionName aidantVersionName
+        archivesBaseName = "ma-voix-aidant-s24-v${aidantVersionName}"
     }
     signingConfigs {
         release {

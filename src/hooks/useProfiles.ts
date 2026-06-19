@@ -14,6 +14,7 @@ import {
   ensureDoctorInfo,
   ensureEmergencyContact,
   ensureMedicalInfo,
+  ensurePinProtection,
   ensureProfile,
 } from "../utils/normalize";
 import { createCaregiverAlertLink } from "../utils/caregiverAlerts";
@@ -25,10 +26,7 @@ import {
 function normalizeImportedProfile(profile: Partial<Profile>): Profile {
   return ensureProfile({
     ...profile,
-    pinProtection: {
-      enabled: Boolean((profile as any)?.pinProtection?.enabled),
-      pin: String((profile as any)?.pinProtection?.pin || "").replace(/\D/g, "").slice(0, 4),
-    },
+    pinProtection: ensurePinProtection(profile.pinProtection),
   } as Profile);
 }
 
@@ -56,6 +54,16 @@ function saveJsonFile(fileName: string, data: unknown) {
   link.remove();
   URL.revokeObjectURL(url);
 }
+
+type ImportAllProfilesPayload = {
+  profile?: Partial<Profile>;
+  profiles?: Partial<Profile>[];
+  currentProfileId?: string;
+  abbreviationDictionary?: unknown;
+  dictionary?: {
+    abbreviations?: unknown;
+  };
+};
 
 export default function useProfiles() {
   const [initialSnapshot] = useState(() => {
@@ -187,24 +195,28 @@ export default function useProfiles() {
     }
   }, [profiles, currentProfileId]);
 
-  const currentProfile = useMemo(
-    () => profiles.find((profile) => profile.id === currentProfileId) || profiles[0],
+  const currentProfile = useMemo<Profile>(
+    () =>
+      profiles.find((profile) => profile.id === currentProfileId) ||
+      profiles[0] ||
+      ensureProfile(createProfile() as Profile),
     [profiles, currentProfileId]
   );
 
-  const customCategories = currentProfile?.categories || DEFAULT_CATEGORIES;
-  const savedPhrases = currentProfile?.phrases || [];
-  const audioMap = currentProfile?.audioMap || {};
-  const defaultVoice = currentProfile?.defaultVoice || "default";
+  const customCategories = currentProfile.categories || DEFAULT_CATEGORIES;
+  const savedPhrases = currentProfile.phrases || [];
+  const audioMap = currentProfile.audioMap || {};
+  const defaultVoice = currentProfile.defaultVoice || "default";
   const defaultVoiceSettings = {
-    rate: currentProfile?.voiceSettings?.rate ?? 1,
-    pitch: currentProfile?.voiceSettings?.pitch ?? 1,
-    volume: currentProfile?.voiceSettings?.volume ?? 1,
+    rate: currentProfile.voiceSettings?.rate ?? 1,
+    pitch: currentProfile.voiceSettings?.pitch ?? 1,
+    volume: currentProfile.voiceSettings?.volume ?? 1,
   };
 
+  const profileEmergencyContacts = currentProfile.emergencyContacts || [];
   const emergencyContacts =
-    currentProfile?.emergencyContacts?.length > 0
-      ? currentProfile.emergencyContacts
+    profileEmergencyContacts.length > 0
+      ? profileEmergencyContacts
       : [createEmptyEmergencyContact()];
 
   const updateCurrentProfile = useCallback((updater: (profile: Profile) => Profile) => {
@@ -226,7 +238,10 @@ export default function useProfiles() {
     updateCurrentProfile((profile) => ({
       ...profile,
       [parentField]: {
-        ...(profile[parentField] || {}),
+        ...((profile[parentField as keyof Profile] &&
+        typeof profile[parentField as keyof Profile] === "object"
+          ? profile[parentField as keyof Profile]
+          : {}) as Record<string, unknown>),
         [childField]: value,
       },
     }));
@@ -379,7 +394,7 @@ export default function useProfiles() {
   }, [profiles.length]);
 
   const duplicateCurrentProfile = useCallback(() => {
-    const phraseIdMap = new Map();
+    const phraseIdMap = new Map<string, string>();
 
     const duplicatedPhrases = (currentProfile?.phrases || []).map((phrase) => {
       const newId = generateId();
@@ -393,7 +408,7 @@ export default function useProfiles() {
           const newPhraseId = phraseIdMap.get(oldPhraseId);
           return newPhraseId ? [newPhraseId, audioValue] : null;
         })
-        .filter(Boolean)
+        .filter((entry): entry is [string, string] => Boolean(entry))
     );
 
     const duplicatedEmergencyContacts = (currentProfile?.emergencyContacts || []).map((contact) =>
@@ -404,11 +419,15 @@ export default function useProfiles() {
     );
 
     const duplicatedCaregiverAlertLinks = (currentProfile?.caregiverAlertLinks || []).map(
-      (link, index) => ({
-        ...link,
-        id: generateId(),
-        channel: createCaregiverAlertLink(index).channel,
-      })
+      (link, index) => {
+        const freshLink = createCaregiverAlertLink(index);
+        return {
+          ...link,
+          id: generateId(),
+          channel: freshLink.channel,
+          accessKey: freshLink.accessKey,
+        };
+      }
     );
 
     const duplicatedTreatments = (currentProfile?.medicalInfo?.treatments || []).map((treatment) => ({
@@ -610,8 +629,8 @@ export default function useProfiles() {
           throw new Error("Fichier invalide");
         }
 
-        const normalizedProfiles = parsed.profiles.map((profile) =>
-          normalizeImportedProfile(profile)
+        const normalizedProfiles: Profile[] = parsed.profiles.map(
+          (profile: Partial<Profile>) => normalizeImportedProfile(profile)
         );
         const abbreviationDictionary =
           parsed.abbreviationDictionary || parsed.dictionary?.abbreviations;
@@ -648,7 +667,9 @@ export default function useProfiles() {
     const reader = new FileReader();
     reader.onload = () => {
       try {
-        const parsed = JSON.parse(String(reader.result || ""));
+        const parsed = JSON.parse(
+          String(reader.result || "")
+        ) as ImportAllProfilesPayload;
         const rawProfile =
           parsed.profile ||
           (Array.isArray(parsed.profiles) && parsed.profiles.length > 0

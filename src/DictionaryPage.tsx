@@ -7,6 +7,7 @@ import {
   resetAbbreviation,
   upsertCustomAbbreviation,
 } from "./utils/textFormatting";
+import type { StyleMap } from "./types";
 
 function getSourceLabel(source: AbbreviationEntry["source"]) {
   if (source === "personnel") return "Personnel";
@@ -14,7 +15,11 @@ function getSourceLabel(source: AbbreviationEntry["source"]) {
   return "Base";
 }
 
-export default function DictionaryPage({ styles }: { styles: any }) {
+type DictionaryPageProps = {
+  styles: StyleMap;
+};
+
+export default function DictionaryPage({ styles }: DictionaryPageProps) {
   const [entries, setEntries] = useState<AbbreviationEntry[]>(() =>
     readAbbreviationEntries()
   );

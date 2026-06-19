@@ -495,8 +495,8 @@ public class AidantActivity extends Activity {
     LinearLayout item = new LinearLayout(this);
     item.setOrientation(LinearLayout.VERTICAL);
     item.setGravity(Gravity.CENTER);
-    item.setPadding(dp(4), dp(4), dp(4), dp(4));
-    item.setMinimumHeight(dp(68));
+    item.setPadding(dp(4), dp(8), dp(4), dp(8));
+    item.setMinimumHeight(dp(86));
     item.setClickable(true);
     item.setFocusable(true);
     item.setContentDescription(label);
@@ -504,17 +504,17 @@ public class AidantActivity extends Activity {
 
     TextView iconView = new TextView(this);
     iconView.setText(icon);
-    iconView.setTextSize(22);
+    iconView.setTextSize(28);
     iconView.setGravity(Gravity.CENTER);
     iconView.setIncludeFontPadding(false);
     item.addView(iconView, matchWrap());
 
     TextView labelView = new TextView(this);
     labelView.setText(label);
-    labelView.setTextSize(11);
+    labelView.setTextSize(15);
     labelView.setGravity(Gravity.CENTER);
     labelView.setIncludeFontPadding(false);
-    item.addView(labelView, spacedParams(0, dp(4), 0, 0));
+    item.addView(labelView, spacedParams(0, dp(6), 0, 0));
 
     return item;
   }
@@ -522,7 +522,7 @@ public class AidantActivity extends Activity {
   private LinearLayout.LayoutParams bottomNavItemParams() {
     return new LinearLayout.LayoutParams(
         0,
-        dp(70),
+        dp(88),
         1f
     );
   }
@@ -898,6 +898,10 @@ public class AidantActivity extends Activity {
     try {
       Uri uri = Uri.parse(link.trim());
       String channel = uri.getQueryParameter("channel");
+      String accessKey = uri.getQueryParameter("key");
+      if (accessKey == null || accessKey.trim().isEmpty()) {
+        accessKey = uri.getQueryParameter("accessKey");
+      }
       String apiBase = null;
 
       if ("http".equals(uri.getScheme()) || "https".equals(uri.getScheme())) {
@@ -915,7 +919,7 @@ public class AidantActivity extends Activity {
         apiBase = AlertContract.DEFAULT_API_BASE;
       }
 
-      PatientLinkStore.addOrSelect(prefs, apiBase, channel.trim());
+      PatientLinkStore.addOrSelect(prefs, apiBase, channel.trim(), accessKey);
       return true;
     } catch (Exception ex) {
       toast("Lien invalide.");
@@ -1229,7 +1233,8 @@ public class AidantActivity extends Activity {
       try {
         String streamUrl = link.apiBase
             + "/api/caregiver-messages/stream?role=caregiver&channel="
-            + URLEncoder.encode(link.channel, "UTF-8");
+            + URLEncoder.encode(link.channel, "UTF-8")
+            + linkAccessKeyQuery(link);
         nextConnection = (HttpURLConnection) new URL(streamUrl).openConnection();
         synchronized (messageConnections) {
           messageConnections.put(link.id, nextConnection);
@@ -1471,6 +1476,7 @@ public class AidantActivity extends Activity {
 
       String body = "{"
           + "\"channel\":\"" + escapeJson(link.channel) + "\","
+          + "\"accessKey\":\"" + escapeJson(link.accessKey) + "\","
           + "\"senderRole\":\"caregiver\","
           + "\"senderName\":\"Aidant\","
           + "\"message\":\"" + escapeJson(message) + "\""
@@ -1720,6 +1726,13 @@ public class AidantActivity extends Activity {
     } catch (InterruptedException interrupted) {
       Thread.currentThread().interrupt();
     }
+  }
+
+  private String linkAccessKeyQuery(PatientLinkStore.Link link) throws Exception {
+    if (link == null || link.accessKey.isEmpty()) {
+      return "";
+    }
+    return "&key=" + URLEncoder.encode(link.accessKey, "UTF-8");
   }
 
   private String readStream(InputStream stream) throws Exception {

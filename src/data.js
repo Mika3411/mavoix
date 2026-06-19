@@ -83,6 +83,10 @@ export function createProfile(name = "Profil principal") {
       name: "",
       phone: "",
     },
+    pinProtection: {
+      enabled: false,
+      pin: "",
+    },
     emergencyContacts: [
       {
         id: generateId(),

@@ -3,8 +3,8 @@
 Ce dossier contient la cible iOS Capacitor de l'application principale Ma Voix.
 La generation d'une IPA signee doit etre faite sur macOS avec Xcode.
 
-Note : l'application iOS native `Ma Voix Aidant` est portee dans
-`../ma-voix-android/ios/App` via le scheme Xcode `Aidant`.
+Note : le workspace a ete fusionne. Le projet iOS Capacitor est maintenant dans
+`ios/App` du dossier `ma-voix-windows`.
 
 ## Depuis un Mac
 
@@ -38,6 +38,5 @@ d'ouvrir le projet dans Xcode.
 
 ## Limites
 
-Cette cible iOS concerne l'application principale Ma Voix de la variante Web/PWA.
-Pour compiler l'app aidant iOS, utiliser la cible `Aidant` de
-`../ma-voix-android/ios/App/App.xcodeproj`.
+Cette cible iOS concerne l'application principale Ma Voix. L'application Aidant
+actuelle est le module Android natif `android/aidant`.

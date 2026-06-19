@@ -7,6 +7,14 @@ declare global {
     standalone?: boolean;
   }
 
+  interface BeforeInstallPromptEvent extends Event {
+    prompt(): Promise<void>;
+    userChoice: Promise<{
+      outcome: "accepted" | "dismissed";
+      platform: string;
+    }>;
+  }
+
   interface Window {
     maVoixDesktopApp?: {
       isDesktopApp: boolean;
@@ -14,6 +22,11 @@ declare global {
     };
     webkitSpeechRecognition?: new () => SpeechRecognition;
     SpeechRecognition?: new () => SpeechRecognition;
+  }
+
+  interface WindowEventMap {
+    beforeinstallprompt: BeforeInstallPromptEvent;
+    appinstalled: Event;
   }
 
   interface SpeechRecognitionEvent extends Event {

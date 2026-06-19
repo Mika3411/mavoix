@@ -5,6 +5,7 @@ import android.content.SharedPreferences;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.net.URLEncoder;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Set;
@@ -27,7 +28,8 @@ final class PatientLinkStore {
             item.optString("id", ""),
             item.optString("name", ""),
             item.optString("apiBase", AlertContract.DEFAULT_API_BASE),
-            item.optString("channel", "")
+            item.optString("channel", ""),
+            item.optString("accessKey", item.optString("key", ""))
         );
         addIfValid(links, seen, link);
       }
@@ -44,7 +46,8 @@ final class PatientLinkStore {
               "",
               "Patient 1",
               prefs.getString(AlertContract.KEY_API_BASE, AlertContract.DEFAULT_API_BASE),
-              legacyChannel
+              legacyChannel,
+              prefs.getString(AlertContract.KEY_ACCESS_KEY, "")
           )
       );
     }
@@ -57,13 +60,16 @@ final class PatientLinkStore {
     return links;
   }
 
-  static Link addOrSelect(SharedPreferences prefs, String apiBase, String channel) {
+  static Link addOrSelect(SharedPreferences prefs, String apiBase, String channel, String accessKey) {
     ArrayList<Link> links = read(prefs);
     String cleanApiBase = trimSlash(apiBase);
     String cleanChannel = channel == null ? "" : channel.trim();
+    String cleanAccessKey = cleanAccessKey(accessKey);
 
     for (Link link : links) {
-      if (link.apiBase.equals(cleanApiBase) && link.channel.equals(cleanChannel)) {
+      if (link.apiBase.equals(cleanApiBase)
+          && link.channel.equals(cleanChannel)
+          && link.accessKey.equals(cleanAccessKey)) {
         save(prefs, links, link.id);
         return link;
       }
@@ -73,7 +79,8 @@ final class PatientLinkStore {
         UUID.randomUUID().toString(),
         "Patient " + (links.size() + 1),
         cleanApiBase,
-        cleanChannel
+        cleanChannel,
+        cleanAccessKey
     );
     links.add(nextLink);
     save(prefs, links, nextLink.id);
@@ -88,7 +95,7 @@ final class PatientLinkStore {
     for (int index = 0; index < links.size(); index++) {
       Link link = links.get(index);
       if (link.id.equals(id)) {
-        links.set(index, new Link(link.id, cleanName, link.apiBase, link.channel));
+        links.set(index, new Link(link.id, cleanName, link.apiBase, link.channel, link.accessKey));
         break;
       }
     }
@@ -135,7 +142,8 @@ final class PatientLinkStore {
 
   static String buildAlertLink(Link link) {
     if (link == null) return "";
-    return link.apiBase + "/aidant-alerte?channel=" + link.channel;
+    return link.apiBase + "/aidant-alerte?channel=" + encode(link.channel)
+        + (link.accessKey.isEmpty() ? "" : "&key=" + encode(link.accessKey));
   }
 
   static String trimSlash(String value) {
@@ -159,6 +167,7 @@ final class PatientLinkStore {
         item.put("name", link.name);
         item.put("apiBase", link.apiBase);
         item.put("channel", link.channel);
+        item.put("accessKey", link.accessKey);
         array.put(item);
       } catch (Exception ignored) {
         // Skip malformed entries.
@@ -170,12 +179,16 @@ final class PatientLinkStore {
         .putString(AlertContract.KEY_SELECTED_CONNECTION_ID, selectedId == null ? "" : selectedId);
 
     if (links.isEmpty()) {
-      editor.remove(AlertContract.KEY_API_BASE).remove(AlertContract.KEY_CHANNEL);
+      editor
+          .remove(AlertContract.KEY_API_BASE)
+          .remove(AlertContract.KEY_CHANNEL)
+          .remove(AlertContract.KEY_ACCESS_KEY);
     } else {
       Link first = links.get(0);
       editor
           .putString(AlertContract.KEY_API_BASE, first.apiBase)
-          .putString(AlertContract.KEY_CHANNEL, first.channel);
+          .putString(AlertContract.KEY_CHANNEL, first.channel)
+          .putString(AlertContract.KEY_ACCESS_KEY, first.accessKey);
     }
 
     editor.apply();
@@ -183,7 +196,7 @@ final class PatientLinkStore {
 
   private static void addIfValid(ArrayList<Link> links, Set<String> seen, Link link) {
     if (link == null || !link.isValid()) return;
-    String key = link.apiBase + "|" + link.channel;
+    String key = link.apiBase + "|" + link.channel + "|" + link.accessKey;
     if (seen.contains(key)) return;
     seen.add(key);
     links.add(link.ensureId());
@@ -193,8 +206,22 @@ final class PatientLinkStore {
     for (int index = 0; index < links.size(); index++) {
       Link link = links.get(index);
       if (link.name == null || link.name.trim().isEmpty()) {
-        links.set(index, new Link(link.id, "Patient " + (index + 1), link.apiBase, link.channel));
+        links.set(index, new Link(link.id, "Patient " + (index + 1), link.apiBase, link.channel, link.accessKey));
       }
+    }
+  }
+
+  private static String cleanAccessKey(String value) {
+    if (value == null) return "";
+    value = value.trim();
+    return value.matches("[a-zA-Z0-9_-]{22,160}") ? value : "";
+  }
+
+  private static String encode(String value) {
+    try {
+      return URLEncoder.encode(value == null ? "" : value, "UTF-8");
+    } catch (Exception ignored) {
+      return "";
     }
   }
 
@@ -203,12 +230,14 @@ final class PatientLinkStore {
     final String name;
     final String apiBase;
     final String channel;
+    final String accessKey;
 
-    Link(String id, String name, String apiBase, String channel) {
+    Link(String id, String name, String apiBase, String channel, String accessKey) {
       this.id = id == null || id.trim().isEmpty() ? UUID.randomUUID().toString() : id.trim();
       this.name = name == null ? "" : name.trim();
       this.apiBase = trimSlash(apiBase);
       this.channel = channel == null ? "" : channel.trim();
+      this.accessKey = cleanAccessKey(accessKey);
     }
 
     boolean isValid() {
@@ -217,7 +246,7 @@ final class PatientLinkStore {
 
     Link ensureId() {
       return id.isEmpty()
-          ? new Link(UUID.randomUUID().toString(), name, apiBase, channel)
+          ? new Link(UUID.randomUUID().toString(), name, apiBase, channel, accessKey)
           : this;
     }
   }

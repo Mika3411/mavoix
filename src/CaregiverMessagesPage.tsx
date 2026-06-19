@@ -8,11 +8,19 @@ import {
   writeCaregiverMessages,
 } from "./utils/caregiverMessages";
 import { formatTextSmart } from "./utils/textFormatting";
+import type {
+  CaregiverAlertTarget as ProfileCaregiverAlertTarget,
+  Profile,
+  SpeakText,
+  StateSetter,
+  StyleMap,
+} from "./types";
 
 type CaregiverTarget = {
   id: string;
   name: string;
   channel: string;
+  accessKey?: string;
 };
 
 type MessageStore = {
@@ -104,9 +112,12 @@ async function showIncomingMessageNotification(
   } catch {}
 }
 
-function buildMessageStreamUrl(channel: string) {
+function buildMessageStreamUrl(channel: string, accessKey?: string) {
   const url = new URL("/api/caregiver-messages/stream", API_BASE);
   url.searchParams.set("channel", channel);
+  if (accessKey) {
+    url.searchParams.set("key", accessKey);
+  }
   url.searchParams.set("role", "user");
   return url.href;
 }
@@ -126,7 +137,22 @@ function isAudioMessage(message: CaregiverMessage) {
   return message.messageType === "audio";
 }
 
-export default function CaregiverMessagesPage(props: any) {
+type CaregiverMessagesPageProps = {
+  styles: StyleMap;
+  caregiverAlertLinks?: ProfileCaregiverAlertTarget[];
+  currentProfile: Profile;
+  currentProfileId: string;
+  text: string;
+  setText: StateSetter<string>;
+  isListening: boolean;
+  startDictation: () => void;
+  speakText: SpeakText;
+  showToast?: (message: string) => void;
+  onCaregiverMessagesChanged?: () => void;
+  markCaregiverMessagesRead?: (channels?: string[]) => void;
+};
+
+export default function CaregiverMessagesPage(props: CaregiverMessagesPageProps) {
   const {
     styles,
     caregiverAlertLinks = [],
@@ -150,11 +176,15 @@ export default function CaregiverMessagesPage(props: any) {
           id: link.id || link.channel,
           name: link.name || `Aidant ${index + 1}`,
           channel: link.channel,
+          accessKey: link.accessKey,
         })),
     [caregiverAlertLinks]
   );
   const caregiverChannelKey = React.useMemo(
-    () => caregiverTargets.map((target) => target.channel).join("|"),
+    () =>
+      caregiverTargets
+        .map((target) => `${target.channel}:${target.accessKey || ""}`)
+        .join("|"),
     [caregiverTargets]
   );
   const storageKey = React.useMemo(
@@ -232,7 +262,9 @@ export default function CaregiverMessagesPage(props: any) {
     if (caregiverTargets.length === 0) return;
 
     const sources = caregiverTargets.map((target) => {
-      const source = new EventSource(buildMessageStreamUrl(target.channel));
+      const source = new EventSource(
+        buildMessageStreamUrl(target.channel, target.accessKey)
+      );
 
       source.addEventListener("connected", (event) => {
         try {
@@ -358,6 +390,7 @@ export default function CaregiverMessagesPage(props: any) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           channel: selectedCaregiver.channel,
+          accessKey: selectedCaregiver.accessKey || "",
           senderRole: "user",
           senderName: currentProfile?.firstName || currentProfile?.name || "Utilisateur",
           message,

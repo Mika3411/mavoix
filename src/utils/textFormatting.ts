@@ -1056,7 +1056,7 @@ function expandFrenchAbbreviations(
   });
 }
 
-export function formatTextSmart(value, options: FormatTextSmartOptions = {}) {
+export function formatTextSmart(value: string, options: FormatTextSmartOptions = {}) {
   if (!value) return value;
 
   const normalizedSpacing = String(value)
@@ -1077,6 +1077,6 @@ export function formatTextSmart(value, options: FormatTextSmartOptions = {}) {
     .replace(/(^\s*\w|[\.\!\?]\s*\w|\n\s*\w)/g, (c) => c.toUpperCase());
 }
 
-export function normalizeTextFormatting(value) {
+export function normalizeTextFormatting(value: string) {
   return formatTextSmart(value, { expandFinalAbbreviation: true });
 }

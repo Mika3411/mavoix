@@ -3,6 +3,21 @@ import type { CSSProperties } from "react";
 import React from "react";
 import { formatTextSmart } from "./utils/textFormatting";
 import { createCompactCardStyle } from "./utils/profileCardStyles";
+import type { SectionKey } from "./NoticePage";
+import type {
+  CaregiverAlertTarget,
+  Category,
+  EmergencyContact,
+  NestedProfileFieldUpdater,
+  Phrase,
+  PrivacyStatus,
+  Profile,
+  ProfileFieldUpdater,
+  SpeakText,
+  StateSetter,
+  StyleMap,
+  Treatment,
+} from "./types";
 
 const CONFIG_SECTIONS = [
   { id: "identite", label: "Identité" },
@@ -10,7 +25,7 @@ const CONFIG_SECTIONS = [
   { id: "contacts", label: "Contacts" },
   { id: "phrases", label: "Phrases" },
   { id: "securite", label: "Sécurité" },
-];
+] as const;
 
 const VIRTUAL_KEYBOARD_ROWS = [
   ["A", "Z", "E", "R", "T", "Y", "U", "I", "O", "P"],
@@ -48,6 +63,86 @@ const VIRTUAL_KEYBOARD_VARIANTS: Record<string, string[]> = {
 };
 
 type ActionIconName = "keyboard" | "microphone" | "recordStop" | "listen" | "voiceStop";
+type ConfigSectionId = (typeof CONFIG_SECTIONS)[number]["id"];
+type SendMode = "sms" | "whatsapp";
+type SuggestionHistory = Record<string, number>;
+
+type ProfileSettingsPageProps = {
+  styles: StyleMap;
+  page: string;
+  currentProfile: Profile;
+  updateCurrentProfileField: ProfileFieldUpdater;
+  updateNestedProfileField: NestedProfileFieldUpdater;
+  updateProfilePhoto: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  removeProfilePhoto: () => void;
+  addTreatment: () => void;
+  updateTreatment: (
+    treatmentId: string,
+    field: keyof Treatment | string,
+    value: string
+  ) => void;
+  deleteTreatment: (treatmentId: string) => void;
+  currentProfileId: string;
+  setCurrentProfileId: StateSetter<string>;
+  profiles: Profile[];
+  setFilter: StateSetter<string>;
+  setCategory: StateSetter<string>;
+  createNewProfile: () => void;
+  duplicateCurrentProfile: () => void;
+  deleteCurrentProfile: () => void;
+  exportCurrentProfile: () => void;
+  importCurrentProfile: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  exportAllProfiles: () => void;
+  importAllProfiles: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  fileInputRef: React.RefObject<HTMLInputElement>;
+  privacyStatus: PrivacyStatus;
+  enablePrivacyPassword?: (password: string) => Promise<void> | void;
+  unlockPrivateData?: (password: string) => Promise<void> | void;
+  lockPrivateData?: () => void;
+  caregiverAlertLinks?: CaregiverAlertTarget[];
+  addCaregiverAlertLink: () => void;
+  updateCaregiverAlertLink: (
+    linkId: string,
+    patch: Partial<Pick<CaregiverAlertTarget, "name" | "enabled">>
+  ) => void;
+  deleteCaregiverAlertLink: (linkId: string) => void;
+  regenerateCaregiverAlertLink: (linkId: string) => void;
+  copyCaregiverAlertLink: (linkId: string) => void | Promise<void>;
+  selectedCaregiverAlertLinkId?: string;
+  selectCaregiverAlertTarget: (linkId: string) => void;
+  openNoticeSection: (section?: SectionKey) => void;
+  text: string;
+  setText: StateSetter<string>;
+  isListening: boolean;
+  stopDictation: () => void;
+  startDictation: () => void;
+  speakText: SpeakText;
+  stopSpeaking: () => void | Promise<void>;
+  savePhrase: () => void;
+  label: string;
+  setLabel: StateSetter<string>;
+  category: string;
+  categories: string[];
+  newCategoryName: string;
+  setNewCategoryName: StateSetter<string>;
+  newCategoryIcon: string;
+  setNewCategoryIcon: StateSetter<string>;
+  AVAILABLE_ICONS: string[];
+  addCategory: () => void;
+  customCategories: Category[];
+  deleteCategory: (categoryName: string) => void;
+  emergencyContacts: EmergencyContact[];
+  addEmergencyContact: () => void;
+  updateEmergencyContact: (
+    contactId: string,
+    field: keyof EmergencyContact | string,
+    value: string
+  ) => void;
+  deleteEmergencyContact: (contactId: string) => void;
+  selectedSmsContactId?: string;
+  setSelectedSmsContactId?: StateSetter<string>;
+  onSendSms?: () => void;
+};
 
 function ActionIcon({
   name,
@@ -201,7 +296,7 @@ function ActionIcon({
   );
 }
 
-export default function ProfileSettingsPage(props: any) {
+export default function ProfileSettingsPage(props: ProfileSettingsPageProps) {
   const {
     styles,
     page,
@@ -234,6 +329,7 @@ export default function ProfileSettingsPage(props: any) {
     addCaregiverAlertLink,
     updateCaregiverAlertLink,
     deleteCaregiverAlertLink,
+    regenerateCaregiverAlertLink,
     copyCaregiverAlertLink,
     selectedCaregiverAlertLinkId = "",
     selectCaregiverAlertTarget,
@@ -264,7 +360,8 @@ export default function ProfileSettingsPage(props: any) {
     deleteEmergencyContact,
   } = props;
   const [showDeleteConfirm, setShowDeleteConfirm] = React.useState(false);
-  const [configSection, setConfigSection] = React.useState("identite");
+  const [configSection, setConfigSection] =
+    React.useState<ConfigSectionId>("identite");
   const standardTextAreaRef = React.useRef<HTMLTextAreaElement | null>(null);
   const virtualKeyboardLongPressTimerRef = React.useRef<number | null>(null);
   const virtualKeyboardSuppressClickRef = React.useRef("");
@@ -278,7 +375,7 @@ export default function ProfileSettingsPage(props: any) {
   const virtualKeyboardKeyPadding = isCompactLayout ? "8px 4px" : "10px 6px";
   const virtualKeyboardVariantSize = isCompactLayout ? 44 : 48;
 
-  const [sendMode, setSendMode] = React.useState("sms");
+  const [sendMode, setSendMode] = React.useState<SendMode>("sms");
   const [selectedSendContactId, setSelectedSendContactId] = React.useState(
     emergencyContacts?.[0]?.id || ""
   );
@@ -347,7 +444,7 @@ export default function ProfileSettingsPage(props: any) {
     }
   }
 
-  function getContactUsage(contact) {
+  function getContactUsage(contact: EmergencyContact) {
     return contact?.usage || "contact";
   }
 
@@ -365,7 +462,8 @@ export default function ProfileSettingsPage(props: any) {
     return `phraseSuggestionHistory:${profileKey}`;
   }, [currentProfileId, currentProfile?.id, currentProfile?.name]);
 
-  const [suggestionHistory, setSuggestionHistory] = React.useState({});
+  const [suggestionHistory, setSuggestionHistory] =
+    React.useState<SuggestionHistory>({});
 
   React.useEffect(() => {
     try {
@@ -377,7 +475,7 @@ export default function ProfileSettingsPage(props: any) {
     }
   }, [profileHistoryStorageKey]);
 
-  function persistSuggestionHistory(nextHistory) {
+  function persistSuggestionHistory(nextHistory: SuggestionHistory) {
     try {
       window.localStorage.setItem(
         profileHistoryStorageKey,
@@ -388,7 +486,7 @@ export default function ProfileSettingsPage(props: any) {
     }
   }
 
-  function saveWordToHistory(word) {
+  function saveWordToHistory(word: string) {
     const normalized = String(word || "").trim().toLowerCase();
     if (!normalized) return;
 
@@ -402,7 +500,7 @@ export default function ProfileSettingsPage(props: any) {
     });
   }
 
-  function rememberLastTypedWord(value) {
+  function rememberLastTypedWord(value: string) {
     const typedWords = String(value || "")
       .trim()
       .toLowerCase()
@@ -415,7 +513,10 @@ export default function ProfileSettingsPage(props: any) {
     }
   }
 
-  function focusStandardTextArea(nextCursorStart = null, nextCursorEnd = null) {
+  function focusStandardTextArea(
+    nextCursorStart: number | null = null,
+    nextCursorEnd: number | null = null
+  ) {
     window.requestAnimationFrame(() => {
       const textarea = standardTextAreaRef.current;
       if (!textarea) return;
@@ -437,12 +538,16 @@ export default function ProfileSettingsPage(props: any) {
     });
   }
 
-  function applyTextInput(nextValue, nextCursorStart = null, nextCursorEnd = null) {
+  function applyTextInput(
+    nextValue: string,
+    nextCursorStart: number | null = null,
+    nextCursorEnd: number | null = null
+  ) {
     setText(formatTextSmart(nextValue));
     focusStandardTextArea(nextCursorStart, nextCursorEnd);
   }
 
-  function handleTextAreaChange(value) {
+  function handleTextAreaChange(value: string) {
     setText(formatTextSmart(value));
 
     if (/\s$/.test(value)) {
@@ -450,7 +555,7 @@ export default function ProfileSettingsPage(props: any) {
     }
   }
 
-  function insertVirtualKeyboardText(value) {
+  function insertVirtualKeyboardText(value: string) {
     const textarea = standardTextAreaRef.current;
     const currentText = String(text || "");
     const selectionStart = textarea?.selectionStart ?? currentText.length;
@@ -514,11 +619,11 @@ export default function ProfileSettingsPage(props: any) {
     applyTextInput(nextText, deleteFrom, deleteFrom);
   }
 
-  function isVirtualKeyboardLetter(key) {
+  function isVirtualKeyboardLetter(key: string) {
     return /^[A-Z]$/.test(key);
   }
 
-  function getVirtualKeyboardKeyValue(key) {
+  function getVirtualKeyboardKeyValue(key: string) {
     if (!isVirtualKeyboardLetter(key)) {
       return key;
     }
@@ -526,14 +631,14 @@ export default function ProfileSettingsPage(props: any) {
     return isVirtualKeyboardShiftActive ? key : key.toLowerCase();
   }
 
-  function getVirtualKeyboardKeyLabel(key, displayedKey) {
+  function getVirtualKeyboardKeyLabel(key: string, displayedKey: string) {
     if (key === "Retour") return "⌫";
     if (key === "Entrée") return "↵";
     if (key === "Mot") return "Mot";
     return displayedKey;
   }
 
-  function getVirtualKeyboardKeyVariants(key) {
+  function getVirtualKeyboardKeyVariants(key: string) {
     if (!isVirtualKeyboardLetter(key)) {
       return [];
     }
@@ -545,7 +650,7 @@ export default function ProfileSettingsPage(props: any) {
     );
   }
 
-  function getVirtualKeyboardVariantFromPoint(clientX, clientY) {
+  function getVirtualKeyboardVariantFromPoint(clientX: number, clientY: number) {
     const target = document.elementFromPoint(clientX, clientY);
 
     if (!(target instanceof Element)) {
@@ -559,7 +664,7 @@ export default function ProfileSettingsPage(props: any) {
     );
   }
 
-  function setVirtualKeyboardHoveredVariantValue(variant) {
+  function setVirtualKeyboardHoveredVariantValue(variant: string) {
     virtualKeyboardHoveredVariantRef.current = variant;
     setVirtualKeyboardHoveredVariant(variant);
   }
@@ -573,7 +678,7 @@ export default function ProfileSettingsPage(props: any) {
     virtualKeyboardLongPressTimerRef.current = null;
   }
 
-  function startVirtualKeyboardLongPress(key) {
+  function startVirtualKeyboardLongPress(key: string) {
     const variants = getVirtualKeyboardKeyVariants(key);
 
     if (!variants.length) {
@@ -600,13 +705,13 @@ export default function ProfileSettingsPage(props: any) {
     setVirtualKeyboardVariantMenu(null);
   }
 
-  function insertVirtualKeyboardVariant(variant) {
+  function insertVirtualKeyboardVariant(variant: string) {
     virtualKeyboardSuppressClickRef.current = "";
     closeVirtualKeyboardVariantMenu();
     insertVirtualKeyboardText(variant);
   }
 
-  function handleVirtualKeyboardKey(key) {
+  function handleVirtualKeyboardKey(key: string) {
     closeVirtualKeyboardVariantMenu();
 
     if (key === "Maj") {
@@ -638,7 +743,7 @@ export default function ProfileSettingsPage(props: any) {
     insertVirtualKeyboardText(getVirtualKeyboardKeyValue(key));
   }
 
-  function handleVirtualKeyboardButtonClick(key) {
+  function handleVirtualKeyboardButtonClick(key: string) {
     cancelVirtualKeyboardLongPress();
 
     if (virtualKeyboardSuppressClickRef.current === key) {
@@ -650,7 +755,11 @@ export default function ProfileSettingsPage(props: any) {
     handleVirtualKeyboardKey(key);
   }
 
-  function getWordBoundaries(value, selectionStart, selectionEnd) {
+  function getWordBoundaries(
+    value: string,
+    selectionStart: number,
+    selectionEnd: number
+  ) {
     let start = selectionStart;
     let end = selectionEnd;
 
@@ -677,7 +786,9 @@ export default function ProfileSettingsPage(props: any) {
       return;
     }
 
-    function handleVariantPointerMove(event) {
+    const activeVariantMenu = virtualKeyboardVariantMenu;
+
+    function handleVariantPointerMove(event: PointerEvent) {
       const variant = getVirtualKeyboardVariantFromPoint(
         event.clientX,
         event.clientY
@@ -688,12 +799,12 @@ export default function ProfileSettingsPage(props: any) {
       }
     }
 
-    function handleVariantPointerUp(event) {
+    function handleVariantPointerUp(event: PointerEvent) {
       const variant =
         getVirtualKeyboardVariantFromPoint(event.clientX, event.clientY) ||
         virtualKeyboardHoveredVariantRef.current;
 
-      virtualKeyboardSuppressClickRef.current = virtualKeyboardVariantMenu.key;
+      virtualKeyboardSuppressClickRef.current = activeVariantMenu.key;
 
       if (variant) {
         insertVirtualKeyboardVariant(variant);
@@ -706,8 +817,8 @@ export default function ProfileSettingsPage(props: any) {
       event.stopPropagation();
     }
 
-    function handleVariantPointerCancel(event) {
-      virtualKeyboardSuppressClickRef.current = virtualKeyboardVariantMenu.key;
+    function handleVariantPointerCancel(event: PointerEvent) {
+      virtualKeyboardSuppressClickRef.current = activeVariantMenu.key;
       closeVirtualKeyboardVariantMenu();
       event.preventDefault();
       event.stopPropagation();
@@ -743,7 +854,7 @@ export default function ProfileSettingsPage(props: any) {
     }
   }, [sendableContacts, selectedSendContactId]);
 
-  function sanitizePhoneInput(value) {
+  function sanitizePhoneInput(value: string) {
     const raw = String(value || "");
     let cleaned = raw.replace(/[^\d+]/g, "");
 
@@ -758,7 +869,7 @@ export default function ProfileSettingsPage(props: any) {
     return cleaned;
   }
 
-  function formatPhoneForStorage(value) {
+  function formatPhoneForStorage(value: string) {
     const cleaned = sanitizePhoneInput(value);
 
     if (!cleaned) return "";
@@ -769,7 +880,7 @@ export default function ProfileSettingsPage(props: any) {
     return `+${cleaned}`;
   }
 
-  function normalizeWhatsAppPhone(rawPhone) {
+  function normalizeWhatsAppPhone(rawPhone: string) {
     const cleaned = String(rawPhone || "")
       .replace(/\s+/g, "")
       .replace(/[^\d+]/g, "");
@@ -818,18 +929,18 @@ export default function ProfileSettingsPage(props: any) {
     setShowDeleteConfirm(false);
   }
 
-  function updateCustomThemeField(field, value) {
+  function updateCustomThemeField(field: string, value: string) {
     updateCurrentProfileField("customTheme", {
       ...(currentProfile.customTheme || {}),
       [field]: value,
     });
   }
 
-  const themeOptionStyle = (mode) =>
+  const themeOptionStyle = (mode: string) =>
     currentProfile.themeMode === mode
       ? styles.primaryButton
       : styles.secondaryButton;
-  const compactThemeOptionStyle = (mode): CSSProperties => ({
+  const compactThemeOptionStyle = (mode: string): CSSProperties => ({
     ...themeOptionStyle(mode),
     minWidth: 0,
     minHeight: 56,
@@ -1199,7 +1310,9 @@ export default function ProfileSettingsPage(props: any) {
             <select
               id="profile-config-section"
               value={activeConfigSection.id}
-              onChange={(event) => setConfigSection(event.target.value)}
+              onChange={(event) =>
+                setConfigSection(event.target.value as ConfigSectionId)
+              }
               style={configSectionSelectStyle}
               aria-label="Choisir une rubrique du profil"
             >
@@ -2137,6 +2250,16 @@ export default function ProfileSettingsPage(props: any) {
                     Copier
                   </button>
 
+                  <button
+                    type="button"
+                    aria-label="Regénérer le lien"
+                    title="Regénérer le lien"
+                    style={{ ...caregiverIconButtonStyle, gridColumn: 2 }}
+                    onClick={() => regenerateCaregiverAlertLink?.(link.id)}
+                  >
+                    Regénérer
+                  </button>
+
                   {link.appLink ? (
                     <a
                       href={link.appLink}
@@ -2157,7 +2280,7 @@ export default function ProfileSettingsPage(props: any) {
                     title="Supprimer l'aidant"
                     style={{
                       ...caregiverDeleteButtonStyle,
-                      gridColumn: 2,
+                      gridColumn: "1 / -1",
                       opacity: caregiverAlertLinks.length <= 1 ? 0.55 : 1,
                       cursor:
                         caregiverAlertLinks.length <= 1
@@ -2890,7 +3013,7 @@ export default function ProfileSettingsPage(props: any) {
                     <label style={styles.label}>Mode d’envoi</label>
                     <select
                       value={sendMode}
-                      onChange={(e) => setSendMode(e.target.value)}
+                      onChange={(e) => setSendMode(e.target.value as SendMode)}
                       style={styles.input}
                     >
                       <option value="sms">SMS</option>

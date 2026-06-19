@@ -20,6 +20,9 @@ const PRIVATE_PROFILE_FIELDS = [
   "medicalInfo",
   "doctorInfo",
   "emergencyContacts",
+  "pinProtection",
+  "caregiverAlertLinks",
+  "selectedCaregiverAlertLinkId",
 ] as const;
 
 type PrivateProfileData = {

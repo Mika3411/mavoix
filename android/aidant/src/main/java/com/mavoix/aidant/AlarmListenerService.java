@@ -72,9 +72,10 @@ public class AlarmListenerService extends Service {
 
     String apiBase = intent != null ? intent.getStringExtra(AlertContract.EXTRA_API_BASE) : null;
     String channel = intent != null ? intent.getStringExtra(AlertContract.EXTRA_CHANNEL) : null;
+    String accessKey = intent != null ? intent.getStringExtra(AlertContract.EXTRA_ACCESS_KEY) : null;
 
     if (channel != null && !channel.trim().isEmpty()) {
-      PatientLinkStore.addOrSelect(prefs, apiBase, channel);
+      PatientLinkStore.addOrSelect(prefs, apiBase, channel, accessKey);
     }
 
     ArrayList<PatientLinkStore.Link> links = PatientLinkStore.read(prefs);
@@ -106,7 +107,8 @@ public class AlarmListenerService extends Service {
       try {
         String streamUrl = link.apiBase
             + "/api/caregiver-alert/stream?channel="
-            + URLEncoder.encode(link.channel, "UTF-8");
+            + URLEncoder.encode(link.channel, "UTF-8")
+            + linkAccessKeyQuery(link);
         nextConnection = (HttpURLConnection) new URL(streamUrl).openConnection();
         connections.put(link.id, nextConnection);
         nextConnection.setConnectTimeout(15000);
@@ -428,6 +430,13 @@ public class AlarmListenerService extends Service {
     } catch (InterruptedException interrupted) {
       Thread.currentThread().interrupt();
     }
+  }
+
+  private String linkAccessKeyQuery(PatientLinkStore.Link link) throws Exception {
+    if (link == null || link.accessKey.isEmpty()) {
+      return "";
+    }
+    return "&key=" + URLEncoder.encode(link.accessKey, "UTF-8");
   }
 
   @Override
