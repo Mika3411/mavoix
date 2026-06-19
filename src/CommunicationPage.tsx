@@ -1,5 +1,16 @@
 import React from "react";
 
+function isIconOnlyPhraseText(value: unknown) {
+  const text = String(value ?? "").trim();
+  if (!text) return false;
+
+  const normalizedText = text.replace(/[\uFE0E\uFE0F]/g, "");
+  return (
+    !/[\p{L}\p{N}]/u.test(normalizedText) &&
+    Array.from(normalizedText).length <= 5
+  );
+}
+
 export default function CommunicationPage(props: any) {
   const {
     styles,
@@ -120,32 +131,40 @@ export default function CommunicationPage(props: any) {
               alignItems: "start",
             }}
           >
-            {filteredPhrases.map((item) => (
-              <div
-                key={item.id}
-                style={{
-                  ...styles.quickPhraseCard,
-                  padding: 10,
-                  gap: 8,
-                  borderRadius: 14,
-                }}
-              >
-                <button
+            {filteredPhrases.map((item) => {
+              const phraseText = item.text;
+              const isIconOnlyPhrase = isIconOnlyPhraseText(phraseText);
+
+              return (
+                <div
+                  key={item.id}
                   style={{
-                    ...styles.quickPhraseButton,
-                    background: getCategoryBackground(item.category),
-                    minHeight: 72,
-                    fontSize: 16,
-                    padding: "12px 14px",
+                    ...styles.quickPhraseCard,
+                    padding: 10,
+                    gap: 8,
                     borderRadius: 14,
-                    width: "100%",
                   }}
-                  onClick={() =>
-                    speakText(item.text, item.assignedVoice, item.id)
-                  }
                 >
-                  {item.text}
-                </button>
+                  <button
+                    style={{
+                      ...styles.quickPhraseButton,
+                      background: getCategoryBackground(item.category),
+                      minHeight: 72,
+                      fontSize: isIconOnlyPhrase ? 34 : 16,
+                      lineHeight: isIconOnlyPhrase ? 1 : 1.15,
+                      padding: isIconOnlyPhrase ? "10px" : "12px 14px",
+                      borderRadius: 14,
+                      width: "100%",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                    onClick={() =>
+                      speakText(item.text, item.assignedVoice, item.id)
+                    }
+                  >
+                    {phraseText}
+                  </button>
 
                 {isEditMode && (
                   <div
@@ -212,7 +231,8 @@ export default function CommunicationPage(props: any) {
                   </div>
                 )}
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
