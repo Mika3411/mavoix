@@ -2125,22 +2125,6 @@ export default function ProfileSettingsPage(props: any) {
                     📋
                   </button>
 
-                  {link.alertLink ? (
-                    <a
-                      href={link.alertLink}
-                      target="_blank"
-                      rel="noreferrer"
-                      aria-label="Ouvrir le mode aidant"
-                      title="Ouvrir le mode aidant"
-                      style={{
-                        ...caregiverModeButtonStyle,
-                        gridColumn: 2,
-                      }}
-                    >
-                      Mode aidant
-                    </a>
-                  ) : null}
-
                   {link.appLink ? (
                     <a
                       href={link.appLink}
