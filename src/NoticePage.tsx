@@ -139,7 +139,7 @@ export default function NoticePage({
                   "6. Dictionnaire d'abréviations",
                   "7. Profil, santé et contacts",
                   "8. Infos d'urgence",
-                  "9. Téléphone aidant",
+                  "9. Téléphone aidant et alarme",
                   "10. Sauvegarde, sécurité et données locales",
                   "11. Confidentialité et RGPD",
                 ]}
@@ -156,8 +156,9 @@ export default function NoticePage({
               <NoticeParagraph>
                 Elle tient aussi compte des derniers réglages d'interface :
                 boutons et champs contenus dans leurs cartes, actions de profil
-                regroupées, navigation arrondie et barres de défilement
-                harmonisées avec le thème choisi.
+                regroupées, boutons Copier et Supprimer pour les liens aidants,
+                navigation arrondie et barres de défilement harmonisées avec le
+                thème choisi.
               </NoticeParagraph>
             </NoticeBlock>
           </>
@@ -243,10 +244,10 @@ export default function NoticePage({
             <NoticeBlock title="Version Android">
               <NoticeList
                 items={[
-                  "Le menu Communication regroupe Rapide, Libre et Aidants.",
+                  "Le menu Communication regroupe Rapide, Libre et Messages aidants.",
                   "Rapide ouvre les boutons de phrases.",
                   "Libre ouvre la zone de saisie et d'envoi de messages.",
-                  "Aidants ouvre la conversation avec les téléphones aidants connectés.",
+                  "Messages aidants ouvre la conversation avec les téléphones aidants connectés.",
                   "Le menu Profil regroupe Infos et Profil.",
                   "Le menu secondaire donne accès à Voix, Configurer, Dictionnaire, Notice et Soutenez-moi.",
                   "L'icône enveloppe ouvre directement les messages aidants et affiche le nombre de messages non lus.",
@@ -603,30 +604,35 @@ export default function NoticePage({
       },
       {
         key: "aidant",
-        label: "Aidant",
-        title: "Téléphone aidant",
+        label: "Téléphone aidant",
+        title: "Téléphone aidant et alarme",
         content: (
           <>
             <NoticeBlock>
               <NoticeParagraph>
-                La fonction Téléphone aidant permet de préparer plusieurs
-                liens d'alarme associés au profil actif. Chaque lien est à
-                ouvrir sur le téléphone d'un aidant.
+                La fonction Téléphone aidant sert à choisir quel téléphone
+                reçoit l'alerte quand la personne appuie sur la cloche orange.
+                Chaque aidant peut avoir son propre lien, associé au profil
+                actif.
+              </NoticeParagraph>
+              <NoticeParagraph>
+                Quand le lien est ouvert sur le téléphone de l'aidant, ce
+                téléphone peut rester connecté pour recevoir l'appel aidant, la
+                sonnerie et les messages liés au profil.
               </NoticeParagraph>
             </NoticeBlock>
 
             <NoticeBlock title="Configurer les liens">
               <NoticeList
                 items={[
-                  "Ouvrez Profil ou Configurer.",
-                  "Repérez la section Téléphone aidant.",
-                  "Ajoutez un aidant si plusieurs téléphones doivent avoir leur propre lien.",
+                  "Ouvrez Configurer, puis repérez la section Téléphone aidant.",
+                  "Utilisez Ajouter un aidant si plusieurs téléphones doivent avoir leur propre lien.",
                   "Le nom d'un aidant sert de repère ; il peut être laissé vide ou effacé sans casser son lien d'alarme.",
-                  "Les champs et boutons de chaque aidant restent dans sa carte, même avec un lien long.",
                   "Cochez Disponible pour Appel aidant pour chaque aidant qui doit apparaître dans la liste de choix.",
                   "Dans Aidant appelé par la cloche, choisissez l'aidant qui doit recevoir l'alarme.",
-                  "Copiez le lien d'alarme ou ouvrez le mode aidant quand il est proposé.",
-                  "Sur Android, le lien direct peut ouvrir l'application Ma Voix Aidant si elle est installée.",
+                  "Utilisez Copier pour envoyer ou coller le lien d'alarme sur le téléphone de l'aidant.",
+                  "Sur Android, le bouton App aidant peut ouvrir directement l'application Ma Voix Aidant si elle est installée.",
+                  "Utilisez Supprimer pour retirer un lien qui ne doit plus recevoir l'alarme.",
                 ]}
               />
             </NoticeBlock>
