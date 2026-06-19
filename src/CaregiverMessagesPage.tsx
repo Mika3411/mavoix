@@ -649,7 +649,7 @@ export default function CaregiverMessagesPage(props: any) {
                 onClick={() => sendCaregiverMessage("audio")}
                 disabled={isSending || !selectedCaregiver}
               >
-                ▶️ Envoyer l'audio
+                Envoyer l'audio
               </button>
 
               <button

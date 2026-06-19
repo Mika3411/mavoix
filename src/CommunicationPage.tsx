@@ -19,6 +19,38 @@ export default function CommunicationPage(props: any) {
   const editToggleStyle = isEditMode
     ? styles.primaryButton
     : styles.secondaryButton;
+  const quickPhraseActionIconStyle = {
+    ...styles.smallActionButton,
+    width: "100%",
+    minWidth: 0,
+    height: 36,
+    padding: 0,
+    borderRadius: 12,
+    fontSize: 18,
+    lineHeight: 1,
+  };
+  const quickPhraseFavoriteStyle = {
+    ...styles.favoriteButton,
+    width: "100%",
+    minWidth: 0,
+    height: 36,
+    borderRadius: 12,
+    fontSize: 18,
+    background: "rgba(250, 204, 21, 0.12)",
+  };
+  const quickPhraseDeleteStyle = {
+    ...styles.deleteButton,
+    width: "100%",
+    minWidth: 0,
+    height: 36,
+    padding: 0,
+    borderRadius: 12,
+    fontSize: 16,
+    lineHeight: 1,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+  };
 
   return (
     <div style={styles.gridSingle}>
@@ -119,39 +151,29 @@ export default function CommunicationPage(props: any) {
                   <div
                     style={{
                       ...styles.quickPhraseActions,
+                      display: "grid",
+                      gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
                       gap: 6,
-                      justifyContent: "space-between",
-                      flexWrap: "wrap",
+                      width: "100%",
+                      alignItems: "center",
                     }}
                   >
                       <button
                         onClick={() => movePhrase(item.id, "up")}
-                        style={{
-                          ...styles.smallActionButton,
-                          minWidth: 44,
-                          height: 44,
-                          fontSize: 16,
-                          padding: "4px 6px",
-                        }}
+                        style={quickPhraseActionIconStyle}
                         title="Monter"
                         aria-label={`Monter ${item.label || item.text}`}
                       >
-                        ⬆
+                        ↑
                       </button>
 
                       <button
                         onClick={() => movePhrase(item.id, "down")}
-                        style={{
-                          ...styles.smallActionButton,
-                          minWidth: 44,
-                          height: 44,
-                          fontSize: 16,
-                          padding: "4px 6px",
-                        }}
+                        style={quickPhraseActionIconStyle}
                         title="Descendre"
                         aria-label={`Descendre ${item.label || item.text}`}
                       >
-                        ⬇
+                        ↓
                       </button>
 
                     <button
@@ -159,11 +181,11 @@ export default function CommunicationPage(props: any) {
                         updatePhrase(item.id, "favorite", !item.favorite)
                       }
                       style={{
-                        ...styles.favoriteButton,
-                        width: 44,
-                        minWidth: 44,
-                        height: 44,
-                        fontSize: 18,
+                        ...quickPhraseFavoriteStyle,
+                        background: item.favorite
+                          ? "rgba(250, 204, 21, 0.22)"
+                          : "rgba(250, 204, 21, 0.10)",
+                        borderColor: item.favorite ? "#facc15" : undefined,
                       }}
                       title={
                         item.favorite
@@ -176,20 +198,16 @@ export default function CommunicationPage(props: any) {
                           : `Ajouter ${item.label || item.text} aux favoris`
                       }
                     >
-                      {item.favorite ? "⭐" : "☆"}
+                      {item.favorite ? "★" : "☆"}
                     </button>
 
                     <button
                       onClick={() => deletePhrase(item.id)}
-                      style={{
-                        ...styles.deleteButton,
-                        minWidth: 92,
-                        height: 44,
-                        fontSize: 13,
-                        padding: "4px 10px",
-                      }}
+                      style={quickPhraseDeleteStyle}
+                      title="Supprimer"
+                      aria-label={`Supprimer ${item.label || item.text}`}
                     >
-                      Supprimer
+                      ×
                     </button>
                   </div>
                 )}
