@@ -110,6 +110,11 @@ function getInitialViewportWidth() {
   return window.innerWidth;
 }
 
+function getInitialViewportHeight() {
+  if (typeof window === "undefined") return 768;
+  return window.innerHeight;
+}
+
 function areVoiceEditorsEqual(a: VoiceEditor, b: VoiceEditor) {
   return (
     a.label === b.label &&
@@ -153,6 +158,7 @@ export default function App() {
   const [toastMessage, setToastMessage] = useState("");
   const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
   const [viewportWidth, setViewportWidth] = useState(getInitialViewportWidth);
+  const [viewportHeight, setViewportHeight] = useState(getInitialViewportHeight);
   const [isPhraseEditMode, setIsPhraseEditMode] = useState(false);
   const [caregiverAlertSending, setCaregiverAlertSending] = useState(false);
   const [unreadCaregiverMessageCount, setUnreadCaregiverMessageCount] =
@@ -215,6 +221,9 @@ export default function App() {
   const activeTheme = getActiveTheme(currentProfile);
   const styles = createStyles(activeTheme);
   const isCompactLayout = viewportWidth <= 640;
+  const isLandscapeMobileLayout =
+    viewportWidth > viewportHeight && viewportHeight <= 520 && viewportWidth <= 960;
+  const isFooterNavLayout = isCompactLayout || isLandscapeMobileLayout;
   const pageSafeAreaPadding = {
     paddingTop: "calc(12px + env(safe-area-inset-top, 0px))",
     paddingRight: "calc(12px + env(safe-area-inset-right, 0px))",
@@ -907,15 +916,18 @@ export default function App() {
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    const syncViewportWidth = () => setViewportWidth(window.innerWidth);
-    syncViewportWidth();
+    const syncViewportSize = () => {
+      setViewportWidth(window.innerWidth);
+      setViewportHeight(window.innerHeight);
+    };
+    syncViewportSize();
 
-    window.addEventListener("resize", syncViewportWidth);
-    window.addEventListener("orientationchange", syncViewportWidth);
+    window.addEventListener("resize", syncViewportSize);
+    window.addEventListener("orientationchange", syncViewportSize);
 
     return () => {
-      window.removeEventListener("resize", syncViewportWidth);
-      window.removeEventListener("orientationchange", syncViewportWidth);
+      window.removeEventListener("resize", syncViewportSize);
+      window.removeEventListener("orientationchange", syncViewportSize);
     };
   }, []);
 
@@ -1119,6 +1131,35 @@ export default function App() {
   const regularTopNavMinHeight = 48;
   const compactTopNavPadding = "8px 6px";
   const compactTopNavFontSize = 13;
+  const topNavMinHeight = isCompactLayout
+    ? compactTopNavMinHeight
+    : isLandscapeMobileLayout
+    ? 40
+    : regularTopNavMinHeight;
+  const topNavTextPadding = isCompactLayout
+    ? compactTopNavPadding
+    : isLandscapeMobileLayout
+    ? "6px 12px"
+    : "12px 14px";
+  const topNavWidePadding = isCompactLayout
+    ? compactTopNavPadding
+    : isLandscapeMobileLayout
+    ? "6px 12px"
+    : "6px 18px";
+  const topNavFontSize = isCompactLayout
+    ? compactTopNavFontSize
+    : isLandscapeMobileLayout
+    ? 13
+    : 15;
+  const topNavBorderRadius = isLandscapeMobileLayout ? 14 : 18;
+  const footerNavMinHeight = isLandscapeMobileLayout ? 40 : 44;
+  const footerNavPadding = isLandscapeMobileLayout ? "6px 10px" : "6px 3px";
+  const footerNavFontSize = isLandscapeMobileLayout ? 13 : 11;
+  const footerNavIconFontSize = isLandscapeMobileLayout ? 16 : 18;
+  const footerAlertSize = 50;
+  const footerNavGridColumns = isLandscapeMobileLayout
+    ? "minmax(104px, 1fr) minmax(58px, 0.7fr) minmax(54px, 0.62fr) minmax(42px, 0.45fr) minmax(42px, 0.45fr)"
+    : "minmax(96px, 1.35fr) minmax(54px, 0.68fr) minmax(48px, 0.58fr) minmax(38px, 0.42fr) minmax(38px, 0.42fr)";
 
   return (
     <div
@@ -1146,8 +1187,10 @@ export default function App() {
         <div
           style={{
             ...styles.header,
-            gap: isCompactLayout ? 10 : 16,
+            gap: isCompactLayout ? 10 : isLandscapeMobileLayout ? 12 : 16,
             alignItems: isCompactLayout ? "flex-start" : "center",
+            justifyContent: "space-between",
+            flexWrap: isLandscapeMobileLayout ? "nowrap" : "wrap",
             position: "relative",
             zIndex: 20,
           }}
@@ -1156,16 +1199,18 @@ export default function App() {
             style={{
               display: "flex",
               alignItems: "center",
-              gap: isCompactLayout ? 10 : 16,
+              gap: isCompactLayout ? 10 : isLandscapeMobileLayout ? 8 : 16,
               minWidth: 0,
               width: isCompactLayout ? "100%" : undefined,
+              maxWidth: isLandscapeMobileLayout ? "min(40vw, 300px)" : undefined,
+              flexShrink: isLandscapeMobileLayout ? 1 : undefined,
             }}
           >
             <img
               src={`${import.meta.env.BASE_URL}picturetitle.png`}
               alt="Ma Voix"
               style={{
-                height: isCompactLayout ? 64 : 80,
+                height: isCompactLayout ? 64 : isLandscapeMobileLayout ? 54 : 80,
                 objectFit: "contain",
                 flexShrink: 0,
               }}
@@ -1173,7 +1218,7 @@ export default function App() {
 
             <div
               style={{
-                fontSize: isCompactLayout ? 20 : 22,
+                fontSize: isCompactLayout ? 20 : isLandscapeMobileLayout ? 17 : 22,
                 fontWeight: 600,
                 lineHeight: 1.15,
                 minWidth: 0,
@@ -1189,14 +1234,18 @@ export default function App() {
             </div>
           </div>
 
+          {!isFooterNavLayout && (
           <div
             style={{
               ...styles.topButtons,
               position: "relative",
-              gap: isCompactLayout ? 6 : 10,
-              flexWrap: "wrap",
+              gap: isCompactLayout ? 6 : isLandscapeMobileLayout ? 8 : 10,
+              flexWrap: isLandscapeMobileLayout ? "nowrap" : "wrap",
               width: isCompactLayout ? "100%" : undefined,
               display: isCompactLayout ? "grid" : "flex",
+              justifyContent: isCompactLayout ? undefined : "flex-end",
+              marginLeft: isCompactLayout ? undefined : "auto",
+              flexShrink: isLandscapeMobileLayout ? 0 : undefined,
               gridTemplateColumns: isCompactLayout
                 ? "minmax(80px, 1.28fr) minmax(46px, 0.82fr) minmax(42px, 0.66fr) minmax(48px, 0.5fr) minmax(48px, 0.5fr)"
                 : undefined,
@@ -1207,13 +1256,11 @@ export default function App() {
                 ...(page === "communication"
                   ? styles.primaryButton
                   : styles.secondaryButton),
-                padding: isCompactLayout ? compactTopNavPadding : "6px 18px",
-                fontSize: isCompactLayout ? compactTopNavFontSize : 15,
+                padding: topNavWidePadding,
+                fontSize: topNavFontSize,
                 width: isCompactLayout ? "100%" : undefined,
-                minHeight: isCompactLayout
-                  ? compactTopNavMinHeight
-                  : regularTopNavMinHeight,
-                borderRadius: 18,
+                minHeight: topNavMinHeight,
+                borderRadius: topNavBorderRadius,
                 lineHeight: isCompactLayout ? 1.1 : undefined,
               }}
               onClick={() => setPage("communication")}
@@ -1227,13 +1274,11 @@ export default function App() {
                   ...(page === "reglages"
                     ? styles.primaryButton
                     : styles.secondaryButton),
-                  padding: isCompactLayout ? compactTopNavPadding : "12px 14px",
-                  fontSize: isCompactLayout ? compactTopNavFontSize : 15,
+                  padding: topNavTextPadding,
+                  fontSize: topNavFontSize,
                   width: isCompactLayout ? "100%" : undefined,
-                  minHeight: isCompactLayout
-                    ? compactTopNavMinHeight
-                    : regularTopNavMinHeight,
-                  borderRadius: 18,
+                  minHeight: topNavMinHeight,
+                  borderRadius: topNavBorderRadius,
                   lineHeight: isCompactLayout ? 1.1 : undefined,
                 }
               }
@@ -1248,13 +1293,11 @@ export default function App() {
                   ...(page === "infos"
                     ? styles.primaryButton
                     : styles.secondaryButton),
-                  padding: isCompactLayout ? compactTopNavPadding : "12px 14px",
-                  fontSize: isCompactLayout ? compactTopNavFontSize : 15,
+                  padding: topNavTextPadding,
+                  fontSize: topNavFontSize,
                   width: isCompactLayout ? "100%" : undefined,
-                  minHeight: isCompactLayout
-                    ? compactTopNavMinHeight
-                    : regularTopNavMinHeight,
-                  borderRadius: 18,
+                  minHeight: topNavMinHeight,
+                  borderRadius: topNavBorderRadius,
                   lineHeight: isCompactLayout ? 1.1 : undefined,
                 }
               }
@@ -1282,14 +1325,12 @@ export default function App() {
                   ...(page === "aidants"
                     ? styles.primaryButton
                     : styles.secondaryButton),
-                  padding: isCompactLayout ? compactTopNavPadding : "6px 18px",
-                  fontSize: isCompactLayout ? 20 : 20,
+                  padding: topNavWidePadding,
+                  fontSize: isLandscapeMobileLayout ? 16 : 20,
                   width: isCompactLayout ? "100%" : undefined,
-                  minWidth: isCompactLayout ? undefined : 64,
-                  minHeight: isCompactLayout
-                    ? compactTopNavMinHeight
-                    : regularTopNavMinHeight,
-                  borderRadius: 18,
+                  minWidth: isCompactLayout ? undefined : isLandscapeMobileLayout ? 44 : 64,
+                  minHeight: topNavMinHeight,
+                  borderRadius: topNavBorderRadius,
                   lineHeight: 1,
                   display: "inline-flex",
                   alignItems: "center",
@@ -1346,13 +1387,12 @@ export default function App() {
                 onClick={() => setIsMoreMenuOpen((prev) => !prev)}
                 style={{
                   ...styles.secondaryButton,
-                  padding: isCompactLayout ? compactTopNavPadding : "6px 18px",
-                  fontSize: isCompactLayout ? 18 : 15,
+                  padding: topNavWidePadding,
+                  fontSize: isCompactLayout ? 18 : isLandscapeMobileLayout ? 14 : 15,
                   width: isCompactLayout ? "100%" : undefined,
-                  minHeight: isCompactLayout
-                    ? compactTopNavMinHeight
-                    : regularTopNavMinHeight,
-                  borderRadius: 18,
+                  minHeight: topNavMinHeight,
+                  minWidth: isCompactLayout ? undefined : isLandscapeMobileLayout ? 44 : undefined,
+                  borderRadius: topNavBorderRadius,
                   lineHeight: isCompactLayout ? 1.1 : undefined,
                 }}
               >
@@ -1445,6 +1485,7 @@ export default function App() {
               )}
             </div>
           </div>
+          )}
         </div>
 
         {availableUpdate && (
@@ -1550,7 +1591,7 @@ export default function App() {
               minHeight: 0,
               WebkitOverflowScrolling: "touch",
               overscrollBehavior: "contain",
-              paddingBottom: isCompactLayout ? 24 : 140,
+              paddingBottom: isFooterNavLayout ? 24 : 140,
             }}
           >
         {page === "communication" ? (
@@ -1941,15 +1982,15 @@ export default function App() {
           </div>
         </div>
 
-        {isCompactLayout && (
+        {isFooterNavLayout && (
           <div
             style={{
               flexShrink: 0,
-              display: "flex",
+              display: "grid",
+              gridTemplateColumns: `minmax(0, 1fr) ${footerAlertSize}px`,
               alignItems: "center",
-              justifyContent: "flex-end",
-              gap: 12,
-              padding: "10px 4px 0",
+              gap: isLandscapeMobileLayout ? 8 : 6,
+              padding: isLandscapeMobileLayout ? "8px 0 0" : "10px 0 0",
               borderTop: `1px solid ${activeTheme?.inputBorder || "#334155"}`,
               background: activeTheme?.pageBackground || "#0b1220",
               boxShadow: "0 -14px 28px rgba(2,6,23,0.74)",
@@ -1957,6 +1998,243 @@ export default function App() {
               zIndex: 40,
             }}
           >
+            <div
+              style={{
+                ...styles.topButtons,
+                display: "grid",
+                gridTemplateColumns: footerNavGridColumns,
+                gap: 6,
+                width: "100%",
+                minWidth: 0,
+                alignItems: "stretch",
+              }}
+            >
+              <button
+                style={{
+                  ...(page === "communication"
+                    ? styles.primaryButton
+                    : styles.secondaryButton),
+                  padding: footerNavPadding,
+                  fontSize: footerNavFontSize,
+                  width: "100%",
+                  minWidth: 0,
+                  minHeight: footerNavMinHeight,
+                  borderRadius: 14,
+                  lineHeight: 1.1,
+                }}
+                onClick={() => setPage("communication")}
+              >
+                Communication
+              </button>
+
+              <button
+                style={{
+                  ...(page === "reglages"
+                    ? styles.primaryButton
+                    : styles.secondaryButton),
+                  padding: footerNavPadding,
+                  fontSize: footerNavFontSize,
+                  width: "100%",
+                  minWidth: 0,
+                  minHeight: footerNavMinHeight,
+                  borderRadius: 14,
+                  lineHeight: 1.1,
+                }}
+                onClick={() => setPage("reglages")}
+              >
+                Parler
+              </button>
+
+              <button
+                style={{
+                  ...(page === "infos"
+                    ? styles.primaryButton
+                    : styles.secondaryButton),
+                  padding: footerNavPadding,
+                  fontSize: footerNavFontSize,
+                  width: "100%",
+                  minWidth: 0,
+                  minHeight: footerNavMinHeight,
+                  borderRadius: 14,
+                  lineHeight: 1.1,
+                }}
+                onClick={() => setPage("infos")}
+              >
+                Infos
+              </button>
+
+              <div style={{ position: "relative", minWidth: 0 }}>
+                <button
+                  type="button"
+                  aria-label={caregiverMessagesButtonLabel}
+                  title={caregiverMessagesButtonLabel}
+                  onClick={() => {
+                    setPage("aidants");
+                    setIsMoreMenuOpen(false);
+                    markCaregiverMessagesRead();
+                  }}
+                  style={{
+                    ...(page === "aidants"
+                      ? styles.primaryButton
+                      : styles.secondaryButton),
+                    padding: 0,
+                    fontSize: footerNavIconFontSize,
+                    width: "100%",
+                    minWidth: 0,
+                    minHeight: footerNavMinHeight,
+                    borderRadius: 14,
+                    lineHeight: 1,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    position: "relative",
+                  }}
+                >
+                  <span aria-hidden="true">✉</span>
+                  {unreadCaregiverMessageCount > 0 ? (
+                    <span
+                      aria-hidden="true"
+                      style={{
+                        position: "absolute",
+                        top: -7,
+                        right: -6,
+                        minWidth: 21,
+                        height: 21,
+                        padding: "0 5px",
+                        borderRadius: 999,
+                        background: "#ef4444",
+                        color: "white",
+                        border: `2px solid ${
+                          activeTheme?.pageBackground || "#0b1220"
+                        }`,
+                        boxSizing: "border-box",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontSize: 11,
+                        fontWeight: 900,
+                        lineHeight: 1,
+                        boxShadow: "0 6px 14px rgba(0,0,0,0.28)",
+                      }}
+                    >
+                      {unreadCaregiverMessageBadge}
+                    </span>
+                  ) : null}
+                </button>
+              </div>
+
+              <div
+                ref={moreMenuRef}
+                style={{ position: "relative", minWidth: 0 }}
+              >
+                <button
+                  type="button"
+                  aria-haspopup="menu"
+                  aria-expanded={isMoreMenuOpen}
+                  aria-label="Menu"
+                  title="Menu"
+                  onClick={() => setIsMoreMenuOpen((prev) => !prev)}
+                  style={{
+                    ...styles.secondaryButton,
+                    padding: 0,
+                    fontSize: footerNavIconFontSize,
+                    width: "100%",
+                    minWidth: 0,
+                    minHeight: footerNavMinHeight,
+                    borderRadius: 14,
+                    lineHeight: 1,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  ☰
+                </button>
+
+                {isMoreMenuOpen && (
+                  <div
+                    role="menu"
+                    style={{
+                      position: "absolute",
+                      bottom: "calc(100% + 10px)",
+                      right: 0,
+                      width: "min(260px, calc(100vw - 24px))",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 8,
+                      padding: 10,
+                      borderRadius: 18,
+                      background: activeTheme?.cardBackground || "#1e293b",
+                      boxShadow: "0 16px 40px rgba(0,0,0,0.28)",
+                      border: "1px solid rgba(255,255,255,0.08)",
+                      backdropFilter: "blur(8px)",
+                      zIndex: 60,
+                    }}
+                  >
+                    <button
+                      style={page === "voix" ? styles.primaryButton : styles.secondaryButton}
+                      onClick={() => {
+                        setPage("voix");
+                        setIsMoreMenuOpen(false);
+                      }}
+                    >
+                      Voix
+                    </button>
+
+                    <button
+                      style={page === "profil" ? styles.primaryButton : styles.secondaryButton}
+                      onClick={() => {
+                        setPage("profil");
+                        setIsMoreMenuOpen(false);
+                      }}
+                    >
+                      Configurer
+                    </button>
+
+                    <button
+                      style={page === "dictionnaire" ? styles.primaryButton : styles.secondaryButton}
+                      onClick={() => {
+                        setPage("dictionnaire");
+                        setIsMoreMenuOpen(false);
+                      }}
+                    >
+                      Dictionnaire
+                    </button>
+
+                    <button
+                      style={page === "notice" ? styles.primaryButton : styles.secondaryButton}
+                      onClick={() => openNoticeSection()}
+                    >
+                      Notice
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setIsMoreMenuOpen(false);
+                        window.open(
+                          "https://paypal.me/anime1120",
+                          "_blank",
+                          "noopener,noreferrer"
+                        );
+                      }}
+                      style={{
+                        padding: "6px 18px",
+                        fontSize: "15px",
+                        borderRadius: "18px",
+                        background: "#22c55e",
+                        color: "white",
+                        border: "none",
+                        fontWeight: "600",
+                        cursor: "pointer",
+                      }}
+                    >
+                      Soutenez-moi ❤️
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+
             <button
               onClick={sendCaregiverAlert}
               disabled={caregiverAlertSending}
@@ -1979,14 +2257,14 @@ export default function App() {
                   : "Appel aidant"
               }
               style={{
-                width: 56,
-                height: 56,
+                width: footerAlertSize,
+                height: footerAlertSize,
                 padding: 0,
                 borderRadius: "18px",
                 background: caregiverAlertSending ? "#92400e" : "#f59e0b",
                 color: "#111827",
                 border: "none",
-                fontSize: "23px",
+                fontSize: isLandscapeMobileLayout ? "21px" : "23px",
                 fontWeight: 800,
                 cursor: caregiverAlertSending ? "wait" : "pointer",
                 boxShadow: "0 8px 25px rgba(0,0,0,0.24)",
@@ -2002,7 +2280,7 @@ export default function App() {
         )}
       </div>
 
-      {!isCompactLayout && (
+      {!isFooterNavLayout && (
         <button
           onClick={sendCaregiverAlert}
           disabled={caregiverAlertSending}
