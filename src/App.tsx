@@ -48,7 +48,7 @@ type CaregiverAlertTarget = CaregiverAlertLink & {
 };
 
 const APK_DOWNLOAD_URL = "/ma-voix.apk";
-const AIDANT_APK_DOWNLOAD_URL = "/ma-voix-aidant-20260619-b124fef7.apk";
+const AIDANT_APK_DOWNLOAD_URL = "/ma-voix-aidant.apk";
 
 function buildCaregiverAlertWebLink(channel: string) {
   const url = new URL("/aidant-alerte", API_BASE);
