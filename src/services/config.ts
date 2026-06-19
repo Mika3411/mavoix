@@ -12,12 +12,7 @@ function getDefaultApiBase() {
 
   try {
     const hostname = new URL(origin).hostname;
-    if (
-      hostname === "mavoix.netlify.app" ||
-      hostname.endsWith(".netlify.app") ||
-      hostname === "mavoix.onrender.com" ||
-      hostname.endsWith(".onrender.com")
-    ) {
+    if (hostname === "mavoix.onrender.com" || hostname.endsWith(".onrender.com")) {
       return origin;
     }
   } catch {}
