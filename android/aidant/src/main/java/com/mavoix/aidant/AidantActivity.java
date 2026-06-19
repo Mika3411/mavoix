@@ -78,7 +78,6 @@ public class AidantActivity extends Activity {
   private static final int COLOR_WARNING_BG = Color.rgb(69, 51, 25);
   private static final int COLOR_USER_BUBBLE = Color.rgb(22, 78, 99);
   private static final int COLOR_CAREGIVER_BUBBLE = Color.rgb(30, 64, 175);
-
   private final ExecutorService messageExecutor = Executors.newCachedThreadPool();
   private final ArrayList<PatientLinkStore.Link> patientLinks = new ArrayList<>();
   private final ArrayList<MessageItem> messages = new ArrayList<>();
@@ -905,9 +904,9 @@ public class AidantActivity extends Activity {
       String apiBase = null;
 
       if ("http".equals(uri.getScheme()) || "https".equals(uri.getScheme())) {
-        apiBase = uri.getScheme() + "://" + uri.getAuthority();
+        apiBase = AidantApiBaseValidator.normalize(uri.toString());
       } else if ("mavoix-aidant".equals(uri.getScheme())) {
-        apiBase = uri.getQueryParameter("apiBase");
+        apiBase = AidantApiBaseValidator.normalize(uri.getQueryParameter("apiBase"));
       }
 
       if (channel == null || channel.trim().length() < 8) {
@@ -917,6 +916,11 @@ public class AidantActivity extends Activity {
 
       if (apiBase == null || apiBase.trim().isEmpty()) {
         apiBase = AlertContract.DEFAULT_API_BASE;
+      }
+
+      if (!AidantApiBaseValidator.isAllowed(this, apiBase)) {
+        toast("Serveur non autorise pour ce lien.");
+        return false;
       }
 
       PatientLinkStore.addOrSelect(prefs, apiBase, channel.trim(), accessKey);
@@ -1234,7 +1238,7 @@ public class AidantActivity extends Activity {
         String streamUrl = link.apiBase
             + "/api/caregiver-messages/stream?role=caregiver&channel="
             + URLEncoder.encode(link.channel, "UTF-8")
-            + linkAccessKeyQuery(link);
+            + AidantMessageUtils.linkAccessKeyQuery(link);
         nextConnection = (HttpURLConnection) new URL(streamUrl).openConnection();
         synchronized (messageConnections) {
           messageConnections.put(link.id, nextConnection);
@@ -1393,7 +1397,7 @@ public class AidantActivity extends Activity {
         pendingIntentFlags()
     );
 
-    String body = truncateNotificationText(item.patientName + " - " + item.preview());
+    String body = AidantMessageUtils.truncateNotificationText(item.patientName + " - " + item.preview());
     Notification.Builder builder = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
         ? new Notification.Builder(this, MESSAGE_NOTIFICATION_CHANNEL_ID)
         : new Notification.Builder(this);
@@ -1440,12 +1444,6 @@ public class AidantActivity extends Activity {
     return flags;
   }
 
-  private String truncateNotificationText(String value) {
-    if (value == null) return "";
-    value = value.replace("\n", " ").replace("\r", " ").trim();
-    return value.length() > 140 ? value.substring(0, 137) + "..." : value;
-  }
-
   private void sendMessage() {
     String message = messageInput.getText().toString().trim();
     if (message.isEmpty()) {
@@ -1475,11 +1473,11 @@ public class AidantActivity extends Activity {
       postConnection.setDoOutput(true);
 
       String body = "{"
-          + "\"channel\":\"" + escapeJson(link.channel) + "\","
-          + "\"accessKey\":\"" + escapeJson(link.accessKey) + "\","
+          + "\"channel\":\"" + AidantMessageUtils.escapeJson(link.channel) + "\","
+          + "\"accessKey\":\"" + AidantMessageUtils.escapeJson(link.accessKey) + "\","
           + "\"senderRole\":\"caregiver\","
           + "\"senderName\":\"Aidant\","
-          + "\"message\":\"" + escapeJson(message) + "\""
+          + "\"message\":\"" + AidantMessageUtils.escapeJson(message) + "\""
           + "}";
       try (OutputStream outputStream = postConnection.getOutputStream()) {
         outputStream.write(body.getBytes(StandardCharsets.UTF_8));
@@ -1489,7 +1487,7 @@ public class AidantActivity extends Activity {
       InputStream stream = statusCode >= 200 && statusCode < 300
           ? postConnection.getInputStream()
           : postConnection.getErrorStream();
-      String response = readStream(stream);
+      String response = AidantMessageUtils.readStream(stream);
 
       if (statusCode < 200 || statusCode >= 300) {
         throw new IllegalStateException(response);
@@ -1536,7 +1534,7 @@ public class AidantActivity extends Activity {
       builder
           .append(item.patientName)
           .append(" - ")
-          .append(formatMessageTime(item.createdAt))
+          .append(AidantMessageUtils.formatMessageTime(item.createdAt))
           .append(" - ")
           .append(item.preview());
       shown += 1;
@@ -1586,7 +1584,7 @@ public class AidantActivity extends Activity {
 
       String sender = caregiver ? "Moi" : "Utilisateur";
       TextView meta = messageTextView(
-          sender + " - " + formatMessageTime(item.createdAt),
+          sender + " - " + AidantMessageUtils.formatMessageTime(item.createdAt),
           COLOR_MUTED,
           13,
           true
@@ -1728,39 +1726,6 @@ public class AidantActivity extends Activity {
     }
   }
 
-  private String linkAccessKeyQuery(PatientLinkStore.Link link) throws Exception {
-    if (link == null || link.accessKey.isEmpty()) {
-      return "";
-    }
-    return "&key=" + URLEncoder.encode(link.accessKey, "UTF-8");
-  }
-
-  private String readStream(InputStream stream) throws Exception {
-    if (stream == null) return "";
-    StringBuilder builder = new StringBuilder();
-    BufferedReader reader = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8));
-    String line;
-    while ((line = reader.readLine()) != null) {
-      builder.append(line);
-    }
-    return builder.toString();
-  }
-
-  private String escapeJson(String value) {
-    return value
-        .replace("\\", "\\\\")
-        .replace("\"", "\\\"")
-        .replace("\n", "\\n")
-        .replace("\r", "\\r");
-  }
-
-  private String formatMessageTime(String value) {
-    if (value != null && value.length() >= 16) {
-      return value.substring(11, 16);
-    }
-    return "--:--";
-  }
-
   private int dp(int value) {
     return Math.round(value * getResources().getDisplayMetrics().density);
   }
@@ -1782,57 +1747,4 @@ public class AidantActivity extends Activity {
     super.onDestroy();
   }
 
-  private static final class MessageItem {
-    final String id;
-    final String connectionId;
-    final String patientName;
-    final String senderRole;
-    final String message;
-    final String messageType;
-    final String createdAt;
-
-    MessageItem(
-        String id,
-        String connectionId,
-        String patientName,
-        String senderRole,
-        String message,
-        String messageType,
-        String createdAt
-    ) {
-      this.id = id;
-      this.connectionId = connectionId == null ? "" : connectionId;
-      this.patientName = patientName == null || patientName.isEmpty() ? "Patient" : patientName;
-      this.senderRole = senderRole;
-      this.message = message == null ? "" : message;
-      this.messageType = messageType == null || messageType.isEmpty() ? "text" : messageType;
-      this.createdAt = createdAt;
-    }
-
-    boolean isAudio() {
-      return "audio".equals(messageType);
-    }
-
-    String preview() {
-      if (isAudio()) {
-        return "Audio recu";
-      }
-      return message;
-    }
-
-    static MessageItem fromJson(JSONObject object, PatientLinkStore.Link link) {
-      if (object == null) return null;
-      String id = object.optString("id", "");
-      if (id.isEmpty()) return null;
-      return new MessageItem(
-          id,
-          link == null ? "" : link.id,
-          link == null ? "Patient" : link.name,
-          object.optString("senderRole", "user"),
-          object.optString("message", ""),
-          object.optString("messageType", "text"),
-          object.optString("createdAt", "")
-      );
-    }
-  }
 }

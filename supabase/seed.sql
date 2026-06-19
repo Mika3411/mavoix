@@ -1,0 +1,2 @@
+-- No seed data is required for production.
+-- Caregiver channels, alerts, messages, and push tokens are created by the app.

@@ -1,4 +1,4 @@
-const CACHE_NAME = "ma-voix-v12";
+const CACHE_NAME = "ma-voix-v13";
 const PRECACHE_URLS = [
   "/",
   "/index.html",
@@ -7,6 +7,27 @@ const PRECACHE_URLS = [
   "/icon-512.png",
   "/picturetitle.png",
 ];
+
+function shouldBypassCache(request, requestUrl) {
+  const pathname = requestUrl.pathname;
+  const acceptHeader = request.headers.get("accept") || "";
+
+  return (
+    request.cache === "no-store" ||
+    pathname === "/api" ||
+    pathname.startsWith("/api/") ||
+    pathname === "/ma-voix-update.json" ||
+    pathname.toLowerCase().endsWith(".apk") ||
+    acceptHeader.includes("text/event-stream")
+  );
+}
+
+function shouldStoreResponse(response) {
+  if (!response || !response.ok) return false;
+
+  const cacheControl = response.headers.get("cache-control") || "";
+  return !cacheControl.toLowerCase().includes("no-store");
+}
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -43,14 +64,20 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
+  if (shouldBypassCache(request, requestUrl)) {
+    return;
+  }
+
   if (request.mode === "navigate") {
     event.respondWith(
       fetch(request)
         .then((response) => {
-          const responseClone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put("/", responseClone);
-          });
+          if (shouldStoreResponse(response)) {
+            const responseClone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => {
+              cache.put("/", responseClone);
+            });
+          }
           return response;
         })
         .catch(() => caches.match("/") || caches.match("/index.html"))
@@ -65,7 +92,7 @@ self.addEventListener("fetch", (event) => {
       }
 
       return fetch(request).then((networkResponse) => {
-        if (networkResponse && networkResponse.ok) {
+        if (shouldStoreResponse(networkResponse)) {
           const responseClone = networkResponse.clone();
           caches.open(CACHE_NAME).then((cache) => {
             cache.put(request, responseClone);
