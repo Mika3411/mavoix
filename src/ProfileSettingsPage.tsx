@@ -988,8 +988,8 @@ export default function ProfileSettingsPage(props: any) {
     };
     const caregiverActionGridStyle: CSSProperties = {
       display: "grid",
-      gridTemplateColumns: "40px minmax(0, 1fr) 40px",
-      gap: 6,
+      gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+      gap: 8,
       alignItems: "stretch",
       minWidth: 0,
       width: caregiverControlsWidth,
@@ -1021,11 +1021,24 @@ export default function ProfileSettingsPage(props: any) {
     const caregiverIconButtonStyle: CSSProperties = {
       ...compactCaregiverButtonStyle,
       minHeight: 40,
-      padding: 0,
+      padding: "8px 8px",
       borderRadius: 12,
-      fontSize: 18,
-      lineHeight: 1,
+      fontSize: 14,
+      fontWeight: 800,
+      lineHeight: 1.1,
       whiteSpace: "nowrap",
+    };
+    const caregiverDeleteButtonStyle: CSSProperties = {
+      ...caregiverIconButtonStyle,
+      ...styles.deleteButton,
+      width: "100%",
+      height: "auto",
+      minHeight: 40,
+      minWidth: 0,
+      padding: "8px 8px",
+      borderRadius: 12,
+      fontSize: 14,
+      lineHeight: 1.1,
     };
     const caregiverModeButtonStyle: CSSProperties = {
       ...compactCaregiverButtonStyle,
@@ -2121,7 +2134,7 @@ export default function ProfileSettingsPage(props: any) {
                     style={{ ...caregiverIconButtonStyle, gridColumn: 1 }}
                     onClick={() => copyCaregiverAlertLink?.(link.id)}
                   >
-                    📋
+                    Copier
                   </button>
 
                   {link.appLink ? (
@@ -2143,8 +2156,8 @@ export default function ProfileSettingsPage(props: any) {
                     aria-label="Supprimer l'aidant"
                     title="Supprimer l'aidant"
                     style={{
-                      ...caregiverIconButtonStyle,
-                      gridColumn: 3,
+                      ...caregiverDeleteButtonStyle,
+                      gridColumn: 2,
                       opacity: caregiverAlertLinks.length <= 1 ? 0.55 : 1,
                       cursor:
                         caregiverAlertLinks.length <= 1
@@ -2154,7 +2167,7 @@ export default function ProfileSettingsPage(props: any) {
                     disabled={caregiverAlertLinks.length <= 1}
                     onClick={() => deleteCaregiverAlertLink?.(link.id)}
                   >
-                    🗑
+                    Supprimer
                   </button>
                 </div>
               </div>
@@ -2226,8 +2239,8 @@ export default function ProfileSettingsPage(props: any) {
           <div style={profileActionGridStyle}>
             <button
               type="button"
-              aria-label="Ajouter un profil"
-              title="Ajouter un profil"
+              aria-label="Ajouter"
+              title="Ajouter"
               style={profilePrimaryActionButtonStyle}
               onClick={createNewProfile}
             >
@@ -2236,8 +2249,8 @@ export default function ProfileSettingsPage(props: any) {
 
             <button
               type="button"
-              aria-label="Dupliquer le profil"
-              title="Dupliquer le profil"
+              aria-label="Dupliquer"
+              title="Dupliquer"
               style={profileActionButtonStyle}
               onClick={duplicateCurrentProfile}
             >
@@ -2246,8 +2259,8 @@ export default function ProfileSettingsPage(props: any) {
 
             <button
               type="button"
-              aria-label="Supprimer le profil"
-              title="Supprimer le profil"
+              aria-label="Supprimer"
+              title="Supprimer"
               style={profileDeleteActionButtonStyle}
               onClick={() => setShowDeleteConfirm(true)}
             >
@@ -2452,7 +2465,7 @@ export default function ProfileSettingsPage(props: any) {
                 id="delete-profile-title"
                 style={{ ...styles.sectionTitle, marginBottom: 12 }}
               >
-                Supprimer ce profil
+                Supprimer
               </h2>
 
               <p style={{ ...styles.text, marginBottom: 12 }}>

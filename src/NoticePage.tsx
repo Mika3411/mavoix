@@ -543,9 +543,9 @@ export default function NoticePage({
               <NoticeList
                 items={[
                   "Choisir un profil permet de basculer vers une autre personne ou un autre jeu de données.",
-                  "Ajouter un profil crée un espace séparé.",
-                  "Dupliquer le profil reprend la base existante pour gagner du temps.",
-                  "Supprimer un profil efface définitivement ses informations locales.",
+                  "Ajouter crée un espace séparé.",
+                  "Dupliquer reprend la base existante pour gagner du temps.",
+                  "Supprimer efface définitivement ses informations locales.",
                   "Les actions Ajouter, Dupliquer et Supprimer restent groupées dans le bloc Profils ; sur petit écran, elles peuvent passer à la ligne.",
                 ]}
               />
