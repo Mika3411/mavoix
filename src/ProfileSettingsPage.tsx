@@ -47,6 +47,160 @@ const VIRTUAL_KEYBOARD_VARIANTS: Record<string, string[]> = {
   Z: ["2"],
 };
 
+type ActionIconName = "keyboard" | "microphone" | "recordStop" | "listen" | "voiceStop";
+
+function ActionIcon({
+  name,
+  size = 26,
+}: {
+  name: ActionIconName;
+  size?: number;
+}) {
+  const commonProps = {
+    width: size,
+    height: size,
+    viewBox: "0 0 32 32",
+    fill: "none",
+    xmlns: "http://www.w3.org/2000/svg",
+    "aria-hidden": true,
+    focusable: "false",
+    style: { display: "block", flex: "0 0 auto" },
+  } as const;
+
+  if (name === "keyboard") {
+    return (
+      <svg {...commonProps}>
+        <rect
+          x="4.75"
+          y="8.5"
+          width="22.5"
+          height="15"
+          rx="3.4"
+          stroke="currentColor"
+          strokeWidth="2.15"
+        />
+        <path
+          d="M10 26.5h12"
+          stroke="currentColor"
+          strokeWidth="2.15"
+          strokeLinecap="round"
+          opacity="0.6"
+        />
+        {[
+          [8.5, 12],
+          [13, 12],
+          [17.5, 12],
+          [22, 12],
+          [8.5, 16],
+          [13, 16],
+          [17.5, 16],
+          [22, 16],
+        ].map(([x, y]) => (
+          <rect
+            key={`${x}-${y}`}
+            x={x}
+            y={y}
+            width="2.8"
+            height="2.35"
+            rx="0.75"
+            fill="currentColor"
+          />
+        ))}
+        <rect x="10.75" y="20" width="10.5" height="2.35" rx="1" fill="currentColor" />
+      </svg>
+    );
+  }
+
+  if (name === "microphone") {
+    return (
+      <svg {...commonProps}>
+        <rect
+          x="12"
+          y="5"
+          width="8"
+          height="14"
+          rx="4"
+          stroke="currentColor"
+          strokeWidth="2.3"
+        />
+        <path
+          d="M8 14.25v1.35c0 4.55 3.45 8 8 8s8-3.45 8-8v-1.35"
+          stroke="currentColor"
+          strokeWidth="2.3"
+          strokeLinecap="round"
+        />
+        <path
+          d="M16 23.6v4.15M12.25 27.75h7.5"
+          stroke="currentColor"
+          strokeWidth="2.3"
+          strokeLinecap="round"
+        />
+        <path
+          d="M14.25 9h3.5M14.25 13h3.5"
+          stroke="currentColor"
+          strokeWidth="1.55"
+          strokeLinecap="round"
+          opacity="0.72"
+        />
+      </svg>
+    );
+  }
+
+  if (name === "recordStop") {
+    return (
+      <svg {...commonProps}>
+        <circle cx="16" cy="16" r="11.25" stroke="currentColor" strokeWidth="2.2" opacity="0.65" />
+        <rect x="11.5" y="11.5" width="9" height="9" rx="2" fill="currentColor" />
+        <path
+          d="M8.25 8.25 23.75 23.75"
+          stroke="currentColor"
+          strokeWidth="2.2"
+          strokeLinecap="round"
+          opacity="0.55"
+        />
+      </svg>
+    );
+  }
+
+  if (name === "listen") {
+    return (
+      <svg {...commonProps}>
+        <path
+          d="M8.25 10.5h3.9l5.35-4.1c.9-.68 2.2-.05 2.2 1.08v17.04c0 1.13-1.3 1.76-2.2 1.08l-5.35-4.1h-3.9a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2Z"
+          stroke="currentColor"
+          strokeWidth="2.15"
+          strokeLinejoin="round"
+        />
+        <path
+          d="M23.25 11.2c1.15 1.25 1.75 2.8 1.75 4.8s-.6 3.55-1.75 4.8M26.7 8.25c1.85 2.05 2.8 4.55 2.8 7.75s-.95 5.7-2.8 7.75"
+          stroke="currentColor"
+          strokeWidth="2.15"
+          strokeLinecap="round"
+        />
+        <path d="M12.4 12.2v7.6" stroke="currentColor" strokeWidth="1.55" opacity="0.6" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg {...commonProps}>
+      <path
+        d="M8.75 10.75h3.55l4.85-3.7c.8-.62 1.98-.05 1.98.96v15.98c0 1.01-1.18 1.58-1.98.96l-4.85-3.7H8.75a1.9 1.9 0 0 1-1.9-1.9v-6.7a1.9 1.9 0 0 1 1.9-1.9Z"
+        stroke="currentColor"
+        strokeWidth="2.1"
+        strokeLinejoin="round"
+      />
+      <rect x="21.35" y="11.35" width="7.2" height="7.2" rx="1.6" fill="currentColor" />
+      <path
+        d="M22.25 22.35 28 27.75M28 22.35l-5.75 5.4"
+        stroke="currentColor"
+        strokeWidth="2.05"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
 export default function ProfileSettingsPage(props: any) {
   const {
     styles,
@@ -119,6 +273,7 @@ export default function ProfileSettingsPage(props: any) {
     typeof window !== "undefined" && window.innerWidth <= 640;
   const virtualKeyboardActionSize = isCompactLayout ? 44 : 48;
   const virtualKeyboardActionPadding = isCompactLayout ? "8px 6px" : "10px 10px";
+  const virtualKeyboardActionIconSize = isCompactLayout ? 23 : 27;
   const virtualKeyboardKeyMinHeight = isCompactLayout ? 48 : 52;
   const virtualKeyboardKeyPadding = isCompactLayout ? "8px 4px" : "10px 6px";
   const virtualKeyboardVariantSize = isCompactLayout ? 44 : 48;
@@ -683,6 +838,17 @@ export default function ProfileSettingsPage(props: any) {
     fontSize: 16,
     lineHeight: 1.1,
     whiteSpace: "normal",
+  });
+  const virtualKeyboardActionStyle = (baseStyle: CSSProperties): CSSProperties => ({
+    ...baseStyle,
+    height: virtualKeyboardActionSize,
+    minHeight: virtualKeyboardActionSize,
+    padding: virtualKeyboardActionPadding,
+    borderRadius: isCompactLayout ? 14 : 18,
+    lineHeight: 1.1,
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
   });
 
   if (page === "profil") {
@@ -2398,87 +2564,54 @@ export default function ProfileSettingsPage(props: any) {
                         : "Afficher le clavier virtuel"
                     }
                     style={{
-                      ...(isVirtualKeyboardOpen
+                      ...virtualKeyboardActionStyle(isVirtualKeyboardOpen
                         ? styles.primaryButton
                         : styles.secondaryButton),
-                      height: virtualKeyboardActionSize,
-                      minHeight: virtualKeyboardActionSize,
-                      padding: virtualKeyboardActionPadding,
-                      borderRadius: isCompactLayout ? 14 : 18,
-                      fontSize: isCompactLayout ? 13 : undefined,
-                      lineHeight: 1.1,
-                      display: "inline-flex",
-                      alignItems: "center",
-                      justifyContent: "center",
                     }}
                     onClick={() => {
                       setIsVirtualKeyboardOpen((prev) => !prev);
                       focusStandardTextArea();
                     }}
                   >
-                    ⌨
+                    <ActionIcon name="keyboard" size={virtualKeyboardActionIconSize} />
                   </button>
 
                   <button
                     aria-label={isListening ? "Arrêter la dictée" : "Dicter"}
                     title={isListening ? "Arrêter la dictée" : "Dicter"}
                     style={{
-                      ...(isListening
+                      ...virtualKeyboardActionStyle(isListening
                         ? styles.recordingButton
                         : styles.primaryButton),
-                      height: virtualKeyboardActionSize,
-                      minHeight: virtualKeyboardActionSize,
-                      padding: virtualKeyboardActionPadding,
-                      borderRadius: isCompactLayout ? 14 : 18,
-                      fontSize: isCompactLayout ? 13 : undefined,
-                      lineHeight: 1.1,
-                      display: "inline-flex",
-                      alignItems: "center",
-                      justifyContent: "center",
                     }}
                     onClick={isListening ? stopDictation : startDictation}
                   >
-                    {isListening ? "⏹" : "🎙"}
+                    <ActionIcon
+                      name={isListening ? "recordStop" : "microphone"}
+                      size={virtualKeyboardActionIconSize}
+                    />
                   </button>
 
                   <button
                     aria-label="Écouter"
                     title="Écouter"
                     style={{
-                      ...styles.secondaryButton,
-                      height: virtualKeyboardActionSize,
-                      minHeight: virtualKeyboardActionSize,
-                      padding: virtualKeyboardActionPadding,
-                      borderRadius: isCompactLayout ? 14 : 18,
-                      fontSize: isCompactLayout ? 13 : undefined,
-                      lineHeight: 1.1,
-                      display: "inline-flex",
-                      alignItems: "center",
-                      justifyContent: "center",
+                      ...virtualKeyboardActionStyle(styles.secondaryButton),
                     }}
                     onClick={() => speakText(text)}
                   >
-                    ▶
+                    <ActionIcon name="listen" size={virtualKeyboardActionIconSize} />
                   </button>
 
                   <button
                     aria-label="Stop voix"
                     title="Stop voix"
                     style={{
-                      ...styles.secondaryButton,
-                      height: virtualKeyboardActionSize,
-                      minHeight: virtualKeyboardActionSize,
-                      padding: virtualKeyboardActionPadding,
-                      borderRadius: isCompactLayout ? 14 : 18,
-                      fontSize: isCompactLayout ? 13 : undefined,
-                      lineHeight: 1.1,
-                      display: "inline-flex",
-                      alignItems: "center",
-                      justifyContent: "center",
+                      ...virtualKeyboardActionStyle(styles.secondaryButton),
                     }}
                     onClick={stopSpeaking}
                   >
-                    ⏹
+                    <ActionIcon name="voiceStop" size={virtualKeyboardActionIconSize} />
                   </button>
                 </div>
 

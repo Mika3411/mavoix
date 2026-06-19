@@ -1391,16 +1391,6 @@ export default function App() {
                   </button>
 
                   <button
-                    style={page === "aidants" ? styles.primaryButton : styles.secondaryButton}
-                    onClick={() => {
-                      setPage("aidants");
-                      setIsMoreMenuOpen(false);
-                    }}
-                  >
-                    Aidants
-                  </button>
-
-                  <button
                     style={page === "dictionnaire" ? styles.primaryButton : styles.secondaryButton}
                     onClick={() => {
                       setPage("dictionnaire");

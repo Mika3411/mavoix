@@ -4,3 +4,27 @@
 
 [build.environment]
   NODE_VERSION = "22"
+
+[[redirects]]
+  from = "/api/*"
+  to = "https://mavoix.onrender.com/api/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/aidant-alerte"
+  to = "https://mavoix.onrender.com/aidant-alerte"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/aidant-alarm-default.mp3"
+  to = "https://mavoix.onrender.com/aidant-alarm-default.mp3"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/ma-voix-update.json"
+  to = "https://mavoix.onrender.com/ma-voix-update.json"
+  status = 200
+  force = true

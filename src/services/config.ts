@@ -1,12 +1,31 @@
 const DEPLOYED_API_BASE = "https://mavoix.onrender.com";
-const DEFAULT_API_BASE =
-  typeof window !== "undefined" &&
-  window.location.origin &&
-  window.location.origin !== "null" &&
-  /^https?:\/\//.test(window.location.origin) &&
-  !import.meta.env.DEV
-    ? window.location.origin
-    : DEPLOYED_API_BASE;
+
+function getDefaultApiBase() {
+  if (import.meta.env.DEV || typeof window === "undefined") {
+    return DEPLOYED_API_BASE;
+  }
+
+  const origin = window.location.origin;
+  if (!origin || origin === "null" || !/^https?:\/\//.test(origin)) {
+    return DEPLOYED_API_BASE;
+  }
+
+  try {
+    const hostname = new URL(origin).hostname;
+    if (
+      hostname === "mavoix.netlify.app" ||
+      hostname.endsWith(".netlify.app") ||
+      hostname === "mavoix.onrender.com" ||
+      hostname.endsWith(".onrender.com")
+    ) {
+      return origin;
+    }
+  } catch {}
+
+  return DEPLOYED_API_BASE;
+}
+
+const DEFAULT_API_BASE = getDefaultApiBase();
 const DEFAULT_ANDROID_APP_URL = import.meta.env.DEV
   ? "http://localhost:3000"
   : "/android/";

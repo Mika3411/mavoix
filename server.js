@@ -14,6 +14,7 @@ app.disable("x-powered-by");
 
 const DEFAULT_ALLOWED_ORIGINS = [
   "https://mavoix.onrender.com",
+  "https://mavoix.netlify.app",
   "capacitor://localhost",
   "ionic://localhost",
   "http://localhost:3000",
@@ -25,8 +26,9 @@ const allowedOrigins = (process.env.ALLOWED_ORIGINS || "")
   .split(",")
   .map((origin) => origin.trim())
   .filter(Boolean);
-const corsOrigins =
-  allowedOrigins.length > 0 ? allowedOrigins : DEFAULT_ALLOWED_ORIGINS;
+const corsOrigins = Array.from(
+  new Set([...DEFAULT_ALLOWED_ORIGINS, ...allowedOrigins])
+);
 
 function isAllowedCorsOrigin(origin) {
   if (!origin || corsOrigins.includes(origin)) return true;
@@ -65,7 +67,8 @@ app.use((req, res, next) => {
   if (
     req.path.startsWith("/api/") ||
     req.path === "/aidant-alerte" ||
-    req.path === "/ma-voix-update.json"
+    req.path === "/ma-voix-update.json" ||
+    req.path.endsWith(".apk")
   ) {
     res.setHeader("Cache-Control", "no-store");
   }
@@ -78,11 +81,17 @@ const DESKTOP_BUILD_DIR = path.join(__dirname, "build");
 const ANDROID_BUILD_DIR = process.env.ANDROID_BUILD_DIR
   ? path.resolve(process.env.ANDROID_BUILD_DIR)
   : path.resolve(__dirname, "..", "ma-voix-android", "build");
+const PUBLIC_DIR = path.join(__dirname, "public");
 const DEFAULT_ALARM_AUDIO_FILE = path.join(
-  __dirname,
-  "public",
+  PUBLIC_DIR,
   "aidant-alarm-default.mp3"
 );
+const APK_FILE_ALIASES = {
+  "ma-voix.apk": "ma-voix.apk",
+  "ma-voix-aidant.apk": "ma-voix-aidant.apk",
+  "ma-voix-aidant-stable-2c3ba01.apk": "ma-voix-aidant.apk",
+  "ma-voix-aidant-1751-d5504ee9.apk": "ma-voix-aidant.apk",
+};
 
 function sanitizeText(value, maxLength = 140) {
   if (typeof value !== "string") return "";
@@ -2109,6 +2118,27 @@ function serveClientBuild(req, res, next) {
 app.get("/aidant-alerte", (_req, res) => {
   res.type("html").send(getCaregiverAlertPageHtml());
 });
+
+app.get(
+  Object.keys(APK_FILE_ALIASES).map((fileName) => `/${fileName}`),
+  (req, res, next) => {
+    const requestedFileName = path.basename(req.path);
+    const publicFileName = APK_FILE_ALIASES[requestedFileName];
+    const apkPath = publicFileName ? path.join(PUBLIC_DIR, publicFileName) : "";
+
+    if (!apkPath || !fs.existsSync(apkPath)) {
+      next();
+      return;
+    }
+
+    res.type("application/vnd.android.package-archive");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${requestedFileName}"`
+    );
+    res.sendFile(apkPath);
+  }
+);
 
 app.get("/aidant-alarm-default.mp3", (_req, res, next) => {
   if (!fs.existsSync(DEFAULT_ALARM_AUDIO_FILE)) {
