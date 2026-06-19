@@ -2000,10 +2000,11 @@ export default function ProfileSettingsPage(props: any) {
             <strong style={{ display: "block", marginBottom: 6 }}>
               À quoi ça sert ?
             </strong>
-            Crée un lien par aidant, puis coche ceux qui doivent être
-            disponibles dans le choix <strong>Appel aidant</strong>. Avant
-            d'appuyer sur la cloche, choisis l'aidant qui doit recevoir
-            l'alarme.
+            Ça sert à choisir quel téléphone aidant reçoit l'alerte quand la
+            personne appuie sur la cloche orange. Crée un lien pour chaque
+            aidant, ouvre ce lien sur son téléphone, puis coche les aidants
+            disponibles dans <strong>Appel aidant</strong>. Ensuite, choisis
+            ici l'aidant à prévenir.
           </div>
 
           {availableCaregiverAlertLinks.length > 0 ? (
