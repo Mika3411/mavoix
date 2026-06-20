@@ -233,6 +233,20 @@ export default function CaregiverApkSharePage({
     border: `1px solid ${activeTheme?.inputBorder || "rgba(255,255,255,0.1)"}`,
     lineHeight: 1.55,
   };
+  const messagePreviewStyle: React.CSSProperties = {
+    width: "100%",
+    marginTop: 8,
+    padding: 14,
+    borderRadius: 16,
+    border: `2px solid ${activeTheme?.inputBorder || "rgba(148,163,184,0.35)"}`,
+    background: activeTheme?.inputBackground || "rgba(15,23,42,0.72)",
+    color: activeTheme?.textColor || "inherit",
+    boxSizing: "border-box",
+    whiteSpace: "pre-wrap",
+    overflowWrap: "anywhere",
+    lineHeight: 1.45,
+    fontSize: 16,
+  };
 
   return (
     <div style={styles.gridSingle}>
@@ -323,16 +337,7 @@ export default function CaregiverApkSharePage({
 
         <div style={{ ...styles.formGroup, marginBottom: 16 }}>
           <label style={styles.label}>Message envoyé à l'aidant</label>
-          <textarea
-            readOnly
-            value={shareMessage}
-            style={{
-              ...styles.smallTextarea,
-              minHeight: 220,
-              marginTop: 8,
-              fontSize: 16,
-            }}
-          />
+          <div style={messagePreviewStyle}>{shareMessage}</div>
         </div>
 
         <div
