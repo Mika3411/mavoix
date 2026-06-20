@@ -76,20 +76,23 @@ function buildAidantShareMessage({
   apkUrl: string;
   caregiverLink: string;
 }) {
-  const connectionStep = caregiverLink
-    ? `4. Ouvre ce lien pour connecter le téléphone aidant à Ma Voix :\n${caregiverLink}`
-    : "4. Demande-moi ensuite le lien aidant pour connecter le téléphone à Ma Voix.";
+  const connectionLink = caregiverLink
+    ? `Lien de connexion Ma Voix :\n${caregiverLink}`
+    : "Lien de connexion Ma Voix :\nDemande-moi ensuite le lien aidant pour connecter le téléphone à Ma Voix.";
 
   return `Bonjour,
 
 Voici l'application Ma Voix Aidant pour recevoir les appels et les messages de ${profileName}.
 
-1. Ouvre ce lien sur le téléphone Android de l'aidant :
+Lien APK Ma Voix Aidant :
 ${apkUrl}
 
+${connectionLink}
+
+1. Sur le téléphone Android de l'aidant, ouvre le lien APK ci-dessus.
 2. Télécharge puis installe le fichier APK.
 3. Si Android demande une autorisation, accepte l'installation depuis le navigateur, SMS ou WhatsApp.
-${connectionStep}
+4. Après l'installation, ouvre le lien de connexion Ma Voix ci-dessus.
 5. Autorise les notifications, l'alarme et la batterie si Android le demande.
 
 Après ça, ${profileName} pourra appeler l'aidant avec la cloche de Ma Voix.`;
@@ -371,10 +374,17 @@ export default function CaregiverApkSharePage({
                   marginBottom: 4,
                 }}
               >
-                Lien ajouté au message
+                Liens ajoutés au message
               </strong>
-              {selectedCaregiverLink ||
-                "Crée ou choisis un aidant pour ajouter son lien."}
+              <div>
+                <span style={{ fontWeight: 800 }}>APK : </span>
+                {apkUrl}
+              </div>
+              <div style={{ marginTop: 6 }}>
+                <span style={{ fontWeight: 800 }}>Aidant : </span>
+                {selectedCaregiverLink ||
+                  "Crée ou choisis un aidant pour ajouter son lien."}
+              </div>
             </div>
 
             <label style={{ ...styles.label, marginTop: 12 }}>
