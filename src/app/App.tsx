@@ -591,6 +591,7 @@ export default function App() {
             emergencyContacts={emergencyContacts}
             caregiverAlertLinks={caregiverAlertTargets}
             selectedCaregiverAlertLinkId={selectedCaregiverAlertTargetId}
+            addCaregiverAlertLink={addCaregiverAlertLink}
             showToast={showToast}
           />
         ) : page === "aidants" ? (

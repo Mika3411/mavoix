@@ -20,6 +20,10 @@ type CaregiverApkSharePageProps = {
   emergencyContacts: EmergencyContact[];
   caregiverAlertLinks: CaregiverAlertTarget[];
   selectedCaregiverAlertLinkId: string;
+  addCaregiverAlertLink?: (options?: {
+    name?: string;
+    select?: boolean;
+  }) => string | void;
   showToast?: (message: string) => void;
 };
 
@@ -105,6 +109,7 @@ export default function CaregiverApkSharePage({
   emergencyContacts,
   caregiverAlertLinks,
   selectedCaregiverAlertLinkId,
+  addCaregiverAlertLink,
   showToast,
 }: CaregiverApkSharePageProps) {
   const apkUrl = React.useMemo(() => resolvePublicUrl(AIDANT_APK_PATH), []);
@@ -131,6 +136,7 @@ export default function CaregiverApkSharePage({
   const [selectedCaregiverId, setSelectedCaregiverId] = React.useState(
     selectedCaregiverAlertLinkId || ""
   );
+  const [newCaregiverName, setNewCaregiverName] = React.useState("");
 
   React.useEffect(() => {
     if (!selectedContactId) return;
@@ -169,12 +175,44 @@ export default function CaregiverApkSharePage({
     null;
   const caregiverWebLink = buildCaregiverAlertWebLink(selectedCaregiver);
   const caregiverAppLink = buildCaregiverAlertAppLink(selectedCaregiver);
+  const selectedCaregiverLink = caregiverWebLink || caregiverAppLink;
   const profileName = getProfileDisplayName(currentProfile);
   const shareMessage = buildAidantShareMessage({
     profileName,
     apkUrl,
-    caregiverLink: caregiverWebLink || caregiverAppLink,
+    caregiverLink: selectedCaregiverLink,
   });
+
+  function createAndSelectCaregiver() {
+    if (!addCaregiverAlertLink) {
+      showToast?.("Création d'aidant indisponible.");
+      return;
+    }
+
+    const fallbackName = selectedContact?.name?.trim();
+    const requestedName =
+      newCaregiverName.trim() ||
+      fallbackName ||
+      `Aidant ${availableCaregivers.length + 1}`;
+    const createdId = addCaregiverAlertLink({ name: requestedName });
+
+    if (createdId) {
+      setSelectedCaregiverId(createdId);
+      setNewCaregiverName("");
+      showToast?.(`Lien ${requestedName} ajouté au message.`);
+      return;
+    }
+
+    showToast?.("Aidant créé. Sélectionne son lien dans la liste.");
+  }
+
+  function handleNewCaregiverKeyDown(
+    event: React.KeyboardEvent<HTMLInputElement>
+  ) {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    createAndSelectCaregiver();
+  }
 
   function openSmsShare() {
     const phone = selectedContact?.phone
@@ -247,6 +285,29 @@ export default function CaregiverApkSharePage({
     lineHeight: 1.45,
     fontSize: 16,
   };
+  const selectedLinkStyle: React.CSSProperties = {
+    marginTop: 10,
+    padding: "10px 12px",
+    borderRadius: 14,
+    border: `1px solid ${activeTheme?.inputBorder || "rgba(148,163,184,0.3)"}`,
+    background: surfaceBackground,
+    color: mutedTextColor,
+    fontSize: 13,
+    lineHeight: 1.4,
+    overflowWrap: "anywhere",
+  };
+  const createCaregiverGridStyle: React.CSSProperties = {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) minmax(104px, auto)",
+    gap: 10,
+    alignItems: "stretch",
+    marginTop: 10,
+  };
+  const createCaregiverButtonStyle: React.CSSProperties = {
+    ...styles.secondaryButton,
+    minHeight: 44,
+    whiteSpace: "normal",
+  };
 
   return (
     <div style={styles.gridSingle}>
@@ -284,7 +345,7 @@ export default function CaregiverApkSharePage({
           </div>
 
           <div style={styles.formGroup}>
-            <label style={styles.label}>Lien aidant à inclure</label>
+            <label style={styles.label}>Choisir l'aidant à connecter</label>
             <select
               value={selectedCaregiverId}
               onChange={(event) => setSelectedCaregiverId(event.target.value)}
@@ -301,6 +362,45 @@ export default function CaregiverApkSharePage({
                 ))
               )}
             </select>
+
+            <div style={selectedLinkStyle}>
+              <strong
+                style={{
+                  display: "block",
+                  color: activeTheme?.textColor || "inherit",
+                  marginBottom: 4,
+                }}
+              >
+                Lien ajouté au message
+              </strong>
+              {selectedCaregiverLink ||
+                "Crée ou choisis un aidant pour ajouter son lien."}
+            </div>
+
+            <label style={{ ...styles.label, marginTop: 12 }}>
+              Créer un nouvel aidant
+            </label>
+            <div style={createCaregiverGridStyle}>
+              <input
+                value={newCaregiverName}
+                onChange={(event) => setNewCaregiverName(event.target.value)}
+                onKeyDown={handleNewCaregiverKeyDown}
+                style={styles.input}
+                placeholder={
+                  selectedContact?.name?.trim()
+                    ? `Nom : ${selectedContact.name.trim()}`
+                    : "Nom du nouvel aidant"
+                }
+              />
+              <button
+                type="button"
+                style={createCaregiverButtonStyle}
+                onClick={createAndSelectCaregiver}
+                disabled={!addCaregiverAlertLink}
+              >
+                Créer
+              </button>
+            </div>
           </div>
         </div>
 

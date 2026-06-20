@@ -20,6 +20,11 @@ type UseCaregiverAlertsOptions = {
   showToast: (message: string) => void;
 };
 
+type AddCaregiverAlertLinkOptions = {
+  name?: string;
+  select?: boolean;
+};
+
 function appendCaregiverAccessKey(url: URL, accessKey?: string) {
   if (accessKey) {
     url.searchParams.set("key", accessKey);
@@ -147,22 +152,37 @@ export default function useCaregiverAlerts({
     [updateCurrentProfile]
   );
 
-  const addCaregiverAlertLink = useCallback(() => {
-    updateCurrentProfile((profile) => {
-      const links = ensureCaregiverAlertLinks(
-        profile.caregiverAlertLinks,
-        profile.id
+  const addCaregiverAlertLink = useCallback(
+    (options: AddCaregiverAlertLinkOptions = {}) => {
+      const existingLinks = ensureCaregiverAlertLinks(
+        currentProfile?.caregiverAlertLinks,
+        currentProfileId
       );
-
-      return {
-        ...profile,
-        caregiverAlertLinks: [
-          ...links,
-          createCaregiverAlertLink(links.length, profile.id),
-        ],
+      const caregiverName = String(options.name || "").trim();
+      const createdLink = {
+        ...createCaregiverAlertLink(existingLinks.length, currentProfileId),
+        ...(caregiverName ? { name: caregiverName } : {}),
       };
-    });
-  }, [updateCurrentProfile]);
+
+      updateCurrentProfile((profile) => {
+        const links = ensureCaregiverAlertLinks(
+          profile.caregiverAlertLinks,
+          profile.id
+        );
+
+        return {
+          ...profile,
+          caregiverAlertLinks: [...links, createdLink],
+          ...(options.select
+            ? { selectedCaregiverAlertLinkId: createdLink.id }
+            : {}),
+        };
+      });
+
+      return createdLink.id;
+    },
+    [currentProfile?.caregiverAlertLinks, currentProfileId, updateCurrentProfile]
+  );
 
   const deleteCaregiverAlertLink = useCallback(
     (linkId: string) => {
