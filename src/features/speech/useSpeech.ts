@@ -273,13 +273,6 @@ export default function useSpeech({
 
       if (!phrase?.trim()) return;
 
-      if (!("speechSynthesis" in window)) {
-        alert("La synthèse vocale n'est pas disponible sur ce navigateur.");
-        return;
-      }
-
-      window.speechSynthesis.cancel();
-
       const phraseSettings = phraseId
         ? savedPhrases.find((item) => item.id === phraseId)?.voiceSettings || null
         : null;
@@ -299,6 +292,13 @@ export default function useSpeech({
         }
         return;
       }
+
+      if (!("speechSynthesis" in window)) {
+        alert("La synthèse vocale n'est pas disponible sur ce navigateur.");
+        return;
+      }
+
+      window.speechSynthesis.cancel();
 
       const utterance = new SpeechSynthesisUtterance(phrase);
       utterance.lang = normalizedLanguage;

@@ -229,6 +229,20 @@ function MoreMenu({
       </button>
 
       <button
+        style={
+          page === "partage-aidant"
+            ? styles.primaryButton
+            : styles.secondaryButton
+        }
+        onClick={() => {
+          setPage("partage-aidant");
+          setIsMoreMenuOpen(false);
+        }}
+      >
+        Envoyer app aidant
+      </button>
+
+      <button
         style={page === "notice" ? styles.primaryButton : styles.secondaryButton}
         onClick={openNoticeSection}
       >

@@ -1,0 +1,408 @@
+import React from "react";
+import { API_BASE } from "../../services/config";
+import {
+  normalizePhoneForSms,
+  normalizeWhatsAppPhone,
+} from "../../shared/phone";
+import type {
+  CaregiverAlertTarget,
+  EmergencyContact,
+  Profile,
+  StyleMap,
+} from "../../shared/types";
+
+const AIDANT_APK_PATH = "/ma-voix-aidant.apk";
+
+type CaregiverApkSharePageProps = {
+  styles: StyleMap;
+  activeTheme: Record<string, string>;
+  currentProfile: Profile;
+  emergencyContacts: EmergencyContact[];
+  caregiverAlertLinks: CaregiverAlertTarget[];
+  selectedCaregiverAlertLinkId: string;
+  showToast?: (message: string) => void;
+};
+
+function resolvePublicUrl(path: string) {
+  try {
+    return new URL(path, API_BASE).href;
+  } catch {
+    return `${API_BASE}${path.startsWith("/") ? "" : "/"}${path}`;
+  }
+}
+
+function getProfileDisplayName(profile: Profile) {
+  return (
+    [profile?.firstName, profile?.lastName].filter(Boolean).join(" ").trim() ||
+    profile?.name ||
+    "la personne Ma Voix"
+  );
+}
+
+function buildCaregiverAlertWebLink(target: CaregiverAlertTarget | null) {
+  if (!target?.channel) return "";
+  if (target.alertLink) return target.alertLink;
+
+  const url = new URL("/aidant-alerte", API_BASE);
+  url.searchParams.set("channel", target.channel);
+  if (target.accessKey) {
+    url.searchParams.set("key", target.accessKey);
+  }
+  return url.href;
+}
+
+function buildCaregiverAlertAppLink(target: CaregiverAlertTarget | null) {
+  if (!target?.channel) return "";
+
+  const url = new URL("mavoix-aidant://open");
+  url.searchParams.set("apiBase", API_BASE);
+  url.searchParams.set("channel", target.channel);
+  if (target.accessKey) {
+    url.searchParams.set("key", target.accessKey);
+  }
+  return url.href;
+}
+
+function buildAidantShareMessage({
+  profileName,
+  apkUrl,
+  caregiverLink,
+}: {
+  profileName: string;
+  apkUrl: string;
+  caregiverLink: string;
+}) {
+  const connectionStep = caregiverLink
+    ? `4. Ouvre ce lien pour connecter le téléphone aidant à Ma Voix :\n${caregiverLink}`
+    : "4. Demande-moi ensuite le lien aidant pour connecter le téléphone à Ma Voix.";
+
+  return `Bonjour,
+
+Voici l'application Ma Voix Aidant pour recevoir les appels et les messages de ${profileName}.
+
+1. Ouvre ce lien sur le téléphone Android de l'aidant :
+${apkUrl}
+
+2. Télécharge puis installe le fichier APK.
+3. Si Android demande une autorisation, accepte l'installation depuis le navigateur, SMS ou WhatsApp.
+${connectionStep}
+5. Autorise les notifications, l'alarme et la batterie si Android le demande.
+
+Après ça, ${profileName} pourra appeler l'aidant avec la cloche de Ma Voix.`;
+}
+
+function contactLabel(contact: EmergencyContact, index: number) {
+  const name = contact.name?.trim();
+  const phone = contact.phone?.trim();
+  if (name && phone) return `${name} - ${phone}`;
+  return name || phone || `Contact ${index + 1}`;
+}
+
+export default function CaregiverApkSharePage({
+  styles,
+  activeTheme,
+  currentProfile,
+  emergencyContacts,
+  caregiverAlertLinks,
+  selectedCaregiverAlertLinkId,
+  showToast,
+}: CaregiverApkSharePageProps) {
+  const apkUrl = React.useMemo(() => resolvePublicUrl(AIDANT_APK_PATH), []);
+  const availableContacts = React.useMemo(
+    () =>
+      (emergencyContacts || []).filter((contact) =>
+        String(contact?.phone || "").trim()
+      ),
+    [emergencyContacts]
+  );
+  const availableCaregivers = React.useMemo(
+    () =>
+      (caregiverAlertLinks || []).filter((link) =>
+        String(link?.channel || "").trim()
+      ),
+    [caregiverAlertLinks]
+  );
+  const caregiverIds = React.useMemo(
+    () => availableCaregivers.map((link) => link.id).join("|"),
+    [availableCaregivers]
+  );
+
+  const [selectedContactId, setSelectedContactId] = React.useState("");
+  const [selectedCaregiverId, setSelectedCaregiverId] = React.useState(
+    selectedCaregiverAlertLinkId || ""
+  );
+
+  React.useEffect(() => {
+    if (!selectedContactId) return;
+
+    const selectedExists = availableContacts.some(
+      (contact) => contact.id === selectedContactId
+    );
+    if (!selectedExists) {
+      setSelectedContactId("");
+    }
+  }, [availableContacts, selectedContactId]);
+
+  React.useEffect(() => {
+    const selectedExists = availableCaregivers.some(
+      (link) => link.id === selectedCaregiverId
+    );
+    if (selectedExists) return;
+
+    const preferredCaregiver =
+      availableCaregivers.find(
+        (link) => link.id === selectedCaregiverAlertLinkId
+      ) || availableCaregivers[0];
+    setSelectedCaregiverId(preferredCaregiver?.id || "");
+  }, [
+    availableCaregivers,
+    caregiverIds,
+    selectedCaregiverAlertLinkId,
+    selectedCaregiverId,
+  ]);
+
+  const selectedContact =
+    availableContacts.find((contact) => contact.id === selectedContactId) ||
+    null;
+  const selectedCaregiver =
+    availableCaregivers.find((link) => link.id === selectedCaregiverId) ||
+    null;
+  const caregiverWebLink = buildCaregiverAlertWebLink(selectedCaregiver);
+  const caregiverAppLink = buildCaregiverAlertAppLink(selectedCaregiver);
+  const profileName = getProfileDisplayName(currentProfile);
+  const shareMessage = buildAidantShareMessage({
+    profileName,
+    apkUrl,
+    caregiverLink: caregiverWebLink || caregiverAppLink,
+  });
+
+  function openSmsShare() {
+    const phone = selectedContact?.phone
+      ? normalizePhoneForSms(selectedContact.phone)
+      : "";
+    window.location.href = `sms:${phone}?body=${encodeURIComponent(
+      shareMessage
+    )}`;
+    showToast?.("SMS préparé. Appuie sur Envoyer dans Messages.");
+  }
+
+  function openWhatsAppShare() {
+    const phone = selectedContact?.phone
+      ? normalizeWhatsAppPhone(selectedContact.phone)
+      : "";
+    const encodedMessage = encodeURIComponent(shareMessage);
+    const appUrl = phone
+      ? `whatsapp://send?phone=${phone}&text=${encodedMessage}`
+      : `whatsapp://send?text=${encodedMessage}`;
+    const webUrl = phone
+      ? `https://wa.me/${phone}?text=${encodedMessage}`
+      : `https://wa.me/?text=${encodedMessage}`;
+
+    window.location.href = appUrl;
+    window.setTimeout(() => {
+      window.open(webUrl, "_blank", "noopener,noreferrer");
+    }, 1200);
+    showToast?.("WhatsApp préparé. Appuie sur Envoyer dans WhatsApp.");
+  }
+
+  async function copyShareMessage() {
+    try {
+      await window.navigator.clipboard.writeText(shareMessage);
+      showToast?.("Message d'installation copié.");
+    } catch {
+      window.prompt("Message d'installation aidant", shareMessage);
+    }
+  }
+
+  async function copyApkLink() {
+    try {
+      await window.navigator.clipboard.writeText(apkUrl);
+      showToast?.("Lien APK aidant copié.");
+    } catch {
+      window.prompt("Lien APK aidant", apkUrl);
+    }
+  }
+
+  const mutedTextColor = activeTheme?.mutedText || "rgba(255,255,255,0.68)";
+  const surfaceBackground =
+    activeTheme?.surfaceAlt || "rgba(15, 23, 42, 0.72)";
+  const stepCardStyle: React.CSSProperties = {
+    padding: 14,
+    borderRadius: 18,
+    background: surfaceBackground,
+    border: `1px solid ${activeTheme?.inputBorder || "rgba(255,255,255,0.1)"}`,
+    lineHeight: 1.55,
+  };
+
+  return (
+    <div style={styles.gridSingle}>
+      <div style={styles.card}>
+        <h2 style={styles.sectionTitle}>Envoyer l'app aidant</h2>
+
+        <div style={{ ...styles.infoBox, marginBottom: 16 }}>
+          Depuis l'iPhone, Ma Voix prépare un SMS ou un message WhatsApp avec le
+          lien direct de l'APK aidant et les étapes d'installation. L'aidant doit
+          ouvrir le message sur son téléphone Android.
+        </div>
+
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+            gap: 14,
+            alignItems: "start",
+          }}
+        >
+          <div style={styles.formGroup}>
+            <label style={styles.label}>Destinataire</label>
+            <select
+              value={selectedContactId}
+              onChange={(event) => setSelectedContactId(event.target.value)}
+              style={styles.input}
+            >
+              <option value="">Choisir dans SMS ou WhatsApp</option>
+              {availableContacts.map((contact, index) => (
+                <option key={contact.id} value={contact.id}>
+                  {contactLabel(contact, index)}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div style={styles.formGroup}>
+            <label style={styles.label}>Lien aidant à inclure</label>
+            <select
+              value={selectedCaregiverId}
+              onChange={(event) => setSelectedCaregiverId(event.target.value)}
+              style={styles.input}
+              disabled={availableCaregivers.length === 0}
+            >
+              {availableCaregivers.length === 0 ? (
+                <option value="">Aucun lien aidant configuré</option>
+              ) : (
+                availableCaregivers.map((link, index) => (
+                  <option key={link.id} value={link.id}>
+                    {link.name || `Aidant ${index + 1}`}
+                  </option>
+                ))
+              )}
+            </select>
+          </div>
+        </div>
+
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+            gap: 12,
+            marginTop: 6,
+            marginBottom: 16,
+          }}
+        >
+          <button type="button" style={styles.primaryButton} onClick={openSmsShare}>
+            Envoyer par SMS
+          </button>
+          <button
+            type="button"
+            style={{
+              ...styles.primaryButton,
+              background: "linear-gradient(135deg, #22c55e, #16a34a)",
+            }}
+            onClick={openWhatsAppShare}
+          >
+            Envoyer par WhatsApp
+          </button>
+          <button
+            type="button"
+            style={styles.secondaryButton}
+            onClick={copyShareMessage}
+          >
+            Copier le message
+          </button>
+        </div>
+
+        <div style={{ ...styles.formGroup, marginBottom: 16 }}>
+          <label style={styles.label}>Message envoyé à l'aidant</label>
+          <textarea
+            readOnly
+            value={shareMessage}
+            style={{
+              ...styles.smallTextarea,
+              minHeight: 220,
+              marginTop: 8,
+              fontSize: 16,
+            }}
+          />
+        </div>
+
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+            gap: 14,
+          }}
+        >
+          <div style={stepCardStyle}>
+            <strong style={{ display: "block", marginBottom: 8 }}>
+              Côté expéditeur
+            </strong>
+            <div style={{ color: mutedTextColor }}>
+              Choisis le contact si tu veux préremplir le numéro, puis appuie
+              sur SMS ou WhatsApp. L'app ouvre la messagerie avec le texte prêt :
+              il reste seulement à vérifier le destinataire et envoyer.
+            </div>
+          </div>
+
+          <div style={stepCardStyle}>
+            <strong style={{ display: "block", marginBottom: 8 }}>
+              Côté aidant
+            </strong>
+            <div style={{ color: mutedTextColor }}>
+              L'aidant ouvre le lien sur Android, installe l'APK, puis ouvre le
+              lien aidant inclus dans le message. Il doit garder les
+              notifications et l'alarme autorisées pour recevoir les appels.
+            </div>
+          </div>
+        </div>
+
+        <div
+          style={{
+            ...styles.infoBox,
+            marginTop: 16,
+            display: "grid",
+            gap: 10,
+          }}
+        >
+          <div style={{ fontWeight: 800 }}>Lien APK aidant</div>
+          <div
+            style={{
+              overflowWrap: "anywhere",
+              color: mutedTextColor,
+              lineHeight: 1.45,
+            }}
+          >
+            {apkUrl}
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+            <a
+              href={apkUrl}
+              download
+              style={{
+                ...styles.secondaryButton,
+                textDecoration: "none",
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              Ouvrir le lien APK
+            </a>
+            <button type="button" style={styles.secondaryButton} onClick={copyApkLink}>
+              Copier le lien APK
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

@@ -1,9 +1,13 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Capacitor } from "@capacitor/core";
 import useAudioRecording from "../features/speech/useAudioRecording";
 import useSpeech from "../features/speech/useSpeech";
 import CommunicationPage from "../features/communication/CommunicationPage";
+import usePhraseEditor from "../features/communication/usePhraseEditor";
+import CaregiverApkSharePage from "../features/caregivers/CaregiverApkSharePage";
 import CaregiverMessagesPage from "../features/caregivers/CaregiverMessagesPage";
+import useCaregiverAlerts from "../features/caregivers/useCaregiverAlerts";
+import useCaregiverMessageStreams from "../features/caregivers/useCaregiverMessageStreams";
 import VoicePage from "../features/speech/VoicePage";
 import ProfileSettingsPage from "../features/profiles/settings/ProfileSettingsPage";
 import ProfileInfoPage from "../features/profiles/ProfileInfoPage";
@@ -16,86 +20,11 @@ import {
 } from "./navigation/AppNavigation";
 import DesktopUpdateBanner from "../features/updates/DesktopUpdateBanner";
 import DownloadPage from "../features/updates/DownloadPage";
-import { AVAILABLE_ICONS, generateId, getCategoryBackground } from "../data";
+import useDesktopUpdates from "../features/updates/useDesktopUpdates";
+import { AVAILABLE_ICONS, getCategoryBackground } from "../data";
 import { createStyles, getActiveTheme } from "../themes";
 import useProfiles from "../features/profiles/useProfiles";
 import { normalizePhoneForSms } from "../shared/phone";
-import {
-  type DownloadDevice,
-  detectDownloadDevice,
-} from "../features/updates/downloadDevice";
-import {
-  ANDROID_APP_URL,
-  APP_VERSION,
-  API_BASE,
-  UPDATE_MANIFEST_URL,
-  getCaregiverNetworkErrorMessage,
-} from "../services/config";
-import {
-  createCaregiverAlertLink,
-  ensureCaregiverAlertLinks,
-} from "../features/caregivers/caregiverLinks";
-import {
-  type CaregiverMessage,
-  countUnreadCaregiverMessages,
-  getCaregiverMessageReadStorageKey,
-  getCaregiverMessageStorageKey,
-  initializeCaregiverReadState,
-  markCaregiverMessagesRead as markCaregiverMessagesReadInStorage,
-  mergeCaregiverMessagesIntoStorage,
-} from "../features/caregivers/caregiverMessages";
-import {
-  type AvailableAppUpdate,
-  fetchAvailableDesktopUpdate,
-  isUpdateSnoozed,
-  snoozeUpdate,
-} from "../features/updates/appUpdates";
-import type { CaregiverAlertLink, Phrase, VoiceEditor } from "../shared/types";
-
-type CaregiverAlertTarget = CaregiverAlertLink & {
-  alertLink: string;
-  appLink: string;
-};
-
-function appendCaregiverAccessKey(url: URL, accessKey?: string) {
-  if (accessKey) {
-    url.searchParams.set("key", accessKey);
-  }
-}
-
-function buildCaregiverAlertWebLink(channel: string, accessKey?: string) {
-  const url = new URL("/aidant-alerte", API_BASE);
-  url.searchParams.set("channel", channel);
-  appendCaregiverAccessKey(url, accessKey);
-  return url.href;
-}
-
-function buildCaregiverAlertAppLink(channel: string, accessKey?: string) {
-  const url = new URL("mavoix-aidant://open");
-  url.searchParams.set("apiBase", API_BASE);
-  url.searchParams.set("channel", channel);
-  appendCaregiverAccessKey(url, accessKey);
-  return url.href;
-}
-
-function buildCaregiverMessageStreamUrl(channel: string, accessKey?: string) {
-  const url = new URL("/api/caregiver-messages/stream", API_BASE);
-  url.searchParams.set("channel", channel);
-  appendCaregiverAccessKey(url, accessKey);
-  url.searchParams.set("role", "user");
-  return url.href;
-}
-
-function getCaregiverAlertErrorMessage(
-  response: Response,
-  data: { details?: string; error?: string }
-) {
-  if (response.status === 404) {
-    return "Serveur d'alerte non déployé sur Render. Redéploie le backend, puis réessaie.";
-  }
-
-  return data?.details || data?.error || "Impossible d'envoyer l'alerte.";
-}
 
 function getSafeCssColor(value: unknown, fallback: string) {
   const color = typeof value === "string" ? value.trim() : "";
@@ -114,65 +43,22 @@ function getInitialViewportHeight() {
   return window.innerHeight;
 }
 
-function areVoiceEditorsEqual(a: VoiceEditor, b: VoiceEditor) {
-  return (
-    a.label === b.label &&
-    a.text === b.text &&
-    a.category === b.category &&
-    a.assignedVoice === b.assignedVoice &&
-    a.useProfileVoiceSettings === b.useProfileVoiceSettings &&
-    a.voiceSettings.rate === b.voiceSettings.rate &&
-    a.voiceSettings.pitch === b.voiceSettings.pitch &&
-    a.voiceSettings.volume === b.voiceSettings.volume
-  );
-}
-
 export default function App() {
   const [page, setPage] = useState("communication");
   const [text, setText] = useState("");
-  const [label, setLabel] = useState("");
-  const [category, setCategory] = useState("Général");
-  const [filter, setFilter] = useState("Toutes");
 
   const [selectedSmsContactId, setSelectedSmsContactId] = useState("");
-
-
-  const [newCategoryName, setNewCategoryName] = useState("");
-  const [newCategoryIcon, setNewCategoryIcon] = useState("💬");
-
-  const [selectedPhraseId, setSelectedPhraseId] = useState<string | null>(null);
-  const [voiceEditor, setVoiceEditor] = useState<VoiceEditor>({
-    label: "",
-    text: "",
-    category: "Général",
-    assignedVoice: "default",
-    useProfileVoiceSettings: true,
-    voiceSettings: {
-      rate: 1,
-      pitch: 1,
-      volume: 1,
-    },
-  });
 
   const [toastMessage, setToastMessage] = useState("");
   const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
   const [viewportWidth, setViewportWidth] = useState(getInitialViewportWidth);
   const [viewportHeight, setViewportHeight] = useState(getInitialViewportHeight);
   const [isPhraseEditMode, setIsPhraseEditMode] = useState(false);
-  const [caregiverAlertSending, setCaregiverAlertSending] = useState(false);
-  const [unreadCaregiverMessageCount, setUnreadCaregiverMessageCount] =
-    useState(0);
   const [noticeInitialSection, setNoticeInitialSection] =
     useState<SectionKey>("sommaire");
-  const [downloadDevice, setDownloadDevice] = useState<DownloadDevice>(() =>
-    detectDownloadDevice()
-  );
-  const [availableUpdate, setAvailableUpdate] =
-    useState<AvailableAppUpdate | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const moreMenuRef = useRef<HTMLDivElement | null>(null);
-  const pageRef = useRef(page);
 
   const {
     profiles,
@@ -230,220 +116,42 @@ export default function App() {
     paddingBottom: "calc(12px + env(safe-area-inset-bottom, 0px))",
     paddingLeft: "calc(12px + env(safe-area-inset-left, 0px))",
   };
-  const canShowDownloadPage = downloadDevice !== "other";
-  const updateDownloadUrl =
-    availableUpdate?.setupUrl || availableUpdate?.portableUrl || "";
-  const caregiverAlertTargets = useMemo<CaregiverAlertTarget[]>(
-    () =>
-      ensureCaregiverAlertLinks(
-        currentProfile?.caregiverAlertLinks,
-        currentProfileId
-      ).map((link) => ({
-        ...link,
-        alertLink: buildCaregiverAlertWebLink(link.channel, link.accessKey),
-        appLink:
-          downloadDevice === "android"
-            ? buildCaregiverAlertAppLink(link.channel, link.accessKey)
-            : "",
-      })),
-    [currentProfile?.caregiverAlertLinks, currentProfileId, downloadDevice]
-  );
-  const caregiverMessageChannels = useMemo(
-    () =>
-      caregiverAlertTargets
-        .map((target) => target.channel)
-        .filter((channel): channel is string => Boolean(channel)),
-    [caregiverAlertTargets]
-  );
-  const caregiverMessageChannelKey = useMemo(
-    () =>
-      caregiverAlertTargets
-        .map((target) => `${target.channel}:${target.accessKey || ""}`)
-        .join("|"),
-    [caregiverAlertTargets]
-  );
-  const caregiverMessageStorageKey = useMemo(
-    () =>
-      getCaregiverMessageStorageKey(
-        currentProfileId || currentProfile?.id || "default"
-      ),
-    [currentProfileId, currentProfile?.id]
-  );
-  const caregiverMessageReadStorageKey = useMemo(
-    () =>
-      getCaregiverMessageReadStorageKey(
-        currentProfileId || currentProfile?.id || "default"
-      ),
-    [currentProfileId, currentProfile?.id]
-  );
-  const enabledCaregiverAlertTargets = useMemo(
-    () => caregiverAlertTargets.filter((link) => link.enabled),
-    [caregiverAlertTargets]
-  );
-  const selectedCaregiverAlertTargetId =
-    currentProfile?.selectedCaregiverAlertLinkId || "";
-  const selectedCaregiverAlertTarget = useMemo(
-    () =>
-      enabledCaregiverAlertTargets.find(
-        (link) => link.id === selectedCaregiverAlertTargetId
-      ) ||
-      enabledCaregiverAlertTargets[0] ||
-      null,
-    [enabledCaregiverAlertTargets, selectedCaregiverAlertTargetId]
-  );
-  const refreshCaregiverUnreadCount = useCallback(() => {
-    setUnreadCaregiverMessageCount(
-      countUnreadCaregiverMessages(
-        caregiverMessageStorageKey,
-        caregiverMessageReadStorageKey,
-        caregiverMessageChannels
-      )
-    );
-  }, [
-    caregiverMessageChannels,
-    caregiverMessageReadStorageKey,
-    caregiverMessageStorageKey,
-  ]);
-  const markCaregiverMessagesRead = useCallback(
-    (channels: string[] = caregiverMessageChannels) => {
-      markCaregiverMessagesReadInStorage(
-        caregiverMessageStorageKey,
-        caregiverMessageReadStorageKey,
-        channels
-      );
-      setUnreadCaregiverMessageCount(
-        countUnreadCaregiverMessages(
-          caregiverMessageStorageKey,
-          caregiverMessageReadStorageKey,
-          caregiverMessageChannels
-        )
-      );
-    },
-    [
-      caregiverMessageChannels,
-      caregiverMessageReadStorageKey,
-      caregiverMessageStorageKey,
-    ]
-  );
-
-  useEffect(() => {
-    if (enabledCaregiverAlertTargets.length === 0) {
-      return;
-    }
-
-    const selectedExists = enabledCaregiverAlertTargets.some(
-      (link) => link.id === selectedCaregiverAlertTargetId
-    );
-
-    if (!selectedExists) {
-      updateCurrentProfile((profile) => ({
-        ...profile,
-        selectedCaregiverAlertLinkId: enabledCaregiverAlertTargets[0].id,
-      }));
-    }
-  }, [
-    enabledCaregiverAlertTargets,
-    selectedCaregiverAlertTargetId,
-    updateCurrentProfile,
-  ]);
-
-  useEffect(() => {
-    pageRef.current = page;
-  }, [page]);
-
-  useEffect(() => {
-    initializeCaregiverReadState(
-      caregiverMessageStorageKey,
-      caregiverMessageReadStorageKey,
-      caregiverMessageChannels
-    );
-    refreshCaregiverUnreadCount();
-  }, [
-    caregiverMessageChannels,
-    caregiverMessageReadStorageKey,
-    caregiverMessageStorageKey,
-    refreshCaregiverUnreadCount,
-  ]);
-
-  useEffect(() => {
-    if (page === "aidants") {
-      markCaregiverMessagesRead();
-    }
-  }, [markCaregiverMessagesRead, page]);
-
-  useEffect(() => {
-    if (
-      typeof window === "undefined" ||
-      typeof EventSource === "undefined" ||
-      caregiverMessageChannels.length === 0
-    ) {
-      setUnreadCaregiverMessageCount(0);
-      return;
-    }
-
-    const sources = caregiverAlertTargets
-      .filter((target) => target.channel)
-      .map((target) => {
-        const source = new EventSource(
-          buildCaregiverMessageStreamUrl(target.channel, target.accessKey)
-        );
-
-        const syncUnreadCount = () => {
-          if (pageRef.current === "aidants") {
-            markCaregiverMessagesRead([target.channel]);
-            return;
-          }
-
-          refreshCaregiverUnreadCount();
-        };
-
-        source.addEventListener("caregiver-message-history", (event) => {
-          try {
-            const payload = JSON.parse((event as MessageEvent).data || "{}");
-            const messages = Array.isArray(payload.messages)
-              ? (payload.messages as CaregiverMessage[])
-              : [];
-            mergeCaregiverMessagesIntoStorage(
-              caregiverMessageStorageKey,
-              target.channel,
-              messages
-            );
-            syncUnreadCount();
-          } catch {}
-        });
-
-        source.addEventListener("caregiver-message", (event) => {
-          try {
-            const payload = JSON.parse((event as MessageEvent).data || "{}");
-            mergeCaregiverMessagesIntoStorage(
-              caregiverMessageStorageKey,
-              target.channel,
-              [payload as CaregiverMessage]
-            );
-            syncUnreadCount();
-          } catch {}
-        });
-
-        return source;
-      });
-
-    return () => {
-      sources.forEach((source) => source.close());
-    };
-  }, [
+  const {
+    availableUpdate,
+    canShowDownloadPage,
+    dismissDesktopUpdate,
+    downloadDevice,
+    openDesktopUpdateDownload,
+  } = useDesktopUpdates({ showToast });
+  const {
+    caregiverAlertSending,
     caregiverAlertTargets,
-    caregiverMessageChannelKey,
-    caregiverMessageStorageKey,
+    selectedCaregiverAlertTarget,
+    selectedCaregiverAlertTargetId,
+    addCaregiverAlertLink,
+    copyCaregiverAlertLink,
+    deleteCaregiverAlertLink,
+    regenerateCaregiverAlertLink,
+    selectCaregiverAlertTarget,
+    sendCaregiverAlert,
+    updateCaregiverAlertLink,
+  } = useCaregiverAlerts({
+    currentProfile,
+    currentProfileId,
+    downloadDevice,
+    updateCurrentProfile,
+    showToast,
+  });
+  const {
     markCaregiverMessagesRead,
     refreshCaregiverUnreadCount,
-  ]);
-
-  function selectCaregiverAlertTarget(linkId: string) {
-    updateCurrentProfile((profile) => ({
-      ...profile,
-      selectedCaregiverAlertLinkId: linkId,
-    }));
-  }
+    unreadCaregiverMessageCount,
+  } = useCaregiverMessageStreams({
+    caregiverAlertTargets,
+    currentProfileId,
+    profileId: currentProfile?.id,
+    page,
+  });
 
   function openNoticeSection(section: SectionKey = "sommaire") {
     setNoticeInitialSection(section);
@@ -494,140 +202,49 @@ export default function App() {
     }
   }, [availableSmsContacts, selectedSmsContactId]);
 
-  const categories = useMemo(
-    () => customCategories.map((item) => item.name),
-    [customCategories]
-  );
+  const {
+    addCategory,
+    categories,
+    category,
+    categoryOptions,
+    deleteCategory,
+    deletePhrase,
+    filter,
+    filteredPhrases,
+    label,
+    movePhrase,
+    newCategoryIcon,
+    newCategoryName,
+    savePhrase,
+    saveSelectedPhraseVoiceSettings,
+    selectedPhrase,
+    selectedPhraseId,
+    setCategory,
+    setFilter,
+    setLabel,
+    setNewCategoryIcon,
+    setNewCategoryName,
+    setSelectedPhraseId,
+    setVoiceEditor,
+    updatePhrase,
+    voiceEditor,
+  } = usePhraseEditor({
+    currentProfile,
+    customCategories,
+    defaultVoice,
+    defaultVoiceSettings,
+    savedPhrases,
+    setText,
+    showToast,
+    text,
+    updateCurrentProfile,
+  });
 
-  useEffect(() => {
-    if (!categories.includes(category) && categories.length > 0) {
-      setCategory(categories[0]);
-    }
-  }, [categories, category]);
-
-  const categoryOptions = useMemo(
-    () => [
-      { name: "Toutes", icon: "🗂️" },
-      { name: "Favoris", icon: "⭐" },
-      ...customCategories,
-    ],
-    [customCategories]
-  );
-
-  const filteredPhrases = useMemo(() => {
-    if (filter === "Toutes") return savedPhrases;
-    if (filter === "Favoris") {
-      return savedPhrases.filter((item) => item.favorite);
-    }
-    return savedPhrases.filter((item) => item.category === filter);
-  }, [savedPhrases, filter]);
-
-  const selectedPhrase = useMemo(
-    () => savedPhrases.find((item) => item.id === selectedPhraseId) || null,
-    [savedPhrases, selectedPhraseId]
-  );
-
-  useEffect(() => {
-    if (savedPhrases.length === 0) {
-      setSelectedPhraseId(null);
-      return;
-    }
-
-    const exists = savedPhrases.some((item) => item.id === selectedPhraseId);
-    if (!exists) {
-      setSelectedPhraseId(savedPhrases[0].id);
-    }
-  }, [savedPhrases, selectedPhraseId]);
-
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    const detectedDevice = detectDownloadDevice();
-    setDownloadDevice(detectedDevice);
-
-    if (Capacitor.isNativePlatform()) {
-      return;
-    }
-
-    if (detectedDevice !== "desktop") {
-      const targetUrl = new URL(ANDROID_APP_URL, window.location.href);
-      const currentUrl = new URL(window.location.href);
-      const isCurrentAndroidTarget =
-        targetUrl.origin === currentUrl.origin &&
-        targetUrl.pathname.replace(/\/+$/, "") ===
-          currentUrl.pathname.replace(/\/+$/, "");
-
-      if (!isCurrentAndroidTarget) {
-        window.location.replace(targetUrl.href);
-      }
-    }
-  }, []);
-
-  useEffect(() => {
-    const fallbackCategory = categories[0] || "Général";
-    let nextVoiceEditor: VoiceEditor;
-
-    if (!selectedPhrase) {
-      nextVoiceEditor = {
-        label: "",
-        text: "",
-        category: fallbackCategory,
-        assignedVoice: "default",
-        useProfileVoiceSettings: true,
-        voiceSettings: {
-          ...defaultVoiceSettings,
-        },
-      };
-    } else {
-      nextVoiceEditor = {
-        label: selectedPhrase.label || "",
-        text: selectedPhrase.text || "",
-        category: selectedPhrase.category || fallbackCategory,
-        assignedVoice: selectedPhrase.assignedVoice || "default",
-        useProfileVoiceSettings: !selectedPhrase.voiceSettings,
-        voiceSettings: {
-          rate: selectedPhrase.voiceSettings?.rate ?? defaultVoiceSettings.rate,
-          pitch: selectedPhrase.voiceSettings?.pitch ?? defaultVoiceSettings.pitch,
-          volume:
-            selectedPhrase.voiceSettings?.volume ?? defaultVoiceSettings.volume,
-        },
-      };
-    }
-
-    setVoiceEditor((current) =>
-      areVoiceEditorsEqual(current, nextVoiceEditor) ? current : nextVoiceEditor
-    );
-  }, [selectedPhrase, categories, defaultVoiceSettings.rate, defaultVoiceSettings.pitch, defaultVoiceSettings.volume]);
   function showToast(message: string) {
     setToastMessage(message);
     window.setTimeout(() => {
       setToastMessage("");
     }, 3000);
-  }
-
-  function savePhrase() {
-    if (!text.trim()) return;
-
-    const newPhrase: Phrase = {
-      id: generateId(),
-      label: label.trim() || text.trim().slice(0, 30),
-      text: text.trim(),
-      category,
-      assignedVoice: defaultVoice,
-      voiceSettings: null,
-      favorite: false,
-    };
-
-    updateCurrentProfile((profile) => ({
-      ...profile,
-      phrases: [newPhrase, ...profile.phrases],
-    }));
-
-    setText("");
-    setLabel("");
-
-    showToast("Phrase enregistrée");
   }
 
   function getSmsTextToSend() {
@@ -654,299 +271,6 @@ export default function App() {
     const encodedMessage = encodeURIComponent(message);
     const smsUrl = `sms:${phone}?body=${encodedMessage}`;
     window.location.href = smsUrl;
-  }
-
-  function updatePhrase(id: string, field: keyof Phrase, value: unknown) {
-    updateCurrentProfile((profile) => ({
-      ...profile,
-      phrases: profile.phrases.map((item) =>
-        item.id === id ? { ...item, [field]: value } : item
-      ),
-    }));
-  }
-
-  function saveSelectedPhraseVoiceSettings() {
-    if (!selectedPhraseId) return;
-
-    updateCurrentProfile((profile) => ({
-      ...profile,
-      phrases: profile.phrases.map((item) =>
-        item.id === selectedPhraseId
-          ? {
-              ...item,
-              label: voiceEditor.label,
-              text: voiceEditor.text,
-              category: voiceEditor.category,
-              assignedVoice: voiceEditor.assignedVoice,
-              voiceSettings: voiceEditor.useProfileVoiceSettings
-                ? null
-                : {
-                    rate: Number(voiceEditor.voiceSettings?.rate ?? 1),
-                    pitch: Number(voiceEditor.voiceSettings?.pitch ?? 1),
-                    volume: Number(voiceEditor.voiceSettings?.volume ?? 1),
-                  },
-            }
-          : item
-      ),
-    }));
-  }
-
-  function deletePhrase(id: string) {
-    const phraseToDelete = savedPhrases.find((item) => item.id === id);
-    const phraseLabel = phraseToDelete?.label || phraseToDelete?.text || "cette phrase";
-
-    if (
-      typeof window !== "undefined" &&
-      !window.confirm(`Supprimer "${phraseLabel}" ?`)
-    ) {
-      return;
-    }
-
-    updateCurrentProfile((profile) => {
-      const nextAudioMap = { ...profile.audioMap };
-      delete nextAudioMap[id];
-
-      return {
-        ...profile,
-        phrases: profile.phrases.filter((item) => item.id !== id),
-        audioMap: nextAudioMap,
-      };
-    });
-  }
-
-  function movePhrase(id: string, direction: "up" | "down") {
-    updateCurrentProfile((profile) => {
-      const index = profile.phrases.findIndex((item) => item.id === id);
-      if (index === -1) return profile;
-
-      const newIndex = direction === "up" ? index - 1 : index + 1;
-      if (newIndex < 0 || newIndex >= profile.phrases.length) return profile;
-
-      const nextPhrases = [...profile.phrases];
-      [nextPhrases[index], nextPhrases[newIndex]] = [
-        nextPhrases[newIndex],
-        nextPhrases[index],
-      ];
-
-      return {
-        ...profile,
-        phrases: nextPhrases,
-      };
-    });
-  }
-
-  function addCategory() {
-    const cleanName = newCategoryName.trim();
-    if (!cleanName) return;
-
-    const exists = currentProfile.categories.some(
-      (item) => item.name.toLowerCase() === cleanName.toLowerCase()
-    );
-
-    if (exists) {
-      alert("Cette catégorie existe déjà.");
-      return;
-    }
-
-    updateCurrentProfile((profile) => ({
-      ...profile,
-      categories: [
-        ...profile.categories,
-        { name: cleanName, icon: newCategoryIcon },
-      ],
-    }));
-
-    setCategory(cleanName);
-    setNewCategoryName("");
-    setNewCategoryIcon("💬");
-  }
-
-  function deleteCategory(categoryName: string) {
-    const protectedCategories = ["Général", "Urgence"];
-    if (protectedCategories.includes(categoryName)) {
-      alert("Cette catégorie de base ne peut pas être supprimée.");
-      return;
-    }
-
-    updateCurrentProfile((profile) => ({
-      ...profile,
-      categories: profile.categories.filter(
-        (item) => item.name !== categoryName
-      ),
-      phrases: profile.phrases.map((item) =>
-        item.category === categoryName ? { ...item, category: "Général" } : item
-      ),
-    }));
-
-    if (category === categoryName) setCategory("Général");
-    if (filter === categoryName) setFilter("Toutes");
-  }
-  function updateCaregiverAlertLink(
-    linkId: string,
-    patch: Partial<Pick<CaregiverAlertLink, "name" | "enabled">>
-  ) {
-    updateCurrentProfile((profile) => {
-      const links = ensureCaregiverAlertLinks(
-        profile.caregiverAlertLinks,
-        profile.id
-      );
-
-      return {
-        ...profile,
-        caregiverAlertLinks: links.map((link) =>
-          link.id === linkId ? { ...link, ...patch } : link
-        ),
-      };
-    });
-  }
-
-  function addCaregiverAlertLink() {
-    updateCurrentProfile((profile) => {
-      const links = ensureCaregiverAlertLinks(
-        profile.caregiverAlertLinks,
-        profile.id
-      );
-
-      return {
-        ...profile,
-        caregiverAlertLinks: [
-          ...links,
-          createCaregiverAlertLink(links.length, profile.id),
-        ],
-      };
-    });
-  }
-
-  function deleteCaregiverAlertLink(linkId: string) {
-    updateCurrentProfile((profile) => {
-      const links = ensureCaregiverAlertLinks(
-        profile.caregiverAlertLinks,
-        profile.id
-      );
-
-      if (links.length <= 1) {
-        return profile;
-      }
-
-      return {
-        ...profile,
-        caregiverAlertLinks: links.filter((link) => link.id !== linkId),
-      };
-    });
-  }
-
-  function regenerateCaregiverAlertLink(linkId: string) {
-    if (
-      typeof window !== "undefined" &&
-      !window.confirm(
-        "Regénérer ce lien ? L'ancien lien aidant ne recevra plus les nouvelles alertes."
-      )
-    ) {
-      return;
-    }
-
-    updateCurrentProfile((profile) => {
-      const links = ensureCaregiverAlertLinks(
-        profile.caregiverAlertLinks,
-        profile.id
-      );
-
-      return {
-        ...profile,
-        caregiverAlertLinks: links.map((link, index) => {
-          if (link.id !== linkId) return link;
-
-          const refreshedLink = createCaregiverAlertLink(index, profile.id);
-          return {
-            ...link,
-            channel: refreshedLink.channel,
-            accessKey: refreshedLink.accessKey,
-          };
-        }),
-      };
-    });
-  }
-
-  async function copyCaregiverAlertLink(linkId: string) {
-    const target = caregiverAlertTargets.find((link) => link.id === linkId);
-    if (!target) return;
-
-    try {
-      await window.navigator.clipboard.writeText(target.alertLink);
-      showToast(`Lien ${target.name || "aidant"} copié`);
-    } catch {
-      window.prompt("Lien du téléphone aidant", target.alertLink);
-    }
-  }
-
-  async function sendCaregiverAlert() {
-    if (caregiverAlertSending) return;
-
-    if (enabledCaregiverAlertTargets.length === 0) {
-      showToast("Aucun aidant disponible pour Appel aidant");
-      return;
-    }
-
-    if (!selectedCaregiverAlertTarget) {
-      showToast("Choisis l'aidant à prévenir");
-      return;
-    }
-
-    try {
-      setCaregiverAlertSending(true);
-
-      const response = await fetch(`${API_BASE}/api/caregiver-alert`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          channel: selectedCaregiverAlertTarget.channel,
-          accessKey: selectedCaregiverAlertTarget.accessKey || "",
-          profileName: currentProfile?.firstName || currentProfile?.name || "",
-          message: "J'ai besoin de mon aidant.",
-        }),
-      });
-      const data = await response.json().catch(() => ({}));
-
-      if (!response.ok) {
-        throw new Error(getCaregiverAlertErrorMessage(response, data));
-      }
-
-      const deliveredTo = Number(data?.deliveredTo || 0);
-      const caregiverName =
-        selectedCaregiverAlertTarget.name || "l'aidant sélectionné";
-
-      if (deliveredTo > 0) {
-        showToast(`Alarme envoyée à ${caregiverName}`);
-      } else {
-        showToast(`${caregiverName} n'est pas connecté`);
-      }
-    } catch (error) {
-      showToast(
-        getCaregiverNetworkErrorMessage(
-          error,
-          "Impossible d'envoyer l'alerte aidant"
-        )
-      );
-    } finally {
-      setCaregiverAlertSending(false);
-    }
-  }
-
-  function openDesktopUpdateDownload() {
-    if (!availableUpdate || !updateDownloadUrl) return;
-
-    window.open(updateDownloadUrl, "_blank", "noopener,noreferrer");
-    showToast("Téléchargement de la mise à jour ouvert");
-  }
-
-  function dismissDesktopUpdate() {
-    if (!availableUpdate) return;
-
-    snoozeUpdate(availableUpdate.version);
-    setAvailableUpdate(null);
-    showToast("Rappel masqué pendant 24 h");
   }
 
   useEffect(() => {
@@ -1054,37 +378,6 @@ export default function App() {
       if (styleElement?.parentNode) {
         styleElement.parentNode.removeChild(styleElement);
       }
-    };
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (window.maVoixDesktopApp?.isDesktopApp !== true) return;
-
-    const controller = new AbortController();
-    const timeoutId = window.setTimeout(() => controller.abort(), 8000);
-    let isCancelled = false;
-
-    fetchAvailableDesktopUpdate(
-      UPDATE_MANIFEST_URL,
-      APP_VERSION,
-      controller.signal
-    )
-      .then((update) => {
-        if (isCancelled || !update || isUpdateSnoozed(update.version)) return;
-        setAvailableUpdate(update);
-      })
-      .catch(() => {
-        // La mise à jour ne doit jamais empêcher Ma Voix de démarrer.
-      })
-      .finally(() => {
-        window.clearTimeout(timeoutId);
-      });
-
-    return () => {
-      isCancelled = true;
-      controller.abort();
-      window.clearTimeout(timeoutId);
     };
   }, []);
 
@@ -1290,6 +583,16 @@ export default function App() {
           />
         ) : page === "dictionnaire" ? (
           <DictionaryPage styles={styles} />
+        ) : page === "partage-aidant" ? (
+          <CaregiverApkSharePage
+            styles={styles}
+            activeTheme={activeTheme}
+            currentProfile={currentProfile}
+            emergencyContacts={emergencyContacts}
+            caregiverAlertLinks={caregiverAlertTargets}
+            selectedCaregiverAlertLinkId={selectedCaregiverAlertTargetId}
+            showToast={showToast}
+          />
         ) : page === "aidants" ? (
           <CaregiverMessagesPage
             styles={styles}
