@@ -18,6 +18,7 @@ const {
   registerDownloadRoutes,
 } = require("./routes/downloads.routes");
 const { registerUpdateRoutes } = require("./routes/updates.routes");
+const { getPrivacyPolicyHtml } = require("./privacy-policy-page");
 
 const app = express();
 app.set("trust proxy", 1);
@@ -29,6 +30,10 @@ app.use(express.json({ limit: "32kb" }));
 
 app.get("/aidant-alerte", (_req, res) => {
   res.type("html").send(getCaregiverAlertPageHtml());
+});
+
+app.get(["/confidentialite", "/privacy"], (_req, res) => {
+  res.type("html").send(getPrivacyPolicyHtml());
 });
 
 registerDownloadRoutes(app, {
