@@ -49,6 +49,9 @@
     "ci": "npm run check && npm test && npm run build",
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0",
+    "native:prune-apks": "node scripts/prune-native-web-assets.cjs",
+    "native:sync:android": "npx cap sync android && node scripts/prune-native-web-assets.cjs android",
+    "native:sync:ios": "npx cap sync ios && node scripts/prune-native-web-assets.cjs ios",
     "desktop:icon": "node scripts/create-windows-icon.cjs",
     "desktop:electron-dist": "node scripts/prepare-electron-dist.cjs",
     "desktop:run": "npm run desktop:icon && npm run build && electron .",
@@ -64,6 +67,7 @@
     },
     "files": [
       "build/**/*",
+      "!build/*.apk",
       "electron/**/*",
       "public/icon-512.png",
       "package.json"

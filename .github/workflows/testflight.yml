@@ -27,7 +27,9 @@ jobs:
         run: npm run build
 
       - name: Sync iOS app
-        run: npx cap sync ios
+        run: |
+          npx cap sync ios
+          node scripts/prune-native-web-assets.cjs ios
 
       - name: Prepare Apple team id
         env:
