@@ -77,8 +77,8 @@ function buildAidantShareMessage({
   caregiverLink: string;
 }) {
   const connectionLink = caregiverLink
-    ? `Lien de connexion Ma Voix :\n${caregiverLink}`
-    : "Lien de connexion Ma Voix :\nDemande-moi ensuite le lien aidant pour connecter le téléphone à Ma Voix.";
+    ? `Lien de connexion à copier dans Ma Voix Aidant > Configurer :\n${caregiverLink}`
+    : "Lien de connexion Ma Voix :\nDemande-moi ensuite le lien aidant à copier dans Ma Voix Aidant > Configurer.";
 
   return `Bonjour,
 
@@ -92,8 +92,9 @@ ${connectionLink}
 1. Sur le téléphone Android de l'aidant, ouvre le lien APK ci-dessus.
 2. Télécharge puis installe le fichier APK.
 3. Si Android demande une autorisation, accepte l'installation depuis le navigateur, SMS ou WhatsApp.
-4. Après l'installation, ouvre le lien de connexion Ma Voix ci-dessus.
-5. Autorise les notifications, l'alarme et la batterie si Android le demande.
+4. Ne touche pas au lien de connexion dans SMS ou WhatsApp : fais un appui long dessus et copie-le.
+5. Ouvre l'application Ma Voix Aidant, va dans Configurer, colle ce lien, puis appuie sur Ajouter ce lien patient.
+6. Autorise les notifications, l'alarme et la batterie si Android le demande.
 
 Après ça, ${profileName} pourra appeler l'aidant avec la cloche de Ma Voix.`;
 }
@@ -381,7 +382,9 @@ export default function CaregiverApkSharePage({
                 {apkUrl}
               </div>
               <div style={{ marginTop: 6 }}>
-                <span style={{ fontWeight: 800 }}>Aidant : </span>
+                <span style={{ fontWeight: 800 }}>
+                  Aidant, à copier dans Configurer :{" "}
+                </span>
                 {selectedCaregiverLink ||
                   "Crée ou choisis un aidant pour ajouter son lien."}
               </div>
@@ -473,9 +476,11 @@ export default function CaregiverApkSharePage({
               Côté aidant
             </strong>
             <div style={{ color: mutedTextColor }}>
-              L'aidant ouvre le lien sur Android, installe l'APK, puis ouvre le
-              lien aidant inclus dans le message. Il doit garder les
-              notifications et l'alarme autorisées pour recevoir les appels.
+              L'aidant ouvre seulement le lien APK pour installer l'application,
+              puis copie le lien de connexion du message. Dans Ma Voix Aidant,
+              il va dans Configurer, colle le lien et appuie sur Ajouter ce
+              lien patient. Il doit garder les notifications et l'alarme
+              autorisées pour recevoir les appels.
             </div>
           </div>
         </div>
