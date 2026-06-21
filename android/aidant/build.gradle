@@ -21,12 +21,12 @@ android {
     compileSdk = rootProject.ext.compileSdkVersion
 
     defaultConfig {
-        applicationId "com.mavoix.aidant"
+        applicationId "com.ma.voix.aidant"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode aidantVersionCode
         versionName aidantVersionName
-        archivesBaseName = "ma-voix-aidant-s24-v${aidantVersionName}"
+        archivesBaseName = "aidant"
     }
     signingConfigs {
         release {
