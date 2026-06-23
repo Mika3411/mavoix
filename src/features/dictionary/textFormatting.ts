@@ -492,6 +492,58 @@ const A_PREPOSITION_PREVIOUS_WORDS = new Set([
   "vont",
 ]);
 
+const PLURAL_CONTEXT_DETERMINERS = new Set([
+  "aux",
+  "ces",
+  "des",
+  "leurs",
+  "mes",
+  "les",
+  "nos",
+  "plusieurs",
+  "quelques",
+  "tes",
+  "ses",
+  "tous",
+  "toutes",
+  "vos",
+]);
+
+const FRENCH_NUMBER_WORDS = new Set([
+  "zero",
+  "zéro",
+  "un",
+  "une",
+  "deux",
+  "trois",
+  "quatre",
+  "cinq",
+  "six",
+  "sept",
+  "huit",
+  "neuf",
+  "dix",
+  "onze",
+  "douze",
+  "treize",
+  "quatorze",
+  "quinze",
+  "seize",
+  "vingt",
+  "vingts",
+  "trente",
+  "quarante",
+  "cinquante",
+  "soixante",
+  "cent",
+  "cents",
+  "mille",
+  "million",
+  "millions",
+  "milliard",
+  "milliards",
+]);
+
 type FormatTextSmartOptions = {
   expandFinalAbbreviation?: boolean;
 };
@@ -502,11 +554,18 @@ export type AbbreviationEntry = {
   abbreviation: string;
   expansion: string;
   source: AbbreviationSource;
+  pluralExpansion?: string;
 };
 
 export type StoredAbbreviationDictionary = {
   custom: Record<string, string>;
   disabled: string[];
+  plurals: Record<string, string>;
+};
+
+type ActiveAbbreviationEntry = {
+  expansion: string;
+  pluralExpansion?: string;
 };
 
 export function normalizeAbbreviationKey(value: string) {
@@ -542,14 +601,44 @@ function normalizeDictionaryRecord(value: unknown) {
   );
 }
 
+function normalizePluralExpansion(value: unknown) {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return normalizeAbbreviationExpansion(
+      String((value as Record<string, unknown>).expansion || "")
+    );
+  }
+
+  return normalizeAbbreviationExpansion(String(value || ""));
+}
+
+function normalizePluralExpansionRecord(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+
+  return Object.entries(value as Record<string, unknown>).reduce(
+    (acc, [rawOwner, rawExpansion]) => {
+      const owner = normalizeAbbreviationKey(rawOwner);
+      const expansion = normalizePluralExpansion(rawExpansion);
+
+      if (owner && expansion) {
+        acc[owner] = expansion;
+      }
+
+      return acc;
+    },
+    {} as Record<string, string>
+  );
+}
+
 function readStoredAbbreviationDictionary(): StoredAbbreviationDictionary {
   if (typeof window === "undefined") {
-    return { custom: {}, disabled: [] };
+    return { custom: {}, disabled: [], plurals: {} };
   }
 
   try {
     const rawValue = window.localStorage.getItem(CUSTOM_ABBREVIATION_STORAGE_KEY);
-    if (!rawValue) return { custom: {}, disabled: [] };
+    if (!rawValue) return { custom: {}, disabled: [], plurals: {} };
 
     const parsed = JSON.parse(rawValue);
     const looksLikeLegacyRecord =
@@ -571,10 +660,11 @@ function readStoredAbbreviationDictionary(): StoredAbbreviationDictionary {
     return {
       custom,
       disabled: Array.from(new Set(disabled)),
+      plurals: normalizePluralExpansionRecord(parsed?.plurals),
     };
   } catch (error) {
     console.error("Impossible de lire le dictionnaire personnalisé :", error);
-    return { custom: {}, disabled: [] };
+    return { custom: {}, disabled: [], plurals: {} };
   }
 }
 
@@ -590,6 +680,7 @@ function saveStoredAbbreviationDictionary(data: StoredAbbreviationDictionary) {
           .filter(Boolean)
       )
     ),
+    plurals: normalizePluralExpansionRecord(data.plurals),
   };
 
   window.localStorage.setItem(
@@ -617,26 +708,55 @@ export function importAbbreviationDictionary(value: unknown) {
     disabled: Array.isArray(rawDictionary.disabled)
       ? rawDictionary.disabled.map((item) => String(item || ""))
       : [],
+    plurals: normalizePluralExpansionRecord(rawDictionary.plurals),
   });
 }
 
 export function readActiveAbbreviationDictionary() {
+  const activeEntries = readActiveAbbreviationEntries();
+
+  return Object.entries(activeEntries).reduce((acc, [abbreviation, entry]) => {
+    acc[abbreviation] = entry.expansion;
+    return acc;
+  }, {} as Record<string, string>);
+}
+
+function readActiveAbbreviationEntries() {
   const stored = readStoredAbbreviationDictionary();
   const disabled = new Set(stored.disabled);
   const activeBuiltIns = Object.entries(BUILT_IN_FRENCH_ABBREVIATIONS).reduce(
     (acc, [abbreviation, expansion]) => {
       if (!disabled.has(abbreviation)) {
-        acc[abbreviation] = expansion;
+        acc[abbreviation] = { expansion };
       }
       return acc;
     },
-    {} as Record<string, string>
+    {} as Record<string, ActiveAbbreviationEntry>
   );
 
-  return {
+  const activeDictionary = {
     ...activeBuiltIns,
-    ...stored.custom,
   };
+
+  Object.entries(stored.custom).forEach(([abbreviation, expansion]) => {
+    activeDictionary[abbreviation] = { expansion };
+  });
+
+  Object.entries(stored.plurals).forEach(([owner, pluralExpansion]) => {
+    const ownerIsActive =
+      Boolean(stored.custom[owner]) ||
+      (owner in BUILT_IN_FRENCH_ABBREVIATIONS && !disabled.has(owner));
+    const activeEntry = activeDictionary[owner];
+
+    if (ownerIsActive && activeEntry) {
+      activeDictionary[owner] = {
+        ...activeEntry,
+        pluralExpansion,
+      };
+    }
+  });
+
+  return activeDictionary;
 }
 
 export function readAbbreviationEntries(): AbbreviationEntry[] {
@@ -666,6 +786,7 @@ export function readAbbreviationEntries(): AbbreviationEntry[] {
         expansion:
           customExpansion || BUILT_IN_FRENCH_ABBREVIATIONS[abbreviation] || "",
         source,
+        pluralExpansion: stored.plurals[abbreviation],
       };
     })
     .sort((a, b) => a.abbreviation.localeCompare(b.abbreviation, "fr"));
@@ -673,7 +794,8 @@ export function readAbbreviationEntries(): AbbreviationEntry[] {
 
 export function upsertCustomAbbreviation(
   rawAbbreviation: string,
-  rawExpansion: string
+  rawExpansion: string,
+  rawPluralExpansion?: string | null
 ) {
   const abbreviation = normalizeAbbreviationKey(rawAbbreviation);
   const expansion = normalizeAbbreviationExpansion(rawExpansion);
@@ -683,11 +805,29 @@ export function upsertCustomAbbreviation(
   }
 
   const stored = readStoredAbbreviationDictionary();
+  const pluralExpansion =
+    rawPluralExpansion === undefined
+      ? undefined
+      : normalizePluralExpansion(rawPluralExpansion);
+
   stored.custom[abbreviation] = expansion;
   stored.disabled = stored.disabled.filter((item) => item !== abbreviation);
+
+  if (rawPluralExpansion !== undefined) {
+    if (pluralExpansion) {
+      stored.plurals[abbreviation] = pluralExpansion;
+    } else {
+      delete stored.plurals[abbreviation];
+    }
+  }
+
   saveStoredAbbreviationDictionary(stored);
 
-  return { abbreviation, expansion };
+  return {
+    abbreviation,
+    expansion,
+    pluralExpansion: stored.plurals[abbreviation],
+  };
 }
 
 export function deleteAbbreviation(rawAbbreviation: string) {
@@ -696,6 +836,7 @@ export function deleteAbbreviation(rawAbbreviation: string) {
 
   const stored = readStoredAbbreviationDictionary();
   delete stored.custom[abbreviation];
+  delete stored.plurals[abbreviation];
 
   if (abbreviation in BUILT_IN_FRENCH_ABBREVIATIONS) {
     stored.disabled = Array.from(new Set([...stored.disabled, abbreviation]));
@@ -710,6 +851,7 @@ export function resetAbbreviation(rawAbbreviation: string) {
 
   const stored = readStoredAbbreviationDictionary();
   delete stored.custom[abbreviation];
+  delete stored.plurals[abbreviation];
   stored.disabled = stored.disabled.filter((item) => item !== abbreviation);
   saveStoredAbbreviationDictionary(stored);
 }
@@ -775,6 +917,80 @@ function readPreviousFrenchWords(value: string, endIndex: number, limit = 2) {
       .match(new RegExp(FRENCH_WORD_PATTERN, "g")) || [];
 
   return words.slice(Math.max(0, words.length - limit));
+}
+
+function readPreviousPluralContextTokens(value: string, endIndex: number) {
+  const tokens =
+    value
+      .slice(0, endIndex)
+      .match(new RegExp(`${FRENCH_WORD_PATTERN}|\\d+`, "g")) || [];
+
+  return tokens.slice(Math.max(0, tokens.length - 8));
+}
+
+function isDigitNumberToken(value: string) {
+  return /^\d+$/.test(value);
+}
+
+function getFrenchNumberTokenParts(value: string) {
+  return normalizeLookup(value)
+    .split(/[-‐‑‒–—]/)
+    .filter(Boolean);
+}
+
+function isFrenchNumberToken(value: string) {
+  const parts = getFrenchNumberTokenParts(value);
+  return (
+    parts.length > 0 &&
+    parts.some((part) => part !== "et") &&
+    parts.every((part) => part === "et" || FRENCH_NUMBER_WORDS.has(part))
+  );
+}
+
+function isSingularOneToken(value: string) {
+  const parts = getFrenchNumberTokenParts(value);
+  return parts.length === 1 && (parts[0] === "un" || parts[0] === "une");
+}
+
+function hasFrenchNumberPhraseSuffix(tokens: string[]) {
+  const suffix: string[] = [];
+
+  for (let index = tokens.length - 1; index >= 0; index -= 1) {
+    const normalizedToken = normalizeLookup(tokens[index]);
+    if (normalizedToken === "et" || isFrenchNumberToken(normalizedToken)) {
+      suffix.unshift(normalizedToken);
+      continue;
+    }
+
+    break;
+  }
+
+  if (!suffix.length || suffix[0] === "et" || suffix[suffix.length - 1] === "et") {
+    return false;
+  }
+
+  for (let index = 1; index < suffix.length; index += 1) {
+    if (suffix[index] === "et" && suffix[index - 1] === "et") {
+      return false;
+    }
+  }
+
+  const numberTokens = suffix.filter((token) => token !== "et");
+  if (!numberTokens.length) return false;
+
+  return numberTokens.length > 1 || !isSingularOneToken(numberTokens[0]);
+}
+
+function shouldUsePluralExpansion(value: string, wordStartIndex: number) {
+  const previousTokens = readPreviousPluralContextTokens(value, wordStartIndex);
+  const previousToken = normalizeLookup(
+    previousTokens[previousTokens.length - 1] || ""
+  );
+
+  if (PLURAL_CONTEXT_DETERMINERS.has(previousToken)) return true;
+  if (isDigitNumberToken(previousToken)) return true;
+
+  return hasFrenchNumberPhraseSuffix(previousTokens);
 }
 
 function readNextFrenchWord(value: string, startIndex: number) {
@@ -1026,11 +1242,12 @@ function expandFrenchAbbreviations(
     `(^|${ABBREVIATION_PREFIX_BOUNDARY})([a-zA-ZÀ-ÿ]+)(?=(${suffixBoundary}))`,
     "g"
   );
-  const activeDictionary = readActiveAbbreviationDictionary();
+  const activeDictionary = readActiveAbbreviationEntries();
 
   return value.replace(abbreviationPattern, (match, prefix, word, _suffix, offset, source) => {
     const key = normalizeAbbreviationKey(String(word));
-    const expanded = activeDictionary[key];
+    const activeEntry = activeDictionary[key];
+    const expanded = activeEntry?.expansion;
     if (key === "e" && expanded === BUILT_IN_FRENCH_ABBREVIATIONS.e) {
       const wordStartIndex = Number(offset) + String(prefix).length;
       return `${prefix}${resolveAmbiguousEAbbreviation(
@@ -1050,6 +1267,13 @@ function expandFrenchAbbreviations(
         wordEndIndex,
         key === "kls"
       )}`;
+    }
+
+    if (activeEntry?.pluralExpansion) {
+      const wordStartIndex = Number(offset) + String(prefix).length;
+      if (shouldUsePluralExpansion(String(source), wordStartIndex)) {
+        return `${prefix}${activeEntry.pluralExpansion}`;
+      }
     }
 
     return expanded ? `${prefix}${expanded}` : match;

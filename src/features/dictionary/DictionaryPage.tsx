@@ -15,6 +15,30 @@ function getSourceLabel(source: AbbreviationEntry["source"]) {
   return "Base";
 }
 
+function suggestPluralText(value: string) {
+  const cleanValue = String(value || "").trim().replace(/\s+/g, " ");
+  if (!cleanValue) return "";
+
+  const words = cleanValue.split(" ");
+  const lastWord = words[words.length - 1] || "";
+  const lowerLastWord = lastWord.toLowerCase();
+
+  let pluralLastWord = `${lastWord}s`;
+  if (/[sxz]$/i.test(lastWord)) {
+    pluralLastWord = lastWord;
+  } else if (lowerLastWord.endsWith("al")) {
+    pluralLastWord = `${lastWord.slice(0, -2)}aux`;
+  } else if (
+    lowerLastWord.endsWith("au") ||
+    lowerLastWord.endsWith("eau") ||
+    lowerLastWord.endsWith("eu")
+  ) {
+    pluralLastWord = `${lastWord}x`;
+  }
+
+  return [...words.slice(0, -1), pluralLastWord].join(" ");
+}
+
 type DictionaryPageProps = {
   styles: StyleMap;
 };
@@ -26,6 +50,7 @@ export default function DictionaryPage({ styles }: DictionaryPageProps) {
   const [search, setSearch] = useState("");
   const [abbreviation, setAbbreviation] = useState("");
   const [expansion, setExpansion] = useState("");
+  const [pluralExpansion, setPluralExpansion] = useState("");
   const [message, setMessage] = useState("");
   const [deleteCandidate, setDeleteCandidate] = useState("");
   const [editingAbbreviation, setEditingAbbreviation] = useState("");
@@ -38,6 +63,7 @@ export default function DictionaryPage({ styles }: DictionaryPageProps) {
       return (
         entry.abbreviation.toLowerCase().includes(query) ||
         entry.expansion.toLowerCase().includes(query) ||
+        entry.pluralExpansion?.toLowerCase().includes(query) ||
         getSourceLabel(entry.source).toLowerCase().includes(query)
       );
     });
@@ -48,6 +74,12 @@ export default function DictionaryPage({ styles }: DictionaryPageProps) {
     setMessage(nextMessage);
     setDeleteCandidate("");
     setEditingAbbreviation("");
+  }
+
+  function resetForm() {
+    setAbbreviation("");
+    setExpansion("");
+    setPluralExpansion("");
   }
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -67,9 +99,8 @@ export default function DictionaryPage({ styles }: DictionaryPageProps) {
         return;
       }
 
-      const saved = upsertCustomAbbreviation(abbreviation, expansion);
-      setAbbreviation("");
-      setExpansion("");
+      const saved = upsertCustomAbbreviation(abbreviation, expansion, pluralExpansion);
+      resetForm();
       refreshEntries(
         editingAbbreviation
           ? `${saved.abbreviation} modifié.`
@@ -85,6 +116,7 @@ export default function DictionaryPage({ styles }: DictionaryPageProps) {
   function handleEdit(entry: AbbreviationEntry) {
     setAbbreviation(entry.abbreviation);
     setExpansion(entry.expansion);
+    setPluralExpansion(entry.pluralExpansion || "");
     setEditingAbbreviation(entry.abbreviation);
     setMessage("");
     setDeleteCandidate("");
@@ -107,11 +139,14 @@ export default function DictionaryPage({ styles }: DictionaryPageProps) {
   }
 
   const previewAbbreviation = normalizeAbbreviationKey(abbreviation);
+  const suggestedPluralExpansion = suggestPluralText(expansion);
   const previewAlreadyExists = entries.some(
     (entry) =>
       entry.abbreviation === previewAbbreviation &&
       editingAbbreviation !== previewAbbreviation
   );
+  const pluralHelpText =
+    "Le pluriel s'applique aux noms après un déterminant pluriel (les, des, aux, ces, nos, vos, leurs...) ou une quantité. Il ne s'applique pas aux verbes conjugués.";
   const compactListButtonStyle = {
     ...styles.secondaryButton,
     minHeight: 36,
@@ -175,6 +210,60 @@ export default function DictionaryPage({ styles }: DictionaryPageProps) {
             />
           </div>
 
+          <div
+            style={{
+              ...styles.formGroup,
+              gridColumn: "1 / -1",
+              marginBottom: 0,
+              minWidth: 0,
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                marginBottom: 6,
+              }}
+            >
+              <label style={{ ...styles.label, marginBottom: 0 }}>
+                Pluriel
+              </label>
+              <span
+                aria-label={pluralHelpText}
+                role="img"
+                tabIndex={0}
+                title={pluralHelpText}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  width: 18,
+                  height: 18,
+                  borderRadius: "50%",
+                  border: `1px solid ${styles.inputBorder?.borderColor || "currentColor"}`,
+                  fontSize: 12,
+                  fontWeight: 900,
+                  lineHeight: 1,
+                  opacity: 0.78,
+                  cursor: "help",
+                  userSelect: "none",
+                }}
+              >
+                ?
+              </span>
+            </div>
+            <input
+              value={pluralExpansion}
+              onChange={(event) => {
+                setPluralExpansion(event.target.value);
+                if (message) setMessage("");
+              }}
+              style={styles.input}
+              placeholder={suggestedPluralExpansion || "ex : chevaux"}
+            />
+          </div>
+
           <button
             type="submit"
             style={{
@@ -182,7 +271,11 @@ export default function DictionaryPage({ styles }: DictionaryPageProps) {
               gridColumn: "1 / -1",
               width: "100%",
             }}
-            disabled={!previewAbbreviation || !expansion.trim()}
+            disabled={
+              !previewAbbreviation ||
+              !expansion.trim() ||
+              previewAlreadyExists
+            }
           >
             {editingAbbreviation ? "Modifier" : "Enregistrer"}
           </button>
@@ -285,6 +378,19 @@ export default function DictionaryPage({ styles }: DictionaryPageProps) {
                       {entry.expansion}
                     </span>
                   </div>
+                  {entry.pluralExpansion ? (
+                    <div
+                      style={{
+                        marginTop: 6,
+                        fontSize: 13,
+                        lineHeight: 1.25,
+                        opacity: 0.78,
+                        overflowWrap: "anywhere",
+                      }}
+                    >
+                      Pluriel : {entry.pluralExpansion}
+                    </div>
+                  ) : null}
                 </div>
 
                 <div
