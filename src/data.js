@@ -95,7 +95,6 @@ export function createProfile(name = "Profil principal") {
         relation: "",
       },
     ],
-    donationUrl: "https://buymeacoffee.com/",
     defaultVoice: "default",
     voiceSettings: {
       rate: 1,

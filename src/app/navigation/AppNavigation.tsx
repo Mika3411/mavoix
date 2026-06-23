@@ -248,29 +248,6 @@ function MoreMenu({
       >
         Notice
       </button>
-
-      <button
-        onClick={() => {
-          setIsMoreMenuOpen(false);
-          window.open(
-            "https://paypal.me/anime1120",
-            "_blank",
-            "noopener,noreferrer"
-          );
-        }}
-        style={{
-          padding: "6px 18px",
-          fontSize: isLandscapeMobileLayout ? "14px" : "15px",
-          borderRadius: "18px",
-          background: "#22c55e",
-          color: "white",
-          border: "none",
-          fontWeight: "600",
-          cursor: "pointer",
-        }}
-      >
-        Soutenez-moi ❤️
-      </button>
     </div>
   );
 }
