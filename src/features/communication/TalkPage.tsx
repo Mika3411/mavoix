@@ -139,34 +139,24 @@ function ActionIcon({
 
   if (name === "microphone") {
     return (
-      <svg {...commonProps}>
+      <svg {...commonProps} viewBox="0 0 24 24">
         <rect
-          x="12"
-          y="5"
-          width="8"
-          height="14"
-          rx="4"
+          x="8.75"
+          y="3.5"
+          width="6.5"
+          height="10"
+          rx="3.25"
           stroke="currentColor"
-          strokeWidth="2.3"
+          strokeWidth="1.9"
+          strokeLinecap="round"
+          strokeLinejoin="round"
         />
         <path
-          d="M8 14.25v1.35c0 4.55 3.45 8 8 8s8-3.45 8-8v-1.35"
+          d="M5.5 11.5v.7a6.5 6.5 0 0 0 13 0v-.7M12 18.7V21M8.8 21h6.4"
           stroke="currentColor"
-          strokeWidth="2.3"
+          strokeWidth="1.9"
           strokeLinecap="round"
-        />
-        <path
-          d="M16 23.6v4.15M12.25 27.75h7.5"
-          stroke="currentColor"
-          strokeWidth="2.3"
-          strokeLinecap="round"
-        />
-        <path
-          d="M14.25 9h3.5M14.25 13h3.5"
-          stroke="currentColor"
-          strokeWidth="1.55"
-          strokeLinecap="round"
-          opacity="0.72"
+          strokeLinejoin="round"
         />
       </svg>
     );

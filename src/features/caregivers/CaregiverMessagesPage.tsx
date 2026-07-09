@@ -30,6 +30,40 @@ type MessageStore = {
 
 const INCOMING_MESSAGE_SOUND_URL = "/message-bip.mp3";
 
+function MicrophoneIcon({ size = 24 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+      focusable="false"
+      style={{ display: "block", flex: "0 0 auto" }}
+    >
+      <rect
+        x="8.75"
+        y="3.5"
+        width="6.5"
+        height="10"
+        rx="3.25"
+        stroke="currentColor"
+        strokeWidth="1.9"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M5.5 11.5v.7a6.5 6.5 0 0 0 13 0v-.7M12 18.7V21M8.8 21h6.4"
+        stroke="currentColor"
+        strokeWidth="1.9"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 type MessageNotificationPermission = NotificationPermission | "unsupported";
 
 function playIncomingMessageSound() {
@@ -664,7 +698,7 @@ export default function CaregiverMessagesPage(props: CaregiverMessagesPageProps)
                 onClick={startDictation}
                 disabled={isListening}
               >
-                🎙
+                <MicrophoneIcon size={26} />
               </button>
 
               <button

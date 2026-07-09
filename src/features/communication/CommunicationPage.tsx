@@ -18,7 +18,7 @@ function isIconOnlyPhraseText(value: unknown) {
   );
 }
 
-function SpeakerIcon({ size = 24 }: { size?: number }) {
+function MicrophoneIcon({ size = 24 }: { size?: number }) {
   return (
     <svg
       width={size}
@@ -30,17 +30,23 @@ function SpeakerIcon({ size = 24 }: { size?: number }) {
       focusable="false"
       style={{ display: "block", flex: "0 0 auto" }}
     >
-      <path
-        d="M4.5 9.25h3.35l4.4-3.45c.72-.56 1.78-.05 1.78.86v10.68c0 .91-1.06 1.42-1.78.86l-4.4-3.45H4.5a1.55 1.55 0 0 1-1.55-1.55v-2.4A1.55 1.55 0 0 1 4.5 9.25Z"
-        stroke="currentColor"
-        strokeWidth="1.9"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M17.1 8.25c.9.98 1.35 2.1 1.35 3.75s-.45 2.77-1.35 3.75M19.7 6.15c1.45 1.58 2.18 3.36 2.18 5.85s-.73 4.27-2.18 5.85"
+      <rect
+        x="8.75"
+        y="3.5"
+        width="6.5"
+        height="10"
+        rx="3.25"
         stroke="currentColor"
         strokeWidth="1.9"
         strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M5.5 11.5v.7a6.5 6.5 0 0 0 13 0v-.7M12 18.7V21M8.8 21h6.4"
+        stroke="currentColor"
+        strokeWidth="1.9"
+        strokeLinecap="round"
+        strokeLinejoin="round"
       />
     </svg>
   );
@@ -158,7 +164,7 @@ export default function CommunicationPage(props: CommunicationPageProps) {
                 flexShrink: 0,
               }}
             >
-              <SpeakerIcon size={22} />
+              <MicrophoneIcon size={22} />
             </span>
             <h2 style={{ ...styles.sectionTitle, marginBottom: 0 }}>
               Communication rapide
@@ -280,7 +286,7 @@ export default function CommunicationPage(props: CommunicationPageProps) {
                           flexShrink: 0,
                         }}
                       >
-                        <SpeakerIcon size={24} />
+                        <MicrophoneIcon size={24} />
                       </span>
                     ) : null}
                     <span style={{ overflowWrap: "anywhere" }}>{phraseText}</span>
