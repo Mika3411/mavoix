@@ -349,28 +349,55 @@ export default function App() {
     }
 
     styleElement.textContent = `
+      html,
+      body {
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      button,
+      input,
+      textarea,
+      select {
+        font-family: inherit;
+      }
+
       button {
         transition:
           filter 0.14s ease,
-          transform 0.08s ease,
+          transform 0.12s ease,
           box-shadow 0.14s ease,
           border-color 0.14s ease,
           opacity 0.14s ease !important;
       }
 
       button:hover:not(:disabled) {
-        filter: brightness(1.08) saturate(1.08);
-        box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08), 0 8px 18px rgba(0, 0, 0, 0.18);
+        filter: brightness(1.05) saturate(1.06);
+        transform: translateY(-1px);
       }
 
       button:active:not(:disabled) {
-        filter: brightness(0.92) saturate(1.18);
-        transform: translateY(1px) scale(0.985);
-        box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.24), 0 0 0 1px rgba(255, 255, 255, 0.06);
+        filter: brightness(0.94) saturate(1.12);
+        transform: translateY(1px) scale(0.99);
       }
 
       button:disabled {
         cursor: not-allowed;
+      }
+
+      button:focus-visible,
+      input:focus-visible,
+      textarea:focus-visible,
+      select:focus-visible,
+      a:focus-visible {
+        outline: 3px solid rgba(25, 194, 255, 0.54);
+        outline-offset: 3px;
+      }
+
+      input:focus,
+      textarea:focus,
+      select:focus {
+        border-color: rgba(25, 194, 255, 0.7) !important;
+        box-shadow: 0 0 0 3px rgba(25, 194, 255, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.06) !important;
       }
     `;
 

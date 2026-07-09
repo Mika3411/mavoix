@@ -18,6 +18,34 @@ function isIconOnlyPhraseText(value: unknown) {
   );
 }
 
+function SpeakerIcon({ size = 24 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+      focusable="false"
+      style={{ display: "block", flex: "0 0 auto" }}
+    >
+      <path
+        d="M4.5 9.25h3.35l4.4-3.45c.72-.56 1.78-.05 1.78.86v10.68c0 .91-1.06 1.42-1.78.86l-4.4-3.45H4.5a1.55 1.55 0 0 1-1.55-1.55v-2.4A1.55 1.55 0 0 1 4.5 9.25Z"
+        stroke="currentColor"
+        strokeWidth="1.9"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M17.1 8.25c.9.98 1.35 2.1 1.35 3.75s-.45 2.77-1.35 3.75M19.7 6.15c1.45 1.58 2.18 3.36 2.18 5.85s-.73 4.27-2.18 5.85"
+        stroke="currentColor"
+        strokeWidth="1.9"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
 type CommunicationPageProps = {
   styles: StyleMap;
   categoryOptions: Category[];
@@ -48,6 +76,14 @@ export default function CommunicationPage(props: CommunicationPageProps) {
     isEditMode,
     setIsEditMode,
   } = props;
+  const viewportWidth =
+    typeof window !== "undefined" ? window.innerWidth : 1024;
+  const categoryGridColumns =
+    viewportWidth <= 560
+      ? "repeat(2, minmax(0, 1fr))"
+      : viewportWidth <= 920
+        ? "repeat(3, minmax(0, 1fr))"
+        : "repeat(4, minmax(0, 1fr))";
 
   const editToggleStyle = isEditMode
     ? styles.primaryButton
@@ -95,12 +131,39 @@ export default function CommunicationPage(props: CommunicationPageProps) {
             justifyContent: "space-between",
             gap: 12,
             flexWrap: "wrap",
-            marginBottom: 12,
+            marginBottom: 16,
           }}
         >
-          <h2 style={{ ...styles.sectionTitle, marginBottom: 0 }}>
-            Communication rapide
-          </h2>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 12,
+              minWidth: 0,
+            }}
+          >
+            <span
+              aria-hidden="true"
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: 10,
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "#19c2ff",
+                background: "rgba(25, 194, 255, 0.12)",
+                border: "1px solid rgba(25, 194, 255, 0.26)",
+                boxShadow: "inset 0 1px 0 rgba(255,255,255,0.08)",
+                flexShrink: 0,
+              }}
+            >
+              <SpeakerIcon size={22} />
+            </span>
+            <h2 style={{ ...styles.sectionTitle, marginBottom: 0 }}>
+              Communication rapide
+            </h2>
+          </div>
 
           <button
             type="button"
@@ -111,16 +174,30 @@ export default function CommunicationPage(props: CommunicationPageProps) {
               minHeight: 44,
               padding: "8px 16px",
               fontSize: 15,
+              borderRadius: 12,
             }}
           >
             {isEditMode ? "Terminer" : "Modifier"}
           </button>
         </div>
 
-        <div style={{ marginBottom: 16 }}>
+        <div
+          style={{
+            marginBottom: 18,
+            padding: 8,
+            borderRadius: 8,
+            background: styles.surfaceAlt?.background || "rgba(255,255,255,0.055)",
+            border: styles.input?.border || "1px solid rgba(132,157,184,0.28)",
+          }}
+        >
           <p style={styles.filterTitle}>Catégories</p>
 
-          <div style={styles.categoryGrid}>
+          <div
+            style={{
+              ...styles.categoryGrid,
+              gridTemplateColumns: categoryGridColumns,
+            }}
+          >
             {categoryOptions.map((cat) => (
               <button
                 key={cat.name}
@@ -148,8 +225,8 @@ export default function CommunicationPage(props: CommunicationPageProps) {
             style={{
               ...styles.quickPhraseGrid,
               gridTemplateColumns:
-                "repeat(auto-fit, minmax(min(150px, 42vw), 1fr))",
-              gap: 10,
+                "repeat(auto-fit, minmax(min(180px, 46vw), 1fr))",
+              gap: 12,
               alignItems: "start",
             }}
           >
@@ -164,28 +241,49 @@ export default function CommunicationPage(props: CommunicationPageProps) {
                     ...styles.quickPhraseCard,
                     padding: 10,
                     gap: 8,
-                    borderRadius: 14,
+                    borderRadius: 8,
                   }}
                 >
                   <button
                     style={{
                       ...styles.quickPhraseButton,
                       background: getCategoryBackground(item.category),
-                      minHeight: 72,
-                      fontSize: isIconOnlyPhrase ? 34 : 16,
+                      minHeight: 82,
+                      fontSize: isIconOnlyPhrase ? 34 : 18,
                       lineHeight: isIconOnlyPhrase ? 1 : 1.15,
-                      padding: isIconOnlyPhrase ? "10px" : "12px 14px",
-                      borderRadius: 14,
+                      padding: isIconOnlyPhrase ? "10px" : "14px 16px",
+                      borderRadius: 10,
                       width: "100%",
                       display: "flex",
                       alignItems: "center",
-                      justifyContent: "center",
+                      justifyContent: isIconOnlyPhrase ? "center" : "flex-start",
+                      gap: 14,
+                      textAlign: isIconOnlyPhrase ? "center" : "left",
                     }}
                     onClick={() =>
                       speakText(item.text, item.assignedVoice, item.id)
                     }
                   >
-                    {phraseText}
+                    {!isIconOnlyPhrase ? (
+                      <span
+                        aria-hidden="true"
+                        style={{
+                          width: 42,
+                          height: 42,
+                          borderRadius: 999,
+                          display: "inline-flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          background: "rgba(255,255,255,0.16)",
+                          border: "1px solid rgba(255,255,255,0.18)",
+                          boxShadow: "inset 0 1px 0 rgba(255,255,255,0.18)",
+                          flexShrink: 0,
+                        }}
+                      >
+                        <SpeakerIcon size={24} />
+                      </span>
+                    ) : null}
+                    <span style={{ overflowWrap: "anywhere" }}>{phraseText}</span>
                   </button>
 
                 {isEditMode && (

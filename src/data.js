@@ -35,12 +35,12 @@ export const AVAILABLE_ICONS = [
 ];
 
 export const CATEGORY_COLORS = {
-  Général: "linear-gradient(135deg, #2563eb, #1d4ed8)",
-  Besoins: "linear-gradient(135deg, #0ea5e9, #0284c7)",
-  Santé: "linear-gradient(135deg, #8b5cf6, #7c3aed)",
-  Émotions: "linear-gradient(135deg, #f59e0b, #d97706)",
-  Urgence: "linear-gradient(135deg, #ef4444, #dc2626)",
-  Famille: "linear-gradient(135deg, #22c55e, #16a34a)",
+  Général: "linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%)",
+  Besoins: "linear-gradient(135deg, #06b6d4 0%, #087ea4 100%)",
+  Santé: "linear-gradient(135deg, #14b8a6 0%, #0f766e 100%)",
+  Émotions: "linear-gradient(135deg, #a855f7 0%, #db2777 100%)",
+  Urgence: "linear-gradient(135deg, #fb7185 0%, #dc2626 100%)",
+  Famille: "linear-gradient(135deg, #22c55e 0%, #15803d 100%)",
 };
 
 export function generateId() {

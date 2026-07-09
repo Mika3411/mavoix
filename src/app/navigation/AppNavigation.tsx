@@ -31,6 +31,118 @@ type CaregiverAlertButtonProps = {
   style?: React.CSSProperties;
 };
 
+type NavGlyphName =
+  | "communication"
+  | "talk"
+  | "info"
+  | "messages"
+  | "menu"
+  | "bell";
+
+function NavGlyph({
+  name,
+  size = 18,
+}: {
+  name: NavGlyphName;
+  size?: number;
+}) {
+  const commonProps = {
+    width: size,
+    height: size,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    xmlns: "http://www.w3.org/2000/svg",
+    "aria-hidden": true,
+    focusable: "false",
+    style: { display: "block", flex: "0 0 auto" },
+  } as const;
+  const strokeProps = {
+    stroke: "currentColor",
+    strokeWidth: 1.9,
+    strokeLinecap: "round",
+    strokeLinejoin: "round",
+  } as const;
+
+  if (name === "communication") {
+    return (
+      <svg {...commonProps}>
+        <path
+          d="M5.25 6.25h13.5a2.5 2.5 0 0 1 2.5 2.5v5.2a2.5 2.5 0 0 1-2.5 2.5H12.6l-4.35 3.3v-3.3h-3a2.5 2.5 0 0 1-2.5-2.5v-5.2a2.5 2.5 0 0 1 2.5-2.5Z"
+          {...strokeProps}
+        />
+        <path d="M7.5 10h9M7.5 13h5.25" {...strokeProps} />
+      </svg>
+    );
+  }
+
+  if (name === "talk") {
+    return (
+      <svg {...commonProps}>
+        <rect x="8.75" y="3.5" width="6.5" height="10" rx="3.25" {...strokeProps} />
+        <path d="M5.5 11.5v.7a6.5 6.5 0 0 0 13 0v-.7M12 18.7V21M8.8 21h6.4" {...strokeProps} />
+      </svg>
+    );
+  }
+
+  if (name === "info") {
+    return (
+      <svg {...commonProps}>
+        <circle cx="12" cy="12" r="8.6" {...strokeProps} />
+        <path d="M12 10.8v5.2M12 7.65h.01" {...strokeProps} />
+      </svg>
+    );
+  }
+
+  if (name === "messages") {
+    return (
+      <svg {...commonProps}>
+        <path d="M4.25 6.75h15.5v10.5H4.25z" {...strokeProps} />
+        <path d="m5.2 7.7 6.8 5 6.8-5" {...strokeProps} />
+      </svg>
+    );
+  }
+
+  if (name === "bell") {
+    return (
+      <svg {...commonProps}>
+        <path d="M6.3 10.5a5.7 5.7 0 0 1 11.4 0c0 4.7 1.55 5.4 2.1 6.1H4.2c.55-.7 2.1-1.4 2.1-6.1Z" {...strokeProps} />
+        <path d="M9.8 19.1a2.35 2.35 0 0 0 4.4 0" {...strokeProps} />
+      </svg>
+    );
+  }
+
+  return (
+    <svg {...commonProps}>
+      <path d="M4.5 6.5h15M4.5 12h15M4.5 17.5h15" {...strokeProps} />
+    </svg>
+  );
+}
+
+function NavButtonContent({
+  icon,
+  label,
+  compact,
+}: {
+  icon: NavGlyphName;
+  label?: string;
+  compact?: boolean;
+}) {
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: compact ? 5 : 8,
+        minWidth: 0,
+      }}
+    >
+      <NavGlyph name={icon} size={compact ? 15 : 17} />
+      {label ? <span style={{ minWidth: 0 }}>{label}</span> : null}
+    </span>
+  );
+}
+
 function getCaregiverAlertLabel(
   caregiverAlertSending: boolean,
   selectedCaregiverAlertTargetName: string
@@ -88,7 +200,7 @@ function CaregiverUnreadBadge({
         borderRadius: 999,
         background: "#ef4444",
         color: "white",
-        border: `2px solid ${activeTheme?.pageBackground || "#0b1220"}`,
+        border: "2px solid rgba(5, 10, 17, 0.95)",
         boxSizing: "border-box",
         display: "inline-flex",
         alignItems: "center",
@@ -127,14 +239,17 @@ function CaregiverAlertButton({
         width: size,
         height: size,
         padding: 0,
-        borderRadius: "18px",
-        background: caregiverAlertSending ? "#92400e" : "#f59e0b",
+        borderRadius: 14,
+        background: caregiverAlertSending
+          ? "linear-gradient(135deg, #92400e, #b45309)"
+          : "linear-gradient(135deg, #ffba3b, #f59e0b)",
         color: "#111827",
-        border: "none",
+        border: "1px solid rgba(255,255,255,0.2)",
         fontSize,
-        fontWeight: 800,
+        fontWeight: 850,
         cursor: caregiverAlertSending ? "wait" : "pointer",
-        boxShadow: "0 8px 25px rgba(0,0,0,0.24)",
+        boxShadow:
+          "0 16px 32px rgba(245, 158, 11, 0.24), inset 0 1px 0 rgba(255,255,255,0.35)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -142,7 +257,7 @@ function CaregiverAlertButton({
         ...style,
       }}
     >
-      🔔
+      <NavGlyph name="bell" size={Math.max(20, Math.round(size * 0.42))} />
     </button>
   );
 }
@@ -188,11 +303,12 @@ function MoreMenu({
         flexDirection: "column",
         gap: 8,
         padding: 10,
-        borderRadius: 18,
+        borderRadius: 12,
         background: activeTheme?.cardBackground || "#1e293b",
-        boxShadow: "0 16px 40px rgba(0,0,0,0.28)",
-        border: "1px solid rgba(255,255,255,0.08)",
-        backdropFilter: "blur(8px)",
+        boxShadow:
+          "0 22px 52px rgba(0,0,0,0.36), inset 0 1px 0 rgba(255,255,255,0.07)",
+        border: `1px solid ${activeTheme?.inputBorder || "rgba(255,255,255,0.12)"}`,
+        backdropFilter: "blur(16px)",
         zIndex: placement === "top" ? 50 : 60,
       }}
     >
@@ -296,7 +412,7 @@ export function AppHeader({
     : isLandscapeMobileLayout
       ? 13
       : 15;
-  const topNavBorderRadius = isLandscapeMobileLayout ? 14 : 18;
+  const topNavBorderRadius = isLandscapeMobileLayout ? 12 : 12;
   const nativeHeaderAlertSize = isLandscapeMobileLayout ? 56 : 62;
   const profileFullName =
     currentProfile.firstName || currentProfile.lastName
@@ -317,6 +433,15 @@ export function AppHeader({
         flexWrap: isLandscapeMobileLayout ? "nowrap" : "wrap",
         position: "relative",
         zIndex: 20,
+        padding: isCompactLayout ? 10 : "12px 14px",
+        borderRadius: 8,
+        background:
+          activeTheme?.cardBackground ||
+          "linear-gradient(180deg, rgba(18, 25, 34, 0.92), rgba(10, 15, 23, 0.9))",
+        border: `1px solid ${activeTheme?.inputBorder || "rgba(132,157,184,0.28)"}`,
+        boxShadow:
+          "0 18px 48px rgba(0,0,0,0.26), inset 0 1px 0 rgba(255,255,255,0.06)",
+        backdropFilter: "blur(18px)",
       }}
     >
       <div
@@ -338,7 +463,7 @@ export function AppHeader({
           src={`${import.meta.env.BASE_URL}picturetitle.png`}
           alt="Ma Voix"
           style={{
-            height: isCompactLayout ? 64 : isLandscapeMobileLayout ? 54 : 80,
+            height: isCompactLayout ? 58 : isLandscapeMobileLayout ? 48 : 66,
             objectFit: "contain",
             flexShrink: 0,
           }}
@@ -347,10 +472,11 @@ export function AppHeader({
         <div
           style={{
             fontSize: isCompactLayout ? 20 : isLandscapeMobileLayout ? 17 : 22,
-            fontWeight: 600,
+            fontWeight: 780,
             lineHeight: 1.15,
             minWidth: 0,
             wordBreak: "break-word",
+            color: activeTheme?.titleColor || "#ffffff",
           }}
         >
           {currentProfile.name}
@@ -408,7 +534,11 @@ export function AppHeader({
             }}
             onClick={() => setPage("communication")}
           >
-            Communication
+            <NavButtonContent
+              icon="communication"
+              label="Communication"
+              compact={isCompactLayout || isLandscapeMobileLayout}
+            />
           </button>
 
           <button
@@ -425,7 +555,11 @@ export function AppHeader({
             }}
             onClick={() => setPage("reglages")}
           >
-            Parler
+            <NavButtonContent
+              icon="talk"
+              label="Parler"
+              compact={isCompactLayout || isLandscapeMobileLayout}
+            />
           </button>
 
           <button
@@ -440,7 +574,11 @@ export function AppHeader({
             }}
             onClick={() => setPage("infos")}
           >
-            Infos
+            <NavButtonContent
+              icon="info"
+              label="Infos"
+              compact={isCompactLayout || isLandscapeMobileLayout}
+            />
           </button>
 
           <div
@@ -479,7 +617,7 @@ export function AppHeader({
                 position: "relative",
               }}
             >
-              <span aria-hidden="true">✉</span>
+              <NavButtonContent icon="messages" compact />
               <CaregiverUnreadBadge
                 activeTheme={activeTheme}
                 unreadCaregiverMessageCount={unreadCaregiverMessageCount}
@@ -519,7 +657,7 @@ export function AppHeader({
                 lineHeight: isCompactLayout ? 1.1 : undefined,
               }}
             >
-              ☰
+              <NavButtonContent icon="menu" compact />
             </button>
 
             {isMoreMenuOpen && (
@@ -582,10 +720,15 @@ export function AppFooterNavigation({
           : undefined,
         alignItems: "center",
         gap: isLandscapeMobileLayout ? 8 : 6,
-        padding: isLandscapeMobileLayout ? "8px 0 0" : "10px 0 0",
+        padding: isLandscapeMobileLayout ? "8px 8px" : "10px 8px",
         borderTop: `1px solid ${activeTheme?.inputBorder || "#334155"}`,
-        background: activeTheme?.pageBackground || "#0b1220",
-        boxShadow: "0 -14px 28px rgba(2,6,23,0.74)",
+        borderLeft: `1px solid ${activeTheme?.inputBorder || "#334155"}`,
+        borderRight: `1px solid ${activeTheme?.inputBorder || "#334155"}`,
+        borderRadius: 8,
+        background: activeTheme?.cardBackground || "#0b1220",
+        boxShadow:
+          "0 -16px 34px rgba(0,0,0,0.34), inset 0 1px 0 rgba(255,255,255,0.06)",
+        backdropFilter: "blur(16px)",
         position: "relative",
         zIndex: 40,
       }}
@@ -678,7 +821,7 @@ export function AppFooterNavigation({
               position: "relative",
             }}
           >
-            <span aria-hidden="true">✉</span>
+            <NavButtonContent icon="messages" compact />
             <CaregiverUnreadBadge
               activeTheme={activeTheme}
               unreadCaregiverMessageCount={unreadCaregiverMessageCount}
@@ -711,7 +854,7 @@ export function AppFooterNavigation({
               justifyContent: "center",
             }}
           >
-            ☰
+            <NavButtonContent icon="menu" compact />
           </button>
 
           {isMoreMenuOpen && (
