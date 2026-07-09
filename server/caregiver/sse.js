@@ -161,12 +161,32 @@ function broadcastCaregiverMessage(channel, payload, recipientRole) {
   return deliveredTo;
 }
 
+function broadcastCaregiverMessageReceipt(channel, payload) {
+  const clients = caregiverMessageClients.get(channel);
+  if (!clients || clients.size === 0) return 0;
+
+  let deliveredTo = 0;
+
+  for (const client of Array.from(clients)) {
+    try {
+      writeSseEvent(client, "caregiver-message-receipt", payload);
+      deliveredTo += 1;
+    } catch (error) {
+      closeSseClient(client);
+      removeCaregiverMessageClient(channel, client);
+    }
+  }
+
+  return deliveredTo;
+}
+
 module.exports = {
   CAREGIVER_ALERT_STREAM_CLIENT_LIMIT,
   CAREGIVER_MESSAGE_STREAM_CLIENT_LIMIT,
   broadcastCaregiverAlert,
   broadcastCaregiverAlertToMessageClients,
   broadcastCaregiverMessage,
+  broadcastCaregiverMessageReceipt,
   broadcastCaregiverPresence,
   closeSseClient,
   countCaregiverMessageClients,

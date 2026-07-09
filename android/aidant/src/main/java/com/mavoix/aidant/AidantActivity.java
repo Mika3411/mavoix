@@ -14,6 +14,7 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
+import android.graphics.Rect;
 import android.graphics.drawable.GradientDrawable;
 import android.media.AudioAttributes;
 import android.media.MediaPlayer;
@@ -27,8 +28,10 @@ import android.os.Vibrator;
 import android.provider.Settings;
 import android.text.InputType;
 import android.view.Gravity;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.inputmethod.InputMethodManager;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
@@ -83,6 +86,9 @@ public class AidantActivity extends Activity {
   private final ArrayList<MessageItem> messages = new ArrayList<>();
   private final Set<String> unreadMessageIds = new HashSet<>();
   private final Set<String> readMessageIds = new HashSet<>();
+  private final Set<String> pendingDeliveryReceiptIds = new HashSet<>();
+  private final Set<String> pendingReadReceiptIds = new HashSet<>();
+  private final Map<String, JSONObject> pendingMessageReceipts = new HashMap<>();
   private final Map<String, HttpURLConnection> messageConnections = new HashMap<>();
   private final Set<String> connectedMessageIds = new HashSet<>();
 
@@ -91,21 +97,44 @@ public class AidantActivity extends Activity {
   private LinearLayout configTab;
   private LinearLayout messagesTab;
   private LinearLayout helpTab;
+  private LinearLayout roleChoicePanel;
+  private LinearLayout patientRoleCard;
+  private LinearLayout aidantRoleCard;
+  private LinearLayout bottomNavigation;
+  private Button roleChoiceBackButton;
   private LinearLayout connectionPanel;
   private LinearLayout configPanel;
   private LinearLayout messagesPanel;
   private LinearLayout helpPanel;
+  private LinearLayout patientCallPanel;
+  private LinearLayout patientConfigPanel;
+  private LinearLayout patientMessagesPanel;
+  private LinearLayout patientHelpPanel;
   private ScrollView contentScrollView;
   private Button connectionButton;
+  private Button patientCallButton;
   private EditText linkInput;
   private EditText messageInput;
+  private EditText patientMessageInput;
   private LinearLayout connectionsListContainer;
+  private LinearLayout patientMessageListContainer;
   private TextView selectedPatientText;
   private TextView statusText;
+  private TextView patientStatusText;
+  private TextView patientLinkText;
+  private TextView patientMessageStatusText;
+  private TextView patientConnectionStatusText;
+  private View centerMessageView;
   private TextView soundText;
   private Spinner soundSpinner;
+  private Spinner patientAidantSpinner;
+  private Spinner patientMessageAidantSpinner;
+  private Button renamePatientAidantButton;
+  private Button deletePatientAidantButton;
+  private TextView patientAidantStatusText;
   private Button testSoundButton;
   private TextView unreadText;
+  private TextView patientUnreadText;
   private LinearLayout messageListContainer;
   private Spinner messagePatientSpinner;
   private TextToSpeech textToSpeech;
@@ -113,18 +142,27 @@ public class AidantActivity extends Activity {
   private boolean textToSpeechReady;
   private boolean isRefreshingPatientUi;
   private boolean isRefreshingSoundUi;
+  private boolean isRefreshingPatientAidantUi;
   private boolean isTestingAlarmSound;
+  private boolean patientAlertSending;
+  private boolean roleChoiceVisible;
 
   private volatile boolean shouldListenMessages;
   private volatile boolean messagesConnected;
   private volatile int messageListenVersion;
+  private int patientConnectedCaregivers;
+  private final Map<String, Integer> patientAidantPresence = new HashMap<>();
+  private String currentRole = AlertContract.ROLE_AIDANT;
   private String selectedConnectionId = "";
   private String currentSection = "connexion";
+  private PatientProfileStore.Profile patientProfile;
 
   @Override
   protected void onCreate(Bundle savedInstanceState) {
     super.onCreate(savedInstanceState);
     prefs = getSharedPreferences(AlertContract.PREFS, MODE_PRIVATE);
+    currentRole = readSavedRole();
+    patientProfile = PatientProfileStore.readOrCreate(prefs);
     createMessageNotificationChannel();
     textToSpeech = new TextToSpeech(this, status -> {
       textToSpeechReady = status == TextToSpeech.SUCCESS;
@@ -134,18 +172,91 @@ public class AidantActivity extends Activity {
     });
     buildLayout();
     requestNotificationsIfNeeded();
-    handleIntent(getIntent(), true);
-    refreshUi();
-    connectMessagesFromPrefs();
+    boolean openedLink = handleIntent(getIntent(), true);
+    if (shouldShowRoleChoiceOnStartup(openedLink)) {
+      showRoleChoice();
+    } else {
+      showMainApp();
+      refreshUi();
+      connectMessagesFromPrefs();
+    }
   }
 
   @Override
   protected void onNewIntent(Intent intent) {
     super.onNewIntent(intent);
     setIntent(intent);
-    handleIntent(intent, true);
-    refreshUi();
-    connectMessagesFromPrefs();
+    boolean openedLink = handleIntent(intent, true);
+    if (openedLink) {
+      showMainApp();
+    }
+    if (!roleChoiceVisible || openedLink) {
+      refreshUi();
+      connectMessagesFromPrefs();
+    }
+  }
+
+  @Override
+  public boolean dispatchTouchEvent(MotionEvent event) {
+    if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
+      hideKeyboardWhenTouchingOutsideInput(event);
+    }
+    return super.dispatchTouchEvent(event);
+  }
+
+  private void hideKeyboardWhenTouchingOutsideInput(MotionEvent event) {
+    View focusedView = getCurrentFocus();
+    if (!(focusedView instanceof EditText)) {
+      return;
+    }
+
+    View touchedView = findTouchedView(getWindow().getDecorView(), event.getRawX(), event.getRawY());
+    if (isSameOrChildOf(touchedView, focusedView)) {
+      return;
+    }
+
+    focusedView.clearFocus();
+    InputMethodManager manager = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+    if (manager != null) {
+      manager.hideSoftInputFromWindow(focusedView.getWindowToken(), 0);
+    }
+  }
+
+  private View findTouchedView(View view, float rawX, float rawY) {
+    if (view == null || view.getVisibility() != View.VISIBLE) {
+      return null;
+    }
+
+    Rect bounds = new Rect();
+    if (!view.getGlobalVisibleRect(bounds)
+        || !bounds.contains((int) rawX, (int) rawY)) {
+      return null;
+    }
+
+    if (view instanceof ViewGroup) {
+      ViewGroup group = (ViewGroup) view;
+      for (int index = group.getChildCount() - 1; index >= 0; index--) {
+        View child = findTouchedView(group.getChildAt(index), rawX, rawY);
+        if (child != null) {
+          return child;
+        }
+      }
+    }
+    return view;
+  }
+
+  private boolean isSameOrChildOf(View view, View possibleParent) {
+    View current = view;
+    while (current != null) {
+      if (current == possibleParent) {
+        return true;
+      }
+      if (!(current.getParent() instanceof View)) {
+        return false;
+      }
+      current = (View) current.getParent();
+    }
+    return false;
   }
 
   private void buildLayout() {
@@ -176,23 +287,44 @@ public class AidantActivity extends Activity {
     LinearLayout.LayoutParams logoParams = new LinearLayout.LayoutParams(0, dp(72), 1);
     header.addView(logo, logoParams);
 
+    roleChoiceBackButton = headerModeButton();
+    header.addView(roleChoiceBackButton);
+
     root.addView(header, spacedParams(0, 0, 0, dp(18)));
+
+    buildRoleChoicePanel(root);
 
     connectionPanel = panel();
     buildConnectionPanel(connectionPanel);
     root.addView(connectionPanel, matchWrap());
 
+    patientCallPanel = panel();
+    buildPatientCallPanel(patientCallPanel);
+    root.addView(patientCallPanel, matchWrap());
+
     configPanel = panel();
     buildConfigPanel(configPanel);
     root.addView(configPanel, matchWrap());
+
+    patientConfigPanel = panel();
+    buildPatientConfigPanel(patientConfigPanel);
+    root.addView(patientConfigPanel, matchWrap());
 
     messagesPanel = panel();
     buildMessagesPanel(messagesPanel);
     root.addView(messagesPanel, matchWrap());
 
+    patientMessagesPanel = panel();
+    buildPatientMessagesPanel(patientMessagesPanel);
+    root.addView(patientMessagesPanel, matchWrap());
+
     helpPanel = panel();
     buildHelpPanel(helpPanel);
     root.addView(helpPanel, matchWrap());
+
+    patientHelpPanel = panel();
+    buildPatientHelpPanel(patientHelpPanel);
+    root.addView(patientHelpPanel, matchWrap());
 
     screen.addView(
             contentScrollView,
@@ -202,10 +334,93 @@ public class AidantActivity extends Activity {
             1f
         )
     );
-    screen.addView(buildBottomNavigation(), matchWrap());
+    bottomNavigation = buildBottomNavigation();
+    screen.addView(bottomNavigation, matchWrap());
     showSection("connexion");
 
     setContentView(screen);
+  }
+
+  private void buildRoleChoicePanel(LinearLayout root) {
+    roleChoicePanel = new LinearLayout(this);
+    roleChoicePanel.setOrientation(LinearLayout.VERTICAL);
+    roleChoicePanel.setPadding(0, dp(6), 0, 0);
+
+    TextView title = sectionTitle("Choisir le mode");
+    title.setTextSize(26);
+    roleChoicePanel.addView(title, matchWrap());
+
+    TextView intro = messageTextView(
+        "Selectionne le role de ce telephone.",
+        COLOR_MUTED,
+        16,
+        false
+    );
+    roleChoicePanel.addView(intro, spacedParams(0, dp(8), 0, dp(16)));
+
+    patientRoleCard = roleChoiceCard(
+        "Patient",
+        "Appeler l'aidant",
+        "Envoyer un appel et des messages depuis ce telephone.",
+        AlertContract.ROLE_PATIENT
+    );
+    roleChoicePanel.addView(patientRoleCard, spacedParams(0, 0, 0, dp(12)));
+
+    aidantRoleCard = roleChoiceCard(
+        "Aidant",
+        "Recevoir les alertes",
+        "Rester connecte aux appels et repondre aux messages.",
+        AlertContract.ROLE_AIDANT
+    );
+    roleChoicePanel.addView(aidantRoleCard, matchWrap());
+
+    root.addView(roleChoicePanel, matchWrap());
+  }
+
+  private LinearLayout roleChoiceCard(
+      String title,
+      String subtitle,
+      String detail,
+      String role
+  ) {
+    LinearLayout card = new LinearLayout(this);
+    card.setOrientation(LinearLayout.VERTICAL);
+    card.setPadding(dp(18), dp(18), dp(18), dp(18));
+    card.setMinimumHeight(dp(136));
+    card.setClickable(true);
+    card.setFocusable(true);
+    card.setOnClickListener(v -> selectRole(role));
+
+    TextView titleView = messageTextView(title, COLOR_TEXT, 24, true);
+    card.addView(titleView, matchWrap());
+
+    TextView subtitleView = messageTextView(subtitle, Color.rgb(191, 219, 254), 16, true);
+    card.addView(subtitleView, spacedParams(0, dp(6), 0, 0));
+
+    TextView detailView = messageTextView(detail, COLOR_MUTED, 15, false);
+    card.addView(detailView, spacedParams(0, dp(6), 0, 0));
+
+    return card;
+  }
+
+  private Button headerModeButton() {
+    Button button = new Button(this);
+    button.setAllCaps(false);
+    button.setText("Mode");
+    button.setTextColor(COLOR_TEXT);
+    button.setTextSize(14);
+    button.setMinHeight(dp(42));
+    button.setPadding(dp(12), 0, dp(12), 0);
+    button.setBackground(roundedStroke(COLOR_SECONDARY, COLOR_BORDER, 16, 1));
+    button.setContentDescription("Choisir Patient ou Aidant");
+    button.setOnClickListener(v -> showRoleChoiceFromModeButton());
+    LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+        LinearLayout.LayoutParams.WRAP_CONTENT,
+        dp(44)
+    );
+    params.setMargins(dp(10), 0, 0, 0);
+    button.setLayoutParams(params);
+    return button;
   }
 
   private void buildConnectionPanel(LinearLayout panel) {
@@ -231,6 +446,44 @@ public class AidantActivity extends Activity {
 
     unreadText = infoText();
     panel.addView(unreadText, matchWrap());
+  }
+
+  private void buildPatientCallPanel(LinearLayout panel) {
+    TextView title = sectionTitle("Mode patient");
+    panel.addView(title, spacedParams(0, 0, 0, dp(8)));
+
+    patientCallButton = button("Appeler l'aidant", v -> sendPatientAlert());
+    patientCallButton.setTextSize(28);
+    patientCallButton.setGravity(Gravity.CENTER);
+    patientCallButton.setMinHeight(dp(156));
+    patientCallButton.setPadding(dp(18), dp(18), dp(18), dp(18));
+    patientCallButton.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+      patientCallButton.setElevation(dp(8));
+    }
+    applyPatientAlarmButtonStyle(false);
+    panel.addView(patientCallButton, matchWrap());
+
+    patientStatusText = new TextView(this);
+    patientStatusText.setTextSize(17);
+    patientStatusText.setTextColor(COLOR_TEXT);
+    patientStatusText.setPadding(dp(14), dp(12), dp(14), dp(12));
+    patientStatusText.setBackground(roundedStroke(COLOR_INFO_BG, Color.rgb(96, 165, 250), 16, 1));
+    panel.addView(patientStatusText, spacedParams(0, dp(12), 0, 0));
+
+    patientConnectionStatusText = infoText();
+    panel.addView(patientConnectionStatusText, spacedParams(0, dp(12), 0, 0));
+
+    LinearLayout actions = buttonRow();
+    actions.addView(rowButton("Partager le lien", v -> sharePatientLink()), rowButtonParams(false));
+    actions.addView(rowButton("Configurer", v -> showSection("configurer")), rowButtonParams(true));
+    panel.addView(actions, spacedParams(0, dp(8), 0, 0));
+
+    TextView unreadTitle = sectionTitle("Messages non lus");
+    panel.addView(unreadTitle, spacedParams(0, dp(22), 0, dp(8)));
+
+    patientUnreadText = infoText();
+    panel.addView(patientUnreadText, matchWrap());
   }
 
   private void buildConfigPanel(LinearLayout panel) {
@@ -304,6 +557,65 @@ public class AidantActivity extends Activity {
     panel.addView(testSoundButton, matchWrap());
   }
 
+  private void buildPatientConfigPanel(LinearLayout panel) {
+    TextView title = sectionTitle("Configurer le patient");
+    panel.addView(title, spacedParams(0, 0, 0, dp(8)));
+
+    TextView intro = infoText();
+    intro.setText("Ce telephone cree son propre lien patient. L'aidant installe cette meme application, choisit Aidant, puis ouvre ou colle le lien.");
+    panel.addView(intro, matchWrap());
+
+    TextView aidantsTitle = sectionTitle("Aidants");
+    panel.addView(aidantsTitle, spacedParams(0, dp(18), 0, dp(8)));
+
+    patientAidantSpinner = new Spinner(this);
+    patientAidantSpinner.setAdapter(darkSpinnerAdapter(new String[] { "Aidant principal" }));
+    patientAidantSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+      @Override
+      public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+        if (isRefreshingPatientAidantUi) {
+          return;
+        }
+        selectPatientAidantAt(position);
+      }
+
+      @Override
+      public void onNothingSelected(AdapterView<?> parent) {
+        // Keep the current aidant selection.
+      }
+    });
+    panel.addView(spinnerBox(patientAidantSpinner), matchWrap());
+
+    LinearLayout selectedAidantActions = buttonRow();
+    renamePatientAidantButton = compactRowButton("Renommer", v -> renameSelectedPatientAidant(), false);
+    selectedAidantActions.addView(renamePatientAidantButton, rowButtonParams(false));
+    deletePatientAidantButton = compactRowButton("Supprimer", v -> deleteSelectedPatientAidant(), true);
+    selectedAidantActions.addView(deletePatientAidantButton, rowButtonParams(true));
+    panel.addView(selectedAidantActions, spacedParams(0, dp(6), 0, 0));
+
+    Button addAidantButton = compactFullButton("+ Ajouter un aidant", v -> addPatientAidant());
+    panel.addView(addAidantButton, spacedParams(0, dp(8), 0, 0));
+
+    patientAidantStatusText = messageTextView("", COLOR_MUTED, 14, false);
+    patientAidantStatusText.setPadding(dp(4), dp(10), dp(4), 0);
+    panel.addView(patientAidantStatusText, matchWrap());
+
+    TextView linkTitle = sectionTitle("Lien de l'aidant selectionne");
+    panel.addView(linkTitle, spacedParams(0, dp(24), 0, dp(8)));
+
+    patientLinkText = infoText();
+    panel.addView(patientLinkText, matchWrap());
+
+    LinearLayout actions = buttonRow();
+    actions.addView(rowButton("Copier", v -> copyPatientLink()), rowButtonParams(false));
+    actions.addView(rowButton("Partager", v -> sharePatientLink()), rowButtonParams(true));
+    panel.addView(actions, spacedParams(0, dp(8), 0, 0));
+
+    Button regenerateButton = rowButton("Regenerer le lien patient", v -> confirmRegeneratePatientLink());
+    regenerateButton.setBackground(roundedStroke(COLOR_WARNING_BG, Color.rgb(245, 158, 11), 18, 1));
+    panel.addView(regenerateButton, matchWrap());
+  }
+
   private void buildMessagesPanel(LinearLayout panel) {
     TextView messageTitle = sectionTitle("Messages");
     panel.addView(messageTitle, spacedParams(0, 0, 0, dp(8)));
@@ -318,6 +630,7 @@ public class AidantActivity extends Activity {
         }
         selectedConnectionId = patientLinks.get(position).id;
         PatientLinkStore.select(prefs, selectedConnectionId);
+        markMessagesRead();
         renderMessages();
       }
 
@@ -348,6 +661,54 @@ public class AidantActivity extends Activity {
     panel.addView(primaryButton("Envoyer le message", v -> sendMessage()), matchWrap());
   }
 
+  private void buildPatientMessagesPanel(LinearLayout panel) {
+    TextView messageTitle = sectionTitle("Messages");
+    panel.addView(messageTitle, spacedParams(0, 0, 0, dp(8)));
+
+    TextView aidantTitle = sectionTitle("Aidant");
+    panel.addView(aidantTitle, spacedParams(0, dp(8), 0, dp(8)));
+
+    patientMessageAidantSpinner = new Spinner(this);
+    patientMessageAidantSpinner.setAdapter(darkSpinnerAdapter(new String[] { "Aidant principal" }));
+    patientMessageAidantSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+      @Override
+      public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+        if (isRefreshingPatientAidantUi) {
+          return;
+        }
+        selectPatientAidantAt(position);
+      }
+
+      @Override
+      public void onNothingSelected(AdapterView<?> parent) {
+        // Keep the current aidant selection.
+      }
+    });
+    panel.addView(spinnerBox(patientMessageAidantSpinner), matchWrap());
+
+    patientMessageStatusText = infoText();
+    panel.addView(patientMessageStatusText, spacedParams(0, dp(8), 0, dp(12)));
+
+    patientMessageListContainer = new LinearLayout(this);
+    patientMessageListContainer.setOrientation(LinearLayout.VERTICAL);
+    patientMessageListContainer.setPadding(dp(12), dp(12), dp(12), dp(12));
+    patientMessageListContainer.setBackground(roundedStroke(COLOR_FIELD, COLOR_BORDER, 18, 1));
+    patientMessageListContainer.setMinimumHeight(dp(220));
+    panel.addView(patientMessageListContainer, matchWrap());
+
+    patientMessageInput = new EditText(this);
+    patientMessageInput.setSingleLine(false);
+    patientMessageInput.setMinLines(3);
+    patientMessageInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
+    patientMessageInput.setHint("Ecrire a l'aidant...");
+    patientMessageInput.setTextSize(16);
+    patientMessageInput.setPadding(dp(12), dp(12), dp(12), dp(12));
+    styleInput(patientMessageInput);
+    panel.addView(patientMessageInput, spacedParams(0, dp(14), 0, 0));
+
+    panel.addView(primaryButton("Envoyer a l'aidant", v -> sendPatientMessage()), matchWrap());
+  }
+
   private void buildHelpPanel(LinearLayout panel) {
     TextView title = sectionTitle("Mode d'emploi");
     panel.addView(title, spacedParams(0, 0, 0, dp(8)));
@@ -360,8 +721,8 @@ public class AidantActivity extends Activity {
     addHelpBlock(
         panel,
         "1. Ajouter un patient",
-        "Dans Ma Voix, ouvre Profil > Aidants et copie le lien du patient. "
-            + "Dans Configurer, colle ce lien puis appuie sur Ajouter ce lien patient."
+        "Sur le telephone patient, choisis Patient puis partage le lien. "
+            + "Sur ce telephone aidant, ouvre le lien ou colle-le dans Configurer."
     );
     addHelpBlock(
         panel,
@@ -373,7 +734,7 @@ public class AidantActivity extends Activity {
         panel,
         "3. Rester connecte aux alertes",
         "Dans Connexion, appuie sur le grand bouton Connecte. "
-            + "Quand un patient appuie sur Appel aidant dans Ma Voix, ce telephone sonne."
+            + "Quand un patient appuie sur Appeler l'aidant, ce telephone sonne."
     );
     addHelpBlock(
         panel,
@@ -394,6 +755,41 @@ public class AidantActivity extends Activity {
         panel,
         "7. Sonnerie et notifications",
         "Dans Configurer, choisis ou teste le son de l'aidant. Autorise aussi les alertes en veille, la notification plein ecran et les notifications Android."
+    );
+  }
+
+  private void buildPatientHelpPanel(LinearLayout panel) {
+    TextView title = sectionTitle("Mode d'emploi patient");
+    panel.addView(title, spacedParams(0, 0, 0, dp(8)));
+
+    TextView intro = infoText();
+    intro.setText("Le mode Patient rend Ma Voix Aidant autonome : il cree le lien, appelle l'aidant et permet d'envoyer des messages sans l'app principale.");
+    panel.addView(intro, matchWrap());
+
+    addHelpBlock(
+        panel,
+        "1. Choisir Patient",
+        "Le bouton Patient en haut de l'ecran active les fonctions du telephone qui demande de l'aide."
+    );
+    addHelpBlock(
+        panel,
+        "2. Donner le lien a l'aidant",
+        "Dans Configurer, copie ou partage le lien. L'aidant installe la meme application, choisit Aidant, puis ouvre ou colle ce lien."
+    );
+    addHelpBlock(
+        panel,
+        "3. Appeler l'aidant",
+        "Dans Appel, appuie sur Appeler l'aidant. Le serveur envoie l'alerte au telephone aidant connecte."
+    );
+    addHelpBlock(
+        panel,
+        "4. Echanger des messages",
+        "Dans Messages, ecris a l'aidant. Les reponses arrivent dans cette meme conversation."
+    );
+    addHelpBlock(
+        panel,
+        "5. Changer le lien",
+        "Regenerer le lien coupe l'ancien acces. Fais-le seulement si le lien a ete partage au mauvais endroit."
     );
   }
 
@@ -448,22 +844,107 @@ public class AidantActivity extends Activity {
 
   private void showSection(String section) {
     currentSection = section;
-    if (connectionPanel == null || configPanel == null || messagesPanel == null || helpPanel == null) {
+    if (connectionPanel == null || configPanel == null || messagesPanel == null || helpPanel == null
+        || patientCallPanel == null || patientConfigPanel == null || patientMessagesPanel == null || patientHelpPanel == null) {
       return;
     }
 
-    connectionPanel.setVisibility("connexion".equals(section) ? View.VISIBLE : View.GONE);
-    configPanel.setVisibility("configurer".equals(section) ? View.VISIBLE : View.GONE);
-    messagesPanel.setVisibility("messages".equals(section) ? View.VISIBLE : View.GONE);
-    helpPanel.setVisibility("aide".equals(section) ? View.VISIBLE : View.GONE);
+    if (roleChoiceVisible) {
+      showOnlyRoleChoice();
+      return;
+    }
+
+    if (roleChoicePanel != null) {
+      roleChoicePanel.setVisibility(View.GONE);
+    }
+    if (roleChoiceBackButton != null) {
+      roleChoiceBackButton.setVisibility(View.VISIBLE);
+    }
+    if (bottomNavigation != null) {
+      bottomNavigation.setVisibility(View.VISIBLE);
+    }
+
+    boolean patientRole = isPatientRole();
+    connectionPanel.setVisibility(!patientRole && "connexion".equals(section) ? View.VISIBLE : View.GONE);
+    configPanel.setVisibility(!patientRole && "configurer".equals(section) ? View.VISIBLE : View.GONE);
+    messagesPanel.setVisibility(!patientRole && "messages".equals(section) ? View.VISIBLE : View.GONE);
+    helpPanel.setVisibility(!patientRole && "aide".equals(section) ? View.VISIBLE : View.GONE);
+
+    patientCallPanel.setVisibility(patientRole && "connexion".equals(section) ? View.VISIBLE : View.GONE);
+    patientConfigPanel.setVisibility(patientRole && "configurer".equals(section) ? View.VISIBLE : View.GONE);
+    patientMessagesPanel.setVisibility(patientRole && "messages".equals(section) ? View.VISIBLE : View.GONE);
+    patientHelpPanel.setVisibility(patientRole && "aide".equals(section) ? View.VISIBLE : View.GONE);
 
     if ("messages".equals(section)) {
       markMessagesRead();
     }
     renderMessages();
+    renderPatientMessages();
     renderUnreadMessages();
+    updateRoleChoiceCards();
     updateBottomNavigation();
     resetContentScroll();
+  }
+
+  private void showRoleChoice() {
+    roleChoiceVisible = true;
+    shouldListenMessages = false;
+    disconnectMessages();
+    showOnlyRoleChoice();
+  }
+
+  private void showRoleChoiceFromModeButton() {
+    showRoleChoice();
+  }
+
+  private boolean shouldShowRoleChoiceOnStartup(boolean openedLink) {
+    return !openedLink && !hasSavedRole();
+  }
+
+  private void showOnlyRoleChoice() {
+    if (roleChoicePanel != null) {
+      roleChoicePanel.setVisibility(View.VISIBLE);
+    }
+    if (roleChoiceBackButton != null) {
+      roleChoiceBackButton.setVisibility(View.GONE);
+    }
+    if (bottomNavigation != null) {
+      bottomNavigation.setVisibility(View.GONE);
+    }
+
+    setPanelVisible(connectionPanel, false);
+    setPanelVisible(configPanel, false);
+    setPanelVisible(messagesPanel, false);
+    setPanelVisible(helpPanel, false);
+    setPanelVisible(patientCallPanel, false);
+    setPanelVisible(patientConfigPanel, false);
+    setPanelVisible(patientMessagesPanel, false);
+    setPanelVisible(patientHelpPanel, false);
+    updateRoleChoiceCards();
+    resetContentScroll();
+  }
+
+  private void showMainApp() {
+    roleChoiceVisible = false;
+    if (roleChoicePanel != null) {
+      roleChoicePanel.setVisibility(View.GONE);
+    }
+    if (roleChoiceBackButton != null) {
+      roleChoiceBackButton.setVisibility(View.VISIBLE);
+    }
+    if (bottomNavigation != null) {
+      bottomNavigation.setVisibility(View.VISIBLE);
+    }
+    showSection("connexion".equals(currentSection) || "configurer".equals(currentSection)
+        || "messages".equals(currentSection) || "aide".equals(currentSection)
+        ? currentSection
+        : "connexion");
+  }
+
+  private void setPanelVisible(View panel, boolean visible) {
+    if (panel != null) {
+      panel.setVisibility(visible ? View.VISIBLE : View.GONE);
+    }
   }
 
   private void resetContentScroll() {
@@ -527,10 +1008,36 @@ public class AidantActivity extends Activity {
   }
 
   private void updateBottomNavigation() {
+    if (isPatientRole()) {
+      setBottomNavItem(connectionTab, "!", "Appel");
+      setBottomNavItem(configTab, "+", "Partager");
+      setBottomNavItem(messagesTab, "●", "Messages");
+      setBottomNavItem(helpTab, "?", "Aide");
+    } else {
+      setBottomNavItem(connectionTab, "⌁", "Connexion");
+      setBottomNavItem(configTab, "☷", "Configurer");
+      setBottomNavItem(messagesTab, "●", "Messages");
+      setBottomNavItem(helpTab, "?", "Aide");
+    }
+
     styleBottomNavItem(connectionTab, "connexion".equals(currentSection));
     styleBottomNavItem(configTab, "configurer".equals(currentSection));
     styleBottomNavItem(messagesTab, "messages".equals(currentSection));
     styleBottomNavItem(helpTab, "aide".equals(currentSection));
+  }
+
+  private void setBottomNavItem(LinearLayout item, String icon, String label) {
+    if (item == null || item.getChildCount() < 2) return;
+
+    View iconView = item.getChildAt(0);
+    View labelView = item.getChildAt(1);
+    if (iconView instanceof TextView) {
+      ((TextView) iconView).setText(icon);
+    }
+    if (labelView instanceof TextView) {
+      ((TextView) labelView).setText(label);
+    }
+    item.setContentDescription(label);
   }
 
   private void styleBottomNavItem(LinearLayout item, boolean selected) {
@@ -607,6 +1114,28 @@ public class AidantActivity extends Activity {
     Button button = button(label, listener);
     button.setMinHeight(dp(48));
     button.setTextSize(16);
+    return button;
+  }
+
+  private Button compactRowButton(String label, View.OnClickListener listener, boolean warning) {
+    Button button = rowButton(label, listener);
+    button.setMinHeight(dp(44));
+    button.setTextSize(15);
+    button.setTextColor(warning ? Color.rgb(251, 191, 36) : COLOR_TEXT);
+    button.setBackground(roundedStroke(
+        COLOR_SECONDARY,
+        warning ? Color.rgb(245, 158, 11) : COLOR_BORDER,
+        14,
+        1
+    ));
+    return button;
+  }
+
+  private Button compactFullButton(String label, View.OnClickListener listener) {
+    Button button = button(label, listener);
+    button.setMinHeight(dp(48));
+    button.setTextSize(16);
+    button.setBackground(roundedStroke(COLOR_CARD, COLOR_BORDER, 14, 1));
     return button;
   }
 
@@ -700,6 +1229,62 @@ public class AidantActivity extends Activity {
     return drawable;
   }
 
+  private String readSavedRole() {
+    String savedRole = prefs.getString(AlertContract.KEY_APP_ROLE, AlertContract.ROLE_AIDANT);
+    if (AlertContract.ROLE_PATIENT.equals(savedRole)) {
+      return AlertContract.ROLE_PATIENT;
+    }
+    return AlertContract.ROLE_AIDANT;
+  }
+
+  private boolean hasSavedRole() {
+    String savedRole = prefs.getString(AlertContract.KEY_APP_ROLE, "");
+    return AlertContract.ROLE_PATIENT.equals(savedRole)
+        || AlertContract.ROLE_AIDANT.equals(savedRole);
+  }
+
+  private boolean isPatientRole() {
+    return AlertContract.ROLE_PATIENT.equals(currentRole);
+  }
+
+  private void selectRole(String role) {
+    String nextRole = AlertContract.ROLE_PATIENT.equals(role)
+        ? AlertContract.ROLE_PATIENT
+        : AlertContract.ROLE_AIDANT;
+
+    currentRole = nextRole;
+    prefs.edit().putString(AlertContract.KEY_APP_ROLE, currentRole).apply();
+    shouldListenMessages = false;
+    disconnectMessages();
+
+    if (isPatientRole()) {
+      stopService(new Intent(this, AlarmListenerService.class));
+      patientProfile = PatientProfileStore.readOrCreate(prefs);
+    } else {
+      reloadPatientLinks();
+      syncAlertServiceWithPatients();
+    }
+
+    showMainApp();
+    refreshUi();
+    connectMessagesFromPrefs();
+  }
+
+  private void updateRoleChoiceCards() {
+    styleRoleChoiceCard(patientRoleCard, isPatientRole());
+    styleRoleChoiceCard(aidantRoleCard, !isPatientRole());
+  }
+
+  private void styleRoleChoiceCard(LinearLayout card, boolean selected) {
+    if (card == null) return;
+
+    card.setBackground(
+        selected
+            ? roundedStroke(Color.rgb(30, 58, 138), Color.rgb(147, 197, 253), 22, 2)
+            : roundedStroke(COLOR_SECONDARY, COLOR_BORDER, 22, 1)
+    );
+  }
+
   private void reloadPatientLinks() {
     patientLinks.clear();
     patientLinks.addAll(PatientLinkStore.read(prefs));
@@ -722,6 +1307,308 @@ public class AidantActivity extends Activity {
   private void renderPatientUi() {
     renderConnectionList();
     renderPatientSpinner();
+  }
+
+  private void refreshPatientUi() {
+    patientProfile = PatientProfileStore.readOrCreate(prefs);
+    if (patientLinkText != null) {
+      patientLinkText.setText(
+          patientProfile.aidantDisplayName()
+              + "\n"
+              + PatientProfileStore.buildAlertLink(patientProfile)
+      );
+    }
+    if (patientMessageStatusText != null && patientMessageStatusText.getText().toString().trim().isEmpty()) {
+      patientMessageStatusText.setText("Conversation patient prete.");
+    }
+    updatePatientCallButton();
+    updatePatientConnectionStatus();
+    renderPatientAidantUi();
+    renderPatientMessages();
+  }
+
+  private void copyPatientLink() {
+    copyPatientLink(PatientProfileStore.selectedAidantLink(prefs));
+  }
+
+  private void sharePatientLink() {
+    sharePatientLink(PatientProfileStore.selectedAidantLink(prefs));
+  }
+
+  private void copyPatientLink(PatientProfileStore.AidantLink link) {
+    PatientProfileStore.Profile profile = PatientProfileStore.profileForAidant(prefs, link);
+    copyText("Lien patient Ma Voix Aidant", PatientProfileStore.buildAlertLink(profile));
+    toast("Lien " + profile.aidantDisplayName() + " copie.");
+  }
+
+  private void sharePatientLink(PatientProfileStore.AidantLink link) {
+    PatientProfileStore.Profile profile = PatientProfileStore.profileForAidant(prefs, link);
+    Intent shareIntent = new Intent(Intent.ACTION_SEND);
+    shareIntent.setType("text/plain");
+    shareIntent.putExtra(Intent.EXTRA_TEXT, PatientProfileStore.buildShareMessage(profile));
+    startActivity(Intent.createChooser(shareIntent, "Envoyer le lien a " + profile.aidantDisplayName()));
+  }
+
+  private void confirmRegeneratePatientLink() {
+    confirmRegeneratePatientLink(PatientProfileStore.selectedAidantLink(prefs));
+  }
+
+  private void confirmRegeneratePatientLink(PatientProfileStore.AidantLink link) {
+    new AlertDialog.Builder(this)
+        .setTitle("Regenerer le lien patient ?")
+        .setMessage("L'ancien lien de " + link.name + " ne recevra plus les nouvelles alertes. Il faudra envoyer le nouveau lien a cet aidant.")
+        .setPositiveButton("Regenerer", (dialog, which) -> {
+          PatientProfileStore.regenerateAidant(prefs, link.id);
+          PatientProfileStore.selectAidant(prefs, link.id);
+          patientProfile = PatientProfileStore.readOrCreate(prefs);
+          shouldListenMessages = false;
+          disconnectMessages();
+          refreshPatientUi();
+          connectMessagesFromPrefs();
+          toast("Nouveau lien patient cree.");
+        })
+        .setNegativeButton("Annuler", null)
+        .show();
+  }
+
+  private void addPatientAidant() {
+    EditText nameInput = new EditText(this);
+    nameInput.setSingleLine(true);
+    nameInput.setHint("Nom de l'aidant");
+    nameInput.setPadding(dp(12), dp(12), dp(12), dp(12));
+    styleInput(nameInput);
+
+    new AlertDialog.Builder(this)
+        .setTitle("Ajouter un aidant")
+        .setView(nameInput)
+        .setPositiveButton("Ajouter", (dialog, which) -> {
+          PatientProfileStore.addAidant(prefs, nameInput.getText().toString());
+          patientProfile = PatientProfileStore.readOrCreate(prefs);
+          refreshPatientUi();
+          connectMessagesFromPrefs();
+          toast("Aidant ajoute.");
+        })
+        .setNegativeButton("Annuler", null)
+        .show();
+  }
+
+  private void renamePatientAidant(PatientProfileStore.AidantLink link) {
+    EditText nameInput = new EditText(this);
+    nameInput.setSingleLine(true);
+    nameInput.setText(link.name);
+    nameInput.setSelectAllOnFocus(true);
+    nameInput.setPadding(dp(12), dp(12), dp(12), dp(12));
+    styleInput(nameInput);
+
+    new AlertDialog.Builder(this)
+        .setTitle("Nom de l'aidant")
+        .setView(nameInput)
+        .setPositiveButton("Enregistrer", (dialog, which) -> {
+          PatientProfileStore.renameAidant(prefs, link.id, nameInput.getText().toString());
+          patientProfile = PatientProfileStore.readOrCreate(prefs);
+          refreshPatientUi();
+          toast("Aidant renomme.");
+        })
+        .setNegativeButton("Annuler", null)
+        .show();
+  }
+
+  private void renameSelectedPatientAidant() {
+    renamePatientAidant(PatientProfileStore.selectedAidantLink(prefs));
+  }
+
+  private void deletePatientAidant(PatientProfileStore.AidantLink link) {
+    new AlertDialog.Builder(this)
+        .setTitle("Supprimer cet aidant ?")
+        .setMessage("Le lien de " + link.name + " sera retire du mode patient.")
+        .setPositiveButton("Supprimer", (dialog, which) -> {
+          PatientProfileStore.deleteAidant(prefs, link.id);
+          for (int index = messages.size() - 1; index >= 0; index--) {
+            if (link.id.equals(messages.get(index).connectionId)) {
+              messages.remove(index);
+            }
+          }
+          patientProfile = PatientProfileStore.readOrCreate(prefs);
+          refreshPatientUi();
+          connectMessagesFromPrefs();
+          toast("Aidant supprime.");
+        })
+        .setNegativeButton("Annuler", null)
+        .show();
+  }
+
+  private void deleteSelectedPatientAidant() {
+    deletePatientAidant(PatientProfileStore.selectedAidantLink(prefs));
+  }
+
+  private void renderPatientAidantUi() {
+    ArrayList<PatientProfileStore.AidantLink> links = PatientProfileStore.readOrCreateAidantLinks(prefs);
+    PatientProfileStore.AidantLink selected = PatientProfileStore.selectedAidantLink(prefs);
+    isRefreshingPatientAidantUi = true;
+    renderPatientAidantSpinner(patientAidantSpinner, links, selected);
+    renderPatientAidantSpinner(patientMessageAidantSpinner, links, selected);
+    isRefreshingPatientAidantUi = false;
+    updatePatientAidantActionButtons(selected);
+    updatePatientAidantStatus(selected);
+  }
+
+  private void updatePatientAidantActionButtons(PatientProfileStore.AidantLink selected) {
+    boolean hasSelectedAidant = selected != null;
+    if (renamePatientAidantButton != null) {
+      renamePatientAidantButton.setEnabled(hasSelectedAidant);
+    }
+    if (deletePatientAidantButton != null) {
+      deletePatientAidantButton.setEnabled(hasSelectedAidant);
+    }
+  }
+
+  private void updatePatientAidantStatus(PatientProfileStore.AidantLink selected) {
+    if (patientAidantStatusText == null) return;
+
+    String name = selected == null ? "Aucun aidant" : selected.name;
+    patientAidantStatusText.setText("Actif pour l'appel et les messages : " + name);
+  }
+
+  private void renderPatientAidantSpinner(
+      Spinner spinner,
+      ArrayList<PatientProfileStore.AidantLink> links,
+      PatientProfileStore.AidantLink selected
+  ) {
+    if (spinner == null || links == null || links.isEmpty()) return;
+
+    String[] labels = new String[links.size()];
+    int selectedIndex = 0;
+    for (int index = 0; index < links.size(); index++) {
+      labels[index] = links.get(index).name;
+      if (selected != null && links.get(index).id.equals(selected.id)) {
+        selectedIndex = index;
+      }
+    }
+    spinner.setAdapter(darkSpinnerAdapter(labels));
+    spinner.setSelection(selectedIndex);
+  }
+
+  private void selectPatientAidantAt(int position) {
+    ArrayList<PatientProfileStore.AidantLink> links = PatientProfileStore.readOrCreateAidantLinks(prefs);
+    if (position < 0 || position >= links.size()) {
+      return;
+    }
+
+    PatientProfileStore.selectAidant(prefs, links.get(position).id);
+    patientProfile = PatientProfileStore.readOrCreate(prefs);
+    refreshPatientUi();
+    if ("messages".equals(currentSection)) {
+      markMessagesRead();
+    }
+  }
+
+  private void copyText(String label, String value) {
+    ClipboardManager clipboard = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+    if (clipboard == null) {
+      return;
+    }
+    clipboard.setPrimaryClip(ClipData.newPlainText(label, value == null ? "" : value));
+  }
+
+  private void updatePatientCallButton() {
+    if (patientCallButton == null) return;
+
+    PatientProfileStore.Profile selectedProfile = patientProfile == null
+        ? PatientProfileStore.readOrCreate(prefs)
+        : patientProfile;
+    patientCallButton.setEnabled(!patientAlertSending);
+    patientCallButton.setText(patientAlertSending
+        ? "ENVOI DE L'ALERTE..."
+        : "ALARME\nAppeler " + selectedProfile.aidantDisplayName());
+    applyPatientAlarmButtonStyle(patientAlertSending);
+  }
+
+  private void applyPatientAlarmButtonStyle(boolean sending) {
+    if (patientCallButton == null) return;
+
+    patientCallButton.setTextColor(COLOR_TEXT);
+    patientCallButton.setBackground(roundedStroke(
+        sending ? COLOR_WARNING_BG : Color.rgb(185, 28, 28),
+        sending ? Color.rgb(245, 158, 11) : Color.rgb(254, 202, 202),
+        30,
+        3
+    ));
+  }
+
+  private void updatePatientConnectionStatus() {
+    PatientProfileStore.Profile selectedProfile = patientProfile == null
+        ? PatientProfileStore.readOrCreate(prefs)
+        : patientProfile;
+    boolean selectedStreamConnected = connectedMessageIds.contains(selectedProfile.aidantId);
+    int connectedCaregivers = patientAidantPresence.containsKey(selectedProfile.aidantId)
+        ? patientAidantPresence.get(selectedProfile.aidantId)
+        : 0;
+    boolean aidantConnected = isAidantConnected(selectedProfile.aidantId);
+
+    updatePatientStatusPill(aidantConnected);
+    updatePatientMessageAidantStatus(selectedProfile, selectedStreamConnected, connectedCaregivers, aidantConnected);
+
+    if (patientConnectionStatusText == null) return;
+
+    if (!selectedStreamConnected) {
+      patientConnectionStatusText.setText("Connexion messages en cours pour " + selectedProfile.aidantDisplayName() + ".");
+      return;
+    }
+
+    if (connectedCaregivers > 0) {
+      patientConnectionStatusText.setText(connectedCaregivers == 1
+          ? selectedProfile.aidantDisplayName() + " est connecte a cette conversation."
+          : connectedCaregivers + " appareils sont connectes pour " + selectedProfile.aidantDisplayName() + ".");
+      return;
+    }
+
+    patientConnectionStatusText.setText("Lien actif pour " + selectedProfile.aidantDisplayName() + ". Aucun appareil aidant n'est connecte pour le moment.");
+  }
+
+  private void updatePatientMessageAidantStatus(
+      PatientProfileStore.Profile selectedProfile,
+      boolean selectedStreamConnected,
+      int connectedCaregivers,
+      boolean aidantConnected
+  ) {
+    if (patientMessageStatusText == null || selectedProfile == null) return;
+
+    if (!selectedStreamConnected) {
+      patientMessageStatusText.setText(selectedProfile.aidantDisplayName() + " : connexion en cours");
+    } else if (connectedCaregivers > 0) {
+      patientMessageStatusText.setText(selectedProfile.aidantDisplayName() + " : Connecté");
+    } else {
+      patientMessageStatusText.setText(selectedProfile.aidantDisplayName() + " : Déconnecté");
+    }
+
+    patientMessageStatusText.setBackground(roundedStroke(
+        aidantConnected ? Color.rgb(20, 83, 45) : COLOR_WARNING_BG,
+        aidantConnected ? Color.rgb(74, 222, 128) : Color.rgb(245, 158, 11),
+        16,
+        1
+    ));
+  }
+
+  private void updatePatientStatusPill(boolean aidantConnected) {
+    if (patientStatusText == null) return;
+
+    patientStatusText.setText(aidantConnected ? "Connecté" : "Déconnecté");
+    patientStatusText.setBackground(roundedStroke(
+        aidantConnected ? Color.rgb(20, 83, 45) : COLOR_WARNING_BG,
+        aidantConnected ? Color.rgb(74, 222, 128) : Color.rgb(245, 158, 11),
+        16,
+        1
+    ));
+  }
+
+  private boolean isAidantConnected(String aidantId) {
+    if (aidantId == null || aidantId.trim().isEmpty()) {
+      return false;
+    }
+    int connectedCaregivers = patientAidantPresence.containsKey(aidantId)
+        ? patientAidantPresence.get(aidantId)
+        : 0;
+    return connectedMessageIds.contains(aidantId) && connectedCaregivers > 0;
   }
 
   private void renderPatientSpinner() {
@@ -866,15 +1753,22 @@ public class AidantActivity extends Activity {
     return params;
   }
 
-  private void handleIntent(Intent intent, boolean autoConnect) {
+  private boolean handleIntent(Intent intent, boolean autoConnect) {
     if (intent == null || intent.getData() == null) {
-      return;
+      return false;
     }
 
     Uri uri = intent.getData();
-    if (saveLink(uri.toString()) && autoConnect) {
+    if (saveLink(uri.toString())) {
+      currentRole = AlertContract.ROLE_AIDANT;
+      prefs.edit().putString(AlertContract.KEY_APP_ROLE, currentRole).apply();
+      if (!autoConnect) {
+        return true;
+      }
       startListening();
+      return true;
     }
+    return false;
   }
 
   private boolean saveLinkFromInput() {
@@ -1210,33 +2104,53 @@ public class AidantActivity extends Activity {
   }
 
   private void connectMessagesFromPrefs() {
+    if (isPatientRole()) {
+      connectPatientMessagesFromPrefs();
+      return;
+    }
+
     reloadPatientLinks();
     if (patientLinks.isEmpty()) {
+      disconnectMessages();
       setMessagesConnected(false);
       return;
     }
-    startMessageListening(new ArrayList<>(patientLinks));
+    startMessageListening(new ArrayList<>(patientLinks), "caregiver");
   }
 
-  private void startMessageListening(ArrayList<PatientLinkStore.Link> links) {
+  private void connectPatientMessagesFromPrefs() {
+    patientProfile = PatientProfileStore.readOrCreate(prefs);
+    ArrayList<PatientLinkStore.Link> links = new ArrayList<>();
+    ArrayList<PatientProfileStore.AidantLink> aidantLinks = PatientProfileStore.readOrCreateAidantLinks(prefs);
+    for (PatientProfileStore.AidantLink aidantLink : aidantLinks) {
+      links.add(PatientProfileStore.profileForAidant(prefs, aidantLink).asLink());
+    }
+    startMessageListening(links, "user");
+  }
+
+  private void startMessageListening(ArrayList<PatientLinkStore.Link> links, String role) {
     shouldListenMessages = false;
     disconnectMessages();
     connectedMessageIds.clear();
+    patientConnectedCaregivers = 0;
+    patientAidantPresence.clear();
     int version = messageListenVersion + 1;
     messageListenVersion = version;
     shouldListenMessages = true;
 
     for (PatientLinkStore.Link link : links) {
-      messageExecutor.execute(() -> messageLoop(link, version));
+      messageExecutor.execute(() -> messageLoop(link, version, role));
     }
   }
 
-  private void messageLoop(PatientLinkStore.Link link, int version) {
+  private void messageLoop(PatientLinkStore.Link link, int version, String role) {
     while (shouldListenMessages && version == messageListenVersion) {
       HttpURLConnection nextConnection = null;
       try {
         String streamUrl = link.apiBase
-            + "/api/caregiver-messages/stream?role=caregiver&channel="
+            + "/api/caregiver-messages/stream?role="
+            + URLEncoder.encode(role, "UTF-8")
+            + "&channel="
             + URLEncoder.encode(link.channel, "UTF-8")
             + AidantMessageUtils.linkAccessKeyQuery(link);
         nextConnection = (HttpURLConnection) new URL(streamUrl).openConnection();
@@ -1286,6 +2200,12 @@ public class AidantActivity extends Activity {
     try {
       if ("connected".equals(eventName)) {
         setMessageConnectionState(link.id, true);
+        updatePatientPresence(data, link);
+        return;
+      }
+
+      if ("caregiver-presence".equals(eventName)) {
+        updatePatientPresence(data, link);
         return;
       }
 
@@ -1301,10 +2221,30 @@ public class AidantActivity extends Activity {
 
       if ("caregiver-message".equals(eventName)) {
         addMessage(MessageItem.fromJson(new JSONObject(data), link), true);
+        return;
+      }
+
+      if ("caregiver-message-receipt".equals(eventName)) {
+        applyMessageReceipt(new JSONObject(data), link);
       }
     } catch (Exception ignored) {
       // Ignore malformed event payloads.
     }
+  }
+
+  private void updatePatientPresence(String data, PatientLinkStore.Link link) {
+    if (!isPatientRole()) return;
+
+    try {
+      JSONObject payload = new JSONObject(data == null || data.isEmpty() ? "{}" : data);
+      patientConnectedCaregivers = payload.optInt("connectedCaregivers", patientConnectedCaregivers);
+      if (link != null) {
+        patientAidantPresence.put(link.id, patientConnectedCaregivers);
+      }
+    } catch (Exception ignored) {
+      // Keep the previous presence count if the server event is malformed.
+    }
+    runOnUiThread(this::updatePatientConnectionStatus);
   }
 
   private void setMessageConnectionState(String connectionId, boolean connected) {
@@ -1316,6 +2256,7 @@ public class AidantActivity extends Activity {
       }
       messagesConnected = !connectedMessageIds.isEmpty();
       updateConnectionStatus();
+      updatePatientConnectionStatus();
     });
   }
 
@@ -1323,27 +2264,248 @@ public class AidantActivity extends Activity {
     if (item == null || item.id.isEmpty()) return;
 
     runOnUiThread(() -> {
-      for (MessageItem existing : messages) {
-        if (existing.id.equals(item.id) && existing.connectionId.equals(item.connectionId)) return;
+      for (int index = 0; index < messages.size(); index++) {
+        MessageItem existing = messages.get(index);
+        if (!existing.id.equals(item.id) || !existing.connectionId.equals(item.connectionId)) continue;
+
+        MessageItem merged = existing.mergeReceipts(item);
+        if (merged != existing) {
+          messages.set(index, merged);
+          renderMessages();
+          renderPatientMessages();
+          renderUnreadMessages();
+        }
+        return;
       }
 
-      messages.add(item);
-      boolean incoming = !"caregiver".equals(item.senderRole);
+      MessageItem nextItem = item;
+      JSONObject pendingReceipt = pendingMessageReceipts.remove(receiptKey(item.connectionId, item.id));
+      if (pendingReceipt != null) {
+        nextItem = applyReceiptToItem(
+            nextItem,
+            pendingReceipt.optString("deliveredAt", ""),
+            pendingReceipt.optString("readAt", ""),
+            pendingReceipt.optString("readerRole", pendingReceipt.optString("recipientRole", ""))
+        );
+      }
+
+      messages.add(nextItem);
+      boolean incoming = isIncomingMessage(nextItem);
+      if (incoming) {
+        sendDeliveryReceipt(nextItem);
+      }
       if (notifyIncoming && incoming) {
         playIncomingMessageSound();
-        showIncomingMessageNotification(item);
+        showIncomingMessageNotification(nextItem);
       }
 
-      if (incoming && !readMessageIds.contains(item.id)) {
-        if ("messages".equals(currentSection)) {
-          readMessageIds.add(item.id);
+      if (incoming && !readMessageIds.contains(nextItem.id)) {
+        if (isVisibleMessage(nextItem)) {
+          readMessageIds.add(nextItem.id);
+          sendReadReceipt(nextItem);
         } else {
-          unreadMessageIds.add(item.id);
+          unreadMessageIds.add(nextItem.id);
         }
       }
       renderMessages();
+      renderPatientMessages();
       renderUnreadMessages();
     });
+  }
+
+  private void applyMessageReceipt(JSONObject payload, PatientLinkStore.Link link) {
+    if (payload == null || link == null) return;
+
+    JSONArray ids = payload.optJSONArray("messageIds");
+    if (ids == null || ids.length() == 0) return;
+
+    HashSet<String> receiptIds = new HashSet<>();
+    for (int index = 0; index < ids.length(); index++) {
+      String id = ids.optString(index, "");
+      if (!id.isEmpty()) {
+        receiptIds.add(id);
+      }
+    }
+    if (receiptIds.isEmpty()) return;
+
+    String recipientRole = payload.optString("recipientRole", payload.optString("readerRole", ""));
+    String readerRole = payload.optString("readerRole", recipientRole);
+    String deliveredAt = payload.optString("deliveredAt", "");
+    String readAt = payload.optString("readAt", "");
+
+    runOnUiThread(() -> {
+      boolean changed = false;
+      HashSet<String> appliedIds = new HashSet<>();
+      for (int index = 0; index < messages.size(); index++) {
+        MessageItem item = messages.get(index);
+        if (!link.id.equals(item.connectionId) || !receiptIds.contains(item.id)) continue;
+
+        appliedIds.add(item.id);
+        MessageItem updated = applyReceiptToItem(item, deliveredAt, readAt, readerRole);
+
+        if (updated != item) {
+          messages.set(index, updated);
+          changed = true;
+        }
+      }
+
+      for (String id : receiptIds) {
+        if (appliedIds.contains(id)) continue;
+        try {
+          JSONObject pendingReceipt = new JSONObject();
+          pendingReceipt.put("deliveredAt", deliveredAt);
+          pendingReceipt.put("readAt", readAt);
+          pendingReceipt.put("readerRole", readerRole);
+          pendingReceipt.put("recipientRole", recipientRole);
+          pendingMessageReceipts.put(receiptKey(link.id, id), pendingReceipt);
+        } catch (Exception ignored) {
+          // Ignore malformed receipt cache entries.
+        }
+      }
+
+      if (changed) {
+        renderMessages();
+        renderPatientMessages();
+        renderUnreadMessages();
+      }
+    });
+  }
+
+  private MessageItem applyReceiptToItem(
+      MessageItem item,
+      String deliveredAt,
+      String readAt,
+      String readerRole
+  ) {
+    MessageItem updated = item;
+    if (!deliveredAt.isEmpty()) {
+      updated = updated.withDeliveredAt(deliveredAt);
+    }
+    if (!readAt.isEmpty()) {
+      updated = updated.withReadAt(readerRole, readAt);
+    }
+    return updated;
+  }
+
+  private String receiptKey(String connectionId, String messageId) {
+    return connectionId + ":" + messageId;
+  }
+
+  private void sendDeliveryReceipt(MessageItem item) {
+    if (item == null || item.isDelivered()) return;
+
+    PatientLinkStore.Link link = linkForMessage(item);
+    if (link == null || !link.id.equals(item.connectionId)) return;
+
+    ArrayList<String> ids = new ArrayList<>();
+    ids.add(item.id);
+    sendMessageReceipt(link, item, ids, "delivered");
+  }
+
+  private void sendReadReceipt(MessageItem item) {
+    if (item == null) return;
+
+    String role = currentReaderRole();
+    if (item.isReadBy(role)) return;
+
+    PatientLinkStore.Link link = currentMessageLink();
+    if (link == null || !link.id.equals(item.connectionId)) return;
+
+    ArrayList<String> ids = new ArrayList<>();
+    ids.add(item.id);
+    sendMessageReceipt(link, item, ids, "read");
+  }
+
+  private void sendMessageReceipt(
+      PatientLinkStore.Link link,
+      MessageItem item,
+      ArrayList<String> ids,
+      String receiptType
+  ) {
+    if (link == null || item == null || ids == null || ids.isEmpty()) return;
+    if (!isIncomingMessage(item)) return;
+
+    Set<String> pendingSet = "read".equals(receiptType)
+        ? pendingReadReceiptIds
+        : pendingDeliveryReceiptIds;
+    ArrayList<String> idsToSend = new ArrayList<>();
+    synchronized (pendingSet) {
+      for (String id : ids) {
+        String key = receiptType + ":" + link.id + ":" + id;
+        if (pendingSet.add(key)) {
+          idsToSend.add(id);
+        }
+      }
+    }
+    if (idsToSend.isEmpty()) return;
+
+    String role = currentReaderRole();
+    messageExecutor.execute(() -> postMessageReceipt(link, role, idsToSend, receiptType));
+  }
+
+  private void postMessageReceipt(
+      PatientLinkStore.Link link,
+      String role,
+      ArrayList<String> ids,
+      String receiptType
+  ) {
+    HttpURLConnection connection = null;
+    try {
+      URL url = new URL(link.apiBase + "/api/caregiver-messages/" + receiptType);
+      connection = (HttpURLConnection) url.openConnection();
+      connection.setRequestMethod("POST");
+      connection.setConnectTimeout(15000);
+      connection.setReadTimeout(15000);
+      connection.setRequestProperty("Content-Type", "application/json; charset=utf-8");
+      connection.setDoOutput(true);
+
+      String roleField = "read".equals(receiptType) ? "readerRole" : "recipientRole";
+      String body = "{"
+          + "\"channel\":\"" + AidantMessageUtils.escapeJson(link.channel) + "\","
+          + "\"accessKey\":\"" + AidantMessageUtils.escapeJson(link.accessKey) + "\","
+          + "\"" + roleField + "\":\"" + AidantMessageUtils.escapeJson(role) + "\","
+          + "\"messageIds\":" + messageIdsJson(ids)
+          + "}";
+      try (OutputStream outputStream = connection.getOutputStream()) {
+        outputStream.write(body.getBytes(StandardCharsets.UTF_8));
+      }
+
+      int statusCode = connection.getResponseCode();
+      InputStream stream = statusCode >= 200 && statusCode < 300
+          ? connection.getInputStream()
+          : connection.getErrorStream();
+      String response = AidantMessageUtils.readStream(stream);
+      if (statusCode >= 200 && statusCode < 300) {
+        applyMessageReceipt(new JSONObject(response), link);
+      }
+    } catch (Exception ignored) {
+      // Receipts are best effort; the next history refresh can still update status.
+    } finally {
+      Set<String> pendingSet = "read".equals(receiptType)
+          ? pendingReadReceiptIds
+          : pendingDeliveryReceiptIds;
+      synchronized (pendingSet) {
+        for (String id : ids) {
+          pendingSet.remove(receiptType + ":" + link.id + ":" + id);
+        }
+      }
+      if (connection != null) {
+        connection.disconnect();
+      }
+    }
+  }
+
+  private String messageIdsJson(ArrayList<String> ids) {
+    StringBuilder builder = new StringBuilder("[");
+    for (int index = 0; index < ids.size(); index++) {
+      if (index > 0) builder.append(",");
+      builder
+          .append("\"")
+          .append(AidantMessageUtils.escapeJson(ids.get(index)))
+          .append("\"");
+    }
+    builder.append("]");
+    return builder.toString();
   }
 
   private void playIncomingMessageSound() {
@@ -1397,14 +2559,19 @@ public class AidantActivity extends Activity {
         pendingIntentFlags()
     );
 
-    String body = AidantMessageUtils.truncateNotificationText(item.patientName + " - " + item.preview());
+    String body = isPatientRole()
+        ? AidantMessageUtils.truncateNotificationText(item.preview())
+        : AidantMessageUtils.truncateNotificationText(item.patientName + " - " + item.preview());
+    String title = isPatientRole()
+        ? "Message de l'aidant"
+        : "Message Ma Voix - " + item.patientName;
     Notification.Builder builder = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
         ? new Notification.Builder(this, MESSAGE_NOTIFICATION_CHANNEL_ID)
         : new Notification.Builder(this);
 
     Notification notification = builder
         .setSmallIcon(android.R.drawable.ic_dialog_email)
-        .setContentTitle("Message Ma Voix - " + item.patientName)
+        .setContentTitle(title)
         .setContentText(body)
         .setStyle(new Notification.BigTextStyle().bigText(body))
         .setContentIntent(openPendingIntent)
@@ -1458,10 +2625,23 @@ public class AidantActivity extends Activity {
     }
 
     messageInput.setText("");
-    messageExecutor.execute(() -> postMessage(link, message));
+    messageExecutor.execute(() -> postMessage(link, message, "caregiver", "Aidant"));
   }
 
-  private void postMessage(PatientLinkStore.Link link, String message) {
+  private void sendPatientMessage() {
+    patientProfile = PatientProfileStore.readOrCreate(prefs);
+    String message = patientMessageInput == null ? "" : patientMessageInput.getText().toString().trim();
+    if (message.isEmpty()) {
+      showCenterMessage("Message vide");
+      return;
+    }
+
+    PatientLinkStore.Link link = patientProfile.asLink();
+    patientMessageInput.setText("");
+    messageExecutor.execute(() -> postMessage(link, message, "user", patientProfile.displayName()));
+  }
+
+  private void postMessage(PatientLinkStore.Link link, String message, String senderRole, String senderName) {
     HttpURLConnection postConnection = null;
     try {
       URL url = new URL(link.apiBase + "/api/caregiver-messages");
@@ -1475,8 +2655,8 @@ public class AidantActivity extends Activity {
       String body = "{"
           + "\"channel\":\"" + AidantMessageUtils.escapeJson(link.channel) + "\","
           + "\"accessKey\":\"" + AidantMessageUtils.escapeJson(link.accessKey) + "\","
-          + "\"senderRole\":\"caregiver\","
-          + "\"senderName\":\"Aidant\","
+          + "\"senderRole\":\"" + AidantMessageUtils.escapeJson(senderRole) + "\","
+          + "\"senderName\":\"" + AidantMessageUtils.escapeJson(senderName) + "\","
           + "\"message\":\"" + AidantMessageUtils.escapeJson(message) + "\""
           + "}";
       try (OutputStream outputStream = postConnection.getOutputStream()) {
@@ -1493,12 +2673,93 @@ public class AidantActivity extends Activity {
         throw new IllegalStateException(response);
       }
 
-      JSONObject payload = new JSONObject(response).optJSONObject("message");
+      JSONObject responseObject = new JSONObject(response);
+      int deliveredTo = responseObject.optInt("deliveredTo", 0);
+      JSONObject payload = responseObject.optJSONObject("message");
+      if (payload != null && !payload.has("deliveredTo")) {
+        payload.put("deliveredTo", deliveredTo);
+      }
       addMessage(MessageItem.fromJson(payload, link), false);
+      if ("user".equals(senderRole)) {
+        runOnUiThread(() -> {
+          updatePatientConnectionStatus();
+          showCenterMessage(deliveredTo > 0 ? "Message envoyé" : "Aidant déconnecté");
+        });
+      }
     } catch (Exception ex) {
       runOnUiThread(() -> {
-        messageInput.setText(message);
-        toast("Impossible d'envoyer le message.");
+        if ("user".equals(senderRole) && patientMessageInput != null) {
+          patientMessageInput.setText(message);
+          updatePatientConnectionStatus();
+          showCenterMessage("Message non envoyé");
+        } else if (messageInput != null) {
+          messageInput.setText(message);
+          toast("Impossible d'envoyer le message.");
+        }
+      });
+    } finally {
+      if (postConnection != null) {
+        postConnection.disconnect();
+      }
+    }
+  }
+
+  private void sendPatientAlert() {
+    if (patientAlertSending) return;
+
+    patientProfile = PatientProfileStore.readOrCreate(prefs);
+    patientAlertSending = true;
+    updatePatientCallButton();
+
+    PatientProfileStore.Profile profile = patientProfile;
+    messageExecutor.execute(() -> postPatientAlert(profile));
+  }
+
+  private void postPatientAlert(PatientProfileStore.Profile profile) {
+    HttpURLConnection postConnection = null;
+    try {
+      URL url = new URL(profile.apiBase + "/api/caregiver-alert");
+      postConnection = (HttpURLConnection) url.openConnection();
+      postConnection.setRequestMethod("POST");
+      postConnection.setConnectTimeout(15000);
+      postConnection.setReadTimeout(15000);
+      postConnection.setRequestProperty("Content-Type", "application/json; charset=utf-8");
+      postConnection.setDoOutput(true);
+
+      String body = "{"
+          + "\"channel\":\"" + AidantMessageUtils.escapeJson(profile.channel) + "\","
+          + "\"accessKey\":\"" + AidantMessageUtils.escapeJson(profile.accessKey) + "\","
+          + "\"profileName\":\"" + AidantMessageUtils.escapeJson(profile.displayName()) + "\","
+          + "\"message\":\"J'ai besoin de mon aidant.\""
+          + "}";
+      try (OutputStream outputStream = postConnection.getOutputStream()) {
+        outputStream.write(body.getBytes(StandardCharsets.UTF_8));
+      }
+
+      int statusCode = postConnection.getResponseCode();
+      InputStream stream = statusCode >= 200 && statusCode < 300
+          ? postConnection.getInputStream()
+          : postConnection.getErrorStream();
+      String response = AidantMessageUtils.readStream(stream);
+
+      if (statusCode < 200 || statusCode >= 300) {
+        throw new IllegalStateException(response);
+      }
+
+      JSONObject payload = new JSONObject(response);
+      int deliveredTo = payload.optInt("deliveredTo", 0);
+      runOnUiThread(() -> {
+        patientAlertSending = false;
+        updatePatientCallButton();
+        updatePatientConnectionStatus();
+        showCenterMessage(deliveredTo > 0 ? "Appel envoyé" : "Aidant déconnecté");
+      });
+    } catch (Exception error) {
+      runOnUiThread(() -> {
+        patientAlertSending = false;
+        updatePatientCallButton();
+        updatePatientConnectionStatus();
+        showCenterMessage("Appel non envoyé");
       });
     } finally {
       if (postConnection != null) {
@@ -1509,29 +2770,44 @@ public class AidantActivity extends Activity {
 
   private void markMessagesRead() {
     for (MessageItem item : messages) {
-      if (!"caregiver".equals(item.senderRole)) {
+      if (isIncomingMessage(item) && isVisibleMessage(item)) {
         readMessageIds.add(item.id);
+        unreadMessageIds.remove(item.id);
+        sendDeliveryReceipt(item);
+        sendReadReceipt(item);
       }
     }
-    unreadMessageIds.clear();
     renderUnreadMessages();
   }
 
   private void renderUnreadMessages() {
-    if (unreadText == null) return;
+    if (unreadText == null && patientUnreadText == null) return;
 
     if (unreadMessageIds.isEmpty()) {
-      unreadText.setText("Aucun message non lu.");
+      if (unreadText != null) {
+        unreadText.setText("Aucun message non lu.");
+      }
+      if (patientUnreadText != null) {
+        patientUnreadText.setText("Aucun message non lu.");
+      }
       return;
     }
 
-    StringBuilder builder = new StringBuilder();
+    StringBuilder aidantBuilder = new StringBuilder();
+    StringBuilder patientBuilder = new StringBuilder();
     int shown = 0;
     for (int index = messages.size() - 1; index >= 0 && shown < 3; index--) {
       MessageItem item = messages.get(index);
       if (!unreadMessageIds.contains(item.id)) continue;
-      if (builder.length() > 0) builder.append("\n\n");
-      builder
+      if (aidantBuilder.length() > 0) aidantBuilder.append("\n\n");
+      aidantBuilder
+          .append(item.patientName)
+          .append(" - ")
+          .append(AidantMessageUtils.formatMessageTime(item.createdAt))
+          .append(" - ")
+          .append(item.preview());
+      if (patientBuilder.length() > 0) patientBuilder.append("\n\n");
+      patientBuilder
           .append(item.patientName)
           .append(" - ")
           .append(AidantMessageUtils.formatMessageTime(item.createdAt))
@@ -1539,7 +2815,12 @@ public class AidantActivity extends Activity {
           .append(item.preview());
       shown += 1;
     }
-    unreadText.setText(builder.toString());
+    if (unreadText != null) {
+      unreadText.setText(aidantBuilder.length() == 0 ? "Aucun message non lu." : aidantBuilder.toString());
+    }
+    if (patientUnreadText != null) {
+      patientUnreadText.setText(patientBuilder.length() == 0 ? "Aucun message non lu." : patientBuilder.toString());
+    }
   }
 
   private void renderMessages() {
@@ -1570,6 +2851,7 @@ public class AidantActivity extends Activity {
       return;
     }
 
+    String lastOutgoingId = lastOutgoingMessageId(selectedMessages, "caregiver");
     for (MessageItem item : selectedMessages) {
       boolean caregiver = "caregiver".equals(item.senderRole);
       LinearLayout bubble = new LinearLayout(this);
@@ -1583,8 +2865,12 @@ public class AidantActivity extends Activity {
       ));
 
       String sender = caregiver ? "Moi" : "Utilisateur";
+      String metaText = sender + " - " + AidantMessageUtils.formatMessageTime(item.createdAt);
+      if (item.id.equals(lastOutgoingId)) {
+        metaText += " - " + outgoingStatusLabel(item);
+      }
       TextView meta = messageTextView(
-          sender + " - " + AidantMessageUtils.formatMessageTime(item.createdAt),
+          metaText,
           COLOR_MUTED,
           13,
           true
@@ -1604,6 +2890,146 @@ public class AidantActivity extends Activity {
 
       messageListContainer.addView(bubble, spacedParams(0, 0, 0, dp(10)));
     }
+  }
+
+  private void renderPatientMessages() {
+    if (patientMessageListContainer == null) return;
+    patientMessageListContainer.removeAllViews();
+
+    PatientProfileStore.Profile profile = patientProfile == null
+        ? PatientProfileStore.readOrCreate(prefs)
+        : patientProfile;
+    PatientLinkStore.Link link = profile.asLink();
+
+    ArrayList<MessageItem> selectedMessages = new ArrayList<>();
+    for (MessageItem item : messages) {
+      if (link.id.equals(item.connectionId)) {
+        selectedMessages.add(item);
+      }
+    }
+
+    if (selectedMessages.isEmpty()) {
+      patientMessageListContainer.addView(
+          messageTextView("Aucun message avec l'aidant.", COLOR_MUTED, 15, false),
+          matchWrap()
+      );
+      return;
+    }
+
+    String lastOutgoingId = lastOutgoingMessageId(selectedMessages, "user");
+    for (MessageItem item : selectedMessages) {
+      boolean caregiver = "caregiver".equals(item.senderRole);
+      LinearLayout bubble = new LinearLayout(this);
+      bubble.setOrientation(LinearLayout.VERTICAL);
+      bubble.setPadding(dp(10), dp(10), dp(10), dp(10));
+      bubble.setBackground(roundedStroke(
+          caregiver ? COLOR_CAREGIVER_BUBBLE : COLOR_USER_BUBBLE,
+          caregiver ? Color.rgb(96, 165, 250) : Color.rgb(74, 222, 128),
+          16,
+          1
+      ));
+
+      String sender = caregiver ? "Aidant" : "Moi";
+      String metaText = sender + " - " + AidantMessageUtils.formatMessageTime(item.createdAt);
+      if (item.id.equals(lastOutgoingId)) {
+        metaText += " - " + outgoingStatusLabel(item);
+      }
+      TextView meta = messageTextView(
+          metaText,
+          COLOR_MUTED,
+          13,
+          true
+      );
+      bubble.addView(meta, matchWrap());
+
+      bubble.addView(
+          messageTextView(item.message, COLOR_TEXT, 16, false),
+          spacedParams(0, dp(5), 0, 0)
+      );
+
+      patientMessageListContainer.addView(bubble, spacedParams(0, 0, 0, dp(10)));
+    }
+  }
+
+  private boolean isIncomingMessage(MessageItem item) {
+    if (item == null) return false;
+    return isPatientRole()
+        ? "caregiver".equals(item.senderRole)
+        : !"caregiver".equals(item.senderRole);
+  }
+
+  private String lastOutgoingMessageId(ArrayList<MessageItem> selectedMessages, String ownRole) {
+    for (int index = selectedMessages.size() - 1; index >= 0; index--) {
+      MessageItem item = selectedMessages.get(index);
+      if (ownRole.equals(item.senderRole)) {
+        return item.id;
+      }
+    }
+    return "";
+  }
+
+  private String outgoingStatusLabel(MessageItem item) {
+    if (item == null) return "";
+
+    String recipientRole = "caregiver".equals(item.senderRole) ? "user" : "caregiver";
+    if (item.isReadBy(recipientRole)) {
+      return "Lu";
+    }
+    if (item.isDelivered()) {
+      return "Reçu";
+    }
+    return "Envoyé";
+  }
+
+  private boolean isVisibleMessage(MessageItem item) {
+    if (item == null || !"messages".equals(currentSection)) return false;
+
+    PatientLinkStore.Link link = currentMessageLink();
+    return link != null && link.id.equals(item.connectionId);
+  }
+
+  private PatientLinkStore.Link currentMessageLink() {
+    if (isPatientRole()) {
+      PatientProfileStore.Profile profile = patientProfile == null
+          ? PatientProfileStore.readOrCreate(prefs)
+          : patientProfile;
+      return profile.asLink();
+    }
+
+    return selectedLink();
+  }
+
+  private PatientLinkStore.Link linkForMessage(MessageItem item) {
+    if (item == null) return null;
+
+    PatientLinkStore.Link currentLink = currentMessageLink();
+    if (currentLink != null && currentLink.id.equals(item.connectionId)) {
+      return currentLink;
+    }
+
+    if (isPatientRole()) {
+      ArrayList<PatientProfileStore.AidantLink> aidantLinks =
+          PatientProfileStore.readOrCreateAidantLinks(prefs);
+      for (PatientProfileStore.AidantLink aidantLink : aidantLinks) {
+        PatientLinkStore.Link link = PatientProfileStore.profileForAidant(prefs, aidantLink).asLink();
+        if (link.id.equals(item.connectionId)) {
+          return link;
+        }
+      }
+      return null;
+    }
+
+    for (PatientLinkStore.Link link : patientLinks) {
+      if (link.id.equals(item.connectionId)) {
+        return link;
+      }
+    }
+
+    return null;
+  }
+
+  private String currentReaderRole() {
+    return isPatientRole() ? "user" : "caregiver";
   }
 
   private void playAudioMessage(MessageItem item) {
@@ -1638,6 +3064,13 @@ public class AidantActivity extends Activity {
   }
 
   private void refreshUi() {
+    if (isPatientRole()) {
+      refreshPatientUi();
+      updateRoleChoiceCards();
+      updateBottomNavigation();
+      return;
+    }
+
     reloadPatientLinks();
     renderPatientUi();
 
@@ -1676,6 +3109,9 @@ public class AidantActivity extends Activity {
     updateConnectionStatus();
     renderUnreadMessages();
     renderMessages();
+    renderPatientMessages();
+    updateRoleChoiceCards();
+    updateBottomNavigation();
   }
 
   private void requestNotificationsIfNeeded() {
@@ -1699,6 +3135,15 @@ public class AidantActivity extends Activity {
     for (HttpURLConnection connection : connectionsToClose) {
       connection.disconnect();
     }
+
+    connectedMessageIds.clear();
+    messagesConnected = false;
+    patientConnectedCaregivers = 0;
+    patientAidantPresence.clear();
+    runOnUiThread(() -> {
+      updateConnectionStatus();
+      updatePatientConnectionStatus();
+    });
   }
 
   private void disconnectMessage(String id, HttpURLConnection expectedConnection) {
@@ -1732,6 +3177,53 @@ public class AidantActivity extends Activity {
 
   private void toast(String message) {
     Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
+  }
+
+  private void showCenterMessage(String message) {
+    if (message == null || message.trim().isEmpty()) {
+      return;
+    }
+
+    if (centerMessageView != null && centerMessageView.getParent() instanceof ViewGroup) {
+      ((ViewGroup) centerMessageView.getParent()).removeView(centerMessageView);
+    }
+
+    TextView view = new TextView(this);
+    view.setText(message);
+    view.setTextColor(COLOR_TEXT);
+    view.setTextSize(22);
+    view.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+    view.setGravity(Gravity.CENTER);
+    view.setPadding(dp(22), dp(16), dp(22), dp(16));
+    view.setBackground(roundedStroke(Color.rgb(15, 23, 42), Color.rgb(96, 165, 250), 18, 1));
+    view.setAlpha(0f);
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+      view.setElevation(dp(10));
+    }
+
+    FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(
+        FrameLayout.LayoutParams.WRAP_CONTENT,
+        FrameLayout.LayoutParams.WRAP_CONTENT,
+        Gravity.CENTER
+    );
+    params.leftMargin = dp(24);
+    params.rightMargin = dp(24);
+    addContentView(view, params);
+    centerMessageView = view;
+
+    view.animate().alpha(1f).setDuration(120).start();
+    view.postDelayed(() -> view.animate()
+        .alpha(0f)
+        .setDuration(220)
+        .withEndAction(() -> {
+          if (view.getParent() instanceof ViewGroup) {
+            ((ViewGroup) view.getParent()).removeView(view);
+          }
+          if (centerMessageView == view) {
+            centerMessageView = null;
+          }
+        })
+        .start(), 1400);
   }
 
   @Override

@@ -7,7 +7,7 @@ import {
   readCaregiverMessages,
   writeCaregiverMessages,
 } from "./caregiverMessages";
-import { formatTextSmart } from "../dictionary/textFormatting";
+import { formatTextSmartWithSelection } from "../dictionary/textFormatting";
 import type {
   CaregiverAlertTarget as ProfileCaregiverAlertTarget,
   Profile,
@@ -63,6 +63,65 @@ function MicrophoneIcon({ size = 24 }: { size?: number }) {
     </svg>
   );
 }
+
+const VIRTUAL_KEYBOARD_ROWS = [
+  ["A", "Z", "E", "R", "T", "Y", "U", "I", "O", "P"],
+  ["Q", "S", "D", "F", "G", "H", "J", "K", "L", "M"],
+  ["Maj", "W", "X", "C", "V", "B", "N", "Retour", "Entree"],
+  ["'", "-", ".", "Emoji", "Espace", ",", "?", "!"],
+];
+const VIRTUAL_KEYBOARD_LONG_PRESS_DELAY_MS = 460;
+const VIRTUAL_KEYBOARD_DELETE_REPEAT_DELAY_MS = 420;
+const VIRTUAL_KEYBOARD_DELETE_REPEAT_INTERVAL_MS = 85;
+const VIRTUAL_KEYBOARD_EMOJI_OPTIONS = [
+  "😀",
+  "😊",
+  "😂",
+  "😍",
+  "🥰",
+  "😢",
+  "😡",
+  "😴",
+  "👍",
+  "👎",
+  "🙏",
+  "👏",
+  "💪",
+  "❤️",
+  "💙",
+  "⭐",
+  "🎉",
+  "🔥",
+  "✅",
+  "❌",
+];
+const VIRTUAL_KEYBOARD_NUMBER_LABELS: Record<string, string> = {
+  A: "1",
+  Z: "2",
+  E: "3",
+  R: "4",
+  T: "5",
+  Y: "6",
+  U: "7",
+  I: "8",
+  O: "9",
+  P: "0",
+};
+const VIRTUAL_KEYBOARD_VARIANTS: Record<string, string[]> = {
+  A: ["1", "à", "â", "ä", "æ", "@"],
+  C: ["ç"],
+  E: ["3", "é", "è", "ê", "ë", "€"],
+  I: ["8", "î", "ï"],
+  N: ["ñ"],
+  O: ["9", "ô", "ö", "œ"],
+  P: ["0"],
+  R: ["4"],
+  S: ["$", "ś", "š", "ş"],
+  T: ["5"],
+  U: ["7", "ù", "û", "ü"],
+  Y: ["6", "ÿ"],
+  Z: ["2"],
+};
 
 type MessageNotificationPermission = NotificationPermission | "unsupported";
 
@@ -171,6 +230,66 @@ function isAudioMessage(message: CaregiverMessage) {
   return message.messageType === "audio";
 }
 
+function VirtualKeyboardIcon({ size = 26 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 32 32"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+      focusable="false"
+      style={{ display: "block", flex: "0 0 auto" }}
+    >
+      <rect
+        x="4.75"
+        y="8.5"
+        width="22.5"
+        height="15"
+        rx="3.4"
+        stroke="currentColor"
+        strokeWidth="2.15"
+      />
+      <path
+        d="M10 26.5h12"
+        stroke="currentColor"
+        strokeWidth="2.15"
+        strokeLinecap="round"
+        opacity="0.6"
+      />
+      {[
+        [8.5, 12],
+        [13, 12],
+        [17.5, 12],
+        [22, 12],
+        [8.5, 16],
+        [13, 16],
+        [17.5, 16],
+        [22, 16],
+      ].map(([x, y]) => (
+        <rect
+          key={`${x}-${y}`}
+          x={x}
+          y={y}
+          width="2.8"
+          height="2.35"
+          rx="0.75"
+          fill="currentColor"
+        />
+      ))}
+      <rect
+        x="10.75"
+        y="20"
+        width="10.5"
+        height="2.35"
+        rx="1"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
+
 type CaregiverMessagesPageProps = {
   styles: StyleMap;
   caregiverAlertLinks?: ProfileCaregiverAlertTarget[];
@@ -201,6 +320,19 @@ export default function CaregiverMessagesPage(props: CaregiverMessagesPageProps)
     onCaregiverMessagesChanged,
     markCaregiverMessagesRead,
   } = props;
+  const viewportWidth = typeof window !== "undefined" ? window.innerWidth : 1024;
+  const isKeyboardCompactLayout = viewportWidth <= 640;
+  const virtualKeyboardActionSize = isKeyboardCompactLayout ? 44 : 48;
+  const virtualKeyboardActionPadding = isKeyboardCompactLayout
+    ? "8px 6px"
+    : "10px 10px";
+  const virtualKeyboardActionIconSize = isKeyboardCompactLayout ? 23 : 27;
+  const virtualKeyboardKeyMinHeight = isKeyboardCompactLayout ? 48 : 52;
+  const virtualKeyboardKeyPadding = isKeyboardCompactLayout
+    ? "8px 4px"
+    : "10px 6px";
+  const virtualKeyboardVariantSize = isKeyboardCompactLayout ? 44 : 48;
+  const virtualKeyboardEmojiSize = isKeyboardCompactLayout ? 40 : 44;
 
   const caregiverTargets = React.useMemo<CaregiverTarget[]>(
     () =>
@@ -244,10 +376,34 @@ export default function CaregiverMessagesPage(props: CaregiverMessagesPageProps)
       getMessageNotificationPermission()
     );
   const messageListRef = React.useRef<HTMLDivElement | null>(null);
+  const messageTextareaRef = React.useRef<HTMLTextAreaElement | null>(null);
+  const currentTextRef = React.useRef(text);
+  const virtualKeyboardLongPressTimerRef = React.useRef<number | null>(null);
+  const virtualKeyboardDeleteRepeatTimerRef = React.useRef<number | null>(null);
+  const virtualKeyboardDeleteRepeatIntervalRef = React.useRef<number | null>(
+    null
+  );
+  const virtualKeyboardDeleteRepeatStartedRef = React.useRef(false);
+  const virtualKeyboardSuppressClickRef = React.useRef("");
+  const virtualKeyboardHoveredVariantRef = React.useRef("");
+  const [isVirtualKeyboardOpen, setIsVirtualKeyboardOpen] =
+    React.useState(false);
+  const [isVirtualKeyboardShiftActive, setIsVirtualKeyboardShiftActive] =
+    React.useState(false);
+  const [virtualKeyboardVariantMenu, setVirtualKeyboardVariantMenu] =
+    React.useState<{ key: string } | null>(null);
+  const [isVirtualKeyboardEmojiMenuOpen, setIsVirtualKeyboardEmojiMenuOpen] =
+    React.useState(false);
+  const [virtualKeyboardHoveredVariant, setVirtualKeyboardHoveredVariant] =
+    React.useState("");
 
   React.useEffect(() => {
     setNotificationPermission(getMessageNotificationPermission());
   }, []);
+
+  React.useEffect(() => {
+    currentTextRef.current = String(text || "");
+  }, [text]);
 
   React.useEffect(() => {
     setMessageStore({
@@ -403,6 +559,380 @@ export default function CaregiverMessagesPage(props: CaregiverMessagesPageProps)
     return () => window.cancelAnimationFrame(frameId);
   }, [lastSelectedMessageId, selectedCaregiver?.channel]);
 
+  function focusMessageTextarea(
+    nextCursorStart: number | null = null,
+    nextCursorEnd: number | null = null
+  ) {
+    window.requestAnimationFrame(() => {
+      const textarea = messageTextareaRef.current;
+      if (!textarea) return;
+
+      textarea.focus();
+
+      const startPos =
+        typeof nextCursorStart === "number"
+          ? nextCursorStart
+          : textarea.value.length;
+      const endPos =
+        typeof nextCursorEnd === "number" ? nextCursorEnd : startPos;
+
+      try {
+        textarea.setSelectionRange(startPos, endPos);
+      } catch (error) {
+        console.error("Impossible de positionner le curseur message :", error);
+      }
+    });
+  }
+
+  function applyMessageTextInput(
+    nextValue: string,
+    nextCursorStart: number | null = null,
+    nextCursorEnd: number | null = null
+  ) {
+    const fallbackCursorStart =
+      typeof nextCursorStart === "number" ? nextCursorStart : nextValue.length;
+    const fallbackCursorEnd =
+      typeof nextCursorEnd === "number" ? nextCursorEnd : fallbackCursorStart;
+    const formattedInput = formatTextSmartWithSelection(
+      nextValue,
+      fallbackCursorStart,
+      fallbackCursorEnd
+    );
+
+    setText(formattedInput.text);
+    currentTextRef.current = formattedInput.text;
+    focusMessageTextarea(
+      formattedInput.selectionStart,
+      formattedInput.selectionEnd
+    );
+  }
+
+  function handleMessageTextAreaChange(
+    event: React.ChangeEvent<HTMLTextAreaElement>
+  ) {
+    const { value, selectionStart, selectionEnd } = event.target;
+    const formattedInput = formatTextSmartWithSelection(
+      value,
+      selectionStart,
+      selectionEnd
+    );
+
+    setText(formattedInput.text);
+    currentTextRef.current = formattedInput.text;
+
+    if (
+      formattedInput.text !== value ||
+      formattedInput.selectionStart !== selectionStart ||
+      formattedInput.selectionEnd !== selectionEnd
+    ) {
+      focusMessageTextarea(
+        formattedInput.selectionStart,
+        formattedInput.selectionEnd
+      );
+    }
+  }
+
+  function insertVirtualKeyboardText(value: string) {
+    const textarea = messageTextareaRef.current;
+    const currentText = currentTextRef.current;
+    const selectionStart = textarea?.selectionStart ?? currentText.length;
+    const selectionEnd = textarea?.selectionEnd ?? selectionStart;
+    const nextText = `${currentText.slice(0, selectionStart)}${value}${currentText.slice(selectionEnd)}`;
+    const nextCursor = selectionStart + value.length;
+
+    applyMessageTextInput(nextText, nextCursor, nextCursor);
+  }
+
+  function deleteVirtualKeyboardText() {
+    const textarea = messageTextareaRef.current;
+    const currentText = currentTextRef.current;
+    const selectionStart = textarea?.selectionStart ?? currentText.length;
+    const selectionEnd = textarea?.selectionEnd ?? selectionStart;
+
+    if (selectionStart !== selectionEnd) {
+      const nextText = `${currentText.slice(0, selectionStart)}${currentText.slice(selectionEnd)}`;
+      applyMessageTextInput(nextText, selectionStart, selectionStart);
+      return;
+    }
+
+    if (selectionStart <= 0) {
+      focusMessageTextarea(0, 0);
+      return;
+    }
+
+    const nextText = `${currentText.slice(0, selectionStart - 1)}${currentText.slice(selectionStart)}`;
+    applyMessageTextInput(nextText, selectionStart - 1, selectionStart - 1);
+  }
+
+  function isVirtualKeyboardLetter(key: string) {
+    return /^[A-Z]$/.test(key);
+  }
+
+  function getVirtualKeyboardKeyValue(key: string) {
+    if (!isVirtualKeyboardLetter(key)) {
+      return key;
+    }
+
+    return isVirtualKeyboardShiftActive ? key : key.toLowerCase();
+  }
+
+  function getVirtualKeyboardKeyLabel(key: string, displayedKey: string) {
+    if (key === "Retour") return "⌫";
+    if (key === "Entree") return "↵";
+    if (key === "Emoji") return "😊";
+    return displayedKey;
+  }
+
+  function getVirtualKeyboardKeyVariants(key: string) {
+    if (!isVirtualKeyboardLetter(key)) {
+      return [];
+    }
+
+    const variants = VIRTUAL_KEYBOARD_VARIANTS[key] || [];
+
+    return variants.map((variant) =>
+      isVirtualKeyboardShiftActive ? variant.toUpperCase() : variant
+    );
+  }
+
+  function getVirtualKeyboardVariantFromPoint(clientX: number, clientY: number) {
+    const target = document.elementFromPoint(clientX, clientY);
+
+    if (!(target instanceof Element)) {
+      return "";
+    }
+
+    return (
+      target
+        .closest("[data-caregiver-virtual-keyboard-variant]")
+        ?.getAttribute("data-caregiver-virtual-keyboard-variant") || ""
+    );
+  }
+
+  function setVirtualKeyboardHoveredVariantValue(variant: string) {
+    virtualKeyboardHoveredVariantRef.current = variant;
+    setVirtualKeyboardHoveredVariant(variant);
+  }
+
+  function clearVirtualKeyboardLongPressTimer() {
+    if (virtualKeyboardLongPressTimerRef.current === null) {
+      return;
+    }
+
+    window.clearTimeout(virtualKeyboardLongPressTimerRef.current);
+    virtualKeyboardLongPressTimerRef.current = null;
+  }
+
+  function clearVirtualKeyboardDeleteRepeatTimer() {
+    if (virtualKeyboardDeleteRepeatTimerRef.current !== null) {
+      window.clearTimeout(virtualKeyboardDeleteRepeatTimerRef.current);
+      virtualKeyboardDeleteRepeatTimerRef.current = null;
+    }
+
+    if (virtualKeyboardDeleteRepeatIntervalRef.current !== null) {
+      window.clearInterval(virtualKeyboardDeleteRepeatIntervalRef.current);
+      virtualKeyboardDeleteRepeatIntervalRef.current = null;
+    }
+  }
+
+  function startVirtualKeyboardLongPress(key: string) {
+    const variants = getVirtualKeyboardKeyVariants(key);
+
+    if (!variants.length) {
+      return;
+    }
+
+    clearVirtualKeyboardLongPressTimer();
+    closeVirtualKeyboardEmojiMenu();
+    virtualKeyboardSuppressClickRef.current = "";
+    setVirtualKeyboardHoveredVariantValue("");
+    virtualKeyboardLongPressTimerRef.current = window.setTimeout(() => {
+      virtualKeyboardLongPressTimerRef.current = null;
+      virtualKeyboardSuppressClickRef.current = key;
+      setVirtualKeyboardVariantMenu({ key });
+      focusMessageTextarea();
+    }, VIRTUAL_KEYBOARD_LONG_PRESS_DELAY_MS);
+  }
+
+  function startVirtualKeyboardDeleteRepeat(key: string) {
+    if (key !== "Retour") {
+      return;
+    }
+
+    clearVirtualKeyboardDeleteRepeatTimer();
+    virtualKeyboardDeleteRepeatStartedRef.current = false;
+    virtualKeyboardSuppressClickRef.current = "";
+    virtualKeyboardDeleteRepeatTimerRef.current = window.setTimeout(() => {
+      virtualKeyboardDeleteRepeatTimerRef.current = null;
+      virtualKeyboardDeleteRepeatStartedRef.current = true;
+      virtualKeyboardSuppressClickRef.current = key;
+      deleteVirtualKeyboardText();
+      virtualKeyboardDeleteRepeatIntervalRef.current = window.setInterval(() => {
+        deleteVirtualKeyboardText();
+      }, VIRTUAL_KEYBOARD_DELETE_REPEAT_INTERVAL_MS);
+    }, VIRTUAL_KEYBOARD_DELETE_REPEAT_DELAY_MS);
+  }
+
+  function startVirtualKeyboardPress(key: string) {
+    startVirtualKeyboardLongPress(key);
+    startVirtualKeyboardDeleteRepeat(key);
+  }
+
+  function cancelVirtualKeyboardLongPress() {
+    clearVirtualKeyboardLongPressTimer();
+  }
+
+  function cancelVirtualKeyboardDeleteRepeat(key: string) {
+    clearVirtualKeyboardDeleteRepeatTimer();
+
+    if (virtualKeyboardDeleteRepeatStartedRef.current) {
+      virtualKeyboardSuppressClickRef.current = key;
+    }
+
+    virtualKeyboardDeleteRepeatStartedRef.current = false;
+  }
+
+  function cancelVirtualKeyboardPress(key: string) {
+    cancelVirtualKeyboardLongPress();
+    cancelVirtualKeyboardDeleteRepeat(key);
+  }
+
+  function closeVirtualKeyboardVariantMenu() {
+    setVirtualKeyboardHoveredVariantValue("");
+    setVirtualKeyboardVariantMenu(null);
+  }
+
+  function closeVirtualKeyboardEmojiMenu() {
+    setIsVirtualKeyboardEmojiMenuOpen(false);
+  }
+
+  function insertVirtualKeyboardVariant(variant: string) {
+    virtualKeyboardSuppressClickRef.current = "";
+    closeVirtualKeyboardVariantMenu();
+    insertVirtualKeyboardText(variant);
+  }
+
+  function insertVirtualKeyboardEmoji(emoji: string) {
+    closeVirtualKeyboardEmojiMenu();
+    insertVirtualKeyboardText(emoji);
+  }
+
+  function handleVirtualKeyboardKey(key: string) {
+    const isEmojiKey = key === "Emoji";
+    closeVirtualKeyboardVariantMenu();
+
+    if (!isEmojiKey) {
+      closeVirtualKeyboardEmojiMenu();
+    }
+
+    if (key === "Maj") {
+      setIsVirtualKeyboardShiftActive((prev) => !prev);
+      focusMessageTextarea();
+      return;
+    }
+
+    if (key === "Espace") {
+      insertVirtualKeyboardText(" ");
+      return;
+    }
+
+    if (isEmojiKey) {
+      setIsVirtualKeyboardEmojiMenuOpen((prev) => !prev);
+      focusMessageTextarea();
+      return;
+    }
+
+    if (key === "Retour") {
+      deleteVirtualKeyboardText();
+      return;
+    }
+
+    if (key === "Entree") {
+      insertVirtualKeyboardText("\n");
+      return;
+    }
+
+    insertVirtualKeyboardText(getVirtualKeyboardKeyValue(key));
+  }
+
+  function handleVirtualKeyboardButtonClick(key: string) {
+    cancelVirtualKeyboardPress(key);
+
+    if (virtualKeyboardSuppressClickRef.current === key) {
+      virtualKeyboardSuppressClickRef.current = "";
+      return;
+    }
+
+    virtualKeyboardSuppressClickRef.current = "";
+    handleVirtualKeyboardKey(key);
+  }
+
+  React.useEffect(
+    () => () => {
+      clearVirtualKeyboardLongPressTimer();
+      clearVirtualKeyboardDeleteRepeatTimer();
+    },
+    []
+  );
+
+  React.useEffect(() => {
+    if (!virtualKeyboardVariantMenu) {
+      return;
+    }
+
+    const activeVariantMenu = virtualKeyboardVariantMenu;
+
+    function handleVariantPointerMove(event: PointerEvent) {
+      const variant = getVirtualKeyboardVariantFromPoint(
+        event.clientX,
+        event.clientY
+      );
+
+      if (variant !== virtualKeyboardHoveredVariantRef.current) {
+        setVirtualKeyboardHoveredVariantValue(variant);
+      }
+    }
+
+    function handleVariantPointerUp(event: PointerEvent) {
+      const variant =
+        getVirtualKeyboardVariantFromPoint(event.clientX, event.clientY) ||
+        virtualKeyboardHoveredVariantRef.current;
+
+      virtualKeyboardSuppressClickRef.current = activeVariantMenu.key;
+
+      if (variant) {
+        insertVirtualKeyboardVariant(variant);
+      } else {
+        closeVirtualKeyboardVariantMenu();
+        focusMessageTextarea();
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+    }
+
+    function handleVariantPointerCancel(event: PointerEvent) {
+      virtualKeyboardSuppressClickRef.current = activeVariantMenu.key;
+      closeVirtualKeyboardVariantMenu();
+      event.preventDefault();
+      event.stopPropagation();
+    }
+
+    window.addEventListener("pointermove", handleVariantPointerMove, true);
+    window.addEventListener("pointerup", handleVariantPointerUp, true);
+    window.addEventListener("pointercancel", handleVariantPointerCancel, true);
+
+    return () => {
+      window.removeEventListener("pointermove", handleVariantPointerMove, true);
+      window.removeEventListener("pointerup", handleVariantPointerUp, true);
+      window.removeEventListener(
+        "pointercancel",
+        handleVariantPointerCancel,
+        true
+      );
+    };
+  }, [virtualKeyboardVariantMenu]);
+
   async function sendCaregiverMessage(messageType: "text" | "audio" = "text") {
     if (!selectedCaregiver || isSending) return;
 
@@ -443,6 +973,7 @@ export default function CaregiverMessagesPage(props: CaregiverMessagesPageProps)
         updateChannelMessages(selectedCaregiver.channel, [data.message]);
       }
       setText("");
+      currentTextRef.current = "";
 
       const nextStatus =
         Number(data?.deliveredTo || 0) > 0
@@ -492,6 +1023,20 @@ export default function CaregiverMessagesPage(props: CaregiverMessagesPageProps)
       showToast?.(nextStatus);
     }
   }
+
+  const virtualKeyboardActionStyle = (
+    baseStyle: React.CSSProperties
+  ): React.CSSProperties => ({
+    ...baseStyle,
+    height: virtualKeyboardActionSize,
+    minHeight: virtualKeyboardActionSize,
+    padding: virtualKeyboardActionPadding,
+    borderRadius: isKeyboardCompactLayout ? 14 : 18,
+    lineHeight: 1.1,
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+  });
 
   const notificationButtonLabel =
     notificationPermission === "granted"
@@ -664,8 +1209,9 @@ export default function CaregiverMessagesPage(props: CaregiverMessagesPageProps)
             <div style={{ ...styles.formGroup, marginTop: 16 }}>
               <label style={styles.label}>Message</label>
               <textarea
+                ref={messageTextareaRef}
                 value={text}
-                onChange={(event) => setText(formatTextSmart(event.target.value))}
+                onChange={handleMessageTextAreaChange}
                 style={styles.textarea}
                 placeholder="Écrire ici..."
               />
@@ -675,24 +1221,54 @@ export default function CaregiverMessagesPage(props: CaregiverMessagesPageProps)
               style={{
                 marginTop: 12,
                 display: "grid",
-                gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-                gap: 10,
+                gridTemplateColumns:
+                  viewportWidth > 900
+                    ? "repeat(4, minmax(0, 1fr))"
+                    : isKeyboardCompactLayout
+                      ? "repeat(4, minmax(0, 1fr))"
+                      : "1fr",
+                gap: isKeyboardCompactLayout ? 6 : 12,
                 alignItems: "stretch",
               }}
             >
               <button
                 type="button"
+                aria-label={
+                  isVirtualKeyboardOpen
+                    ? "Masquer le clavier virtuel"
+                    : "Afficher le clavier virtuel"
+                }
+                title={
+                  isVirtualKeyboardOpen
+                    ? "Masquer le clavier virtuel"
+                    : "Afficher le clavier virtuel"
+                }
+                style={{
+                  ...virtualKeyboardActionStyle(
+                    isVirtualKeyboardOpen
+                      ? styles.primaryButton
+                      : styles.secondaryButton
+                  ),
+                  width: "100%",
+                  minWidth: 0,
+                }}
+                onClick={() => {
+                  setIsVirtualKeyboardOpen((prev) => !prev);
+                  focusMessageTextarea();
+                }}
+              >
+                <VirtualKeyboardIcon size={virtualKeyboardActionIconSize} />
+              </button>
+
+              <button
+                type="button"
                 aria-label="Dicter"
                 title="Dicter"
                 style={{
-                  ...styles.primaryButton,
+                  ...virtualKeyboardActionStyle(styles.primaryButton),
                   width: "100%",
                   minWidth: 0,
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
                   whiteSpace: "normal",
-                  lineHeight: 1.2,
                   opacity: isListening ? 0.6 : 1,
                 }}
                 onClick={startDictation}
@@ -704,14 +1280,11 @@ export default function CaregiverMessagesPage(props: CaregiverMessagesPageProps)
               <button
                 type="button"
                 style={{
-                  ...styles.secondaryButton,
+                  ...virtualKeyboardActionStyle(styles.secondaryButton),
                   width: "100%",
                   minWidth: 0,
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
                   whiteSpace: "normal",
-                  lineHeight: 1.2,
+                  fontSize: isKeyboardCompactLayout ? 12 : undefined,
                 }}
                 onClick={() => sendCaregiverMessage("audio")}
                 disabled={isSending || !selectedCaregiver}
@@ -722,14 +1295,11 @@ export default function CaregiverMessagesPage(props: CaregiverMessagesPageProps)
               <button
                 type="button"
                 style={{
-                  ...styles.primaryButton,
+                  ...virtualKeyboardActionStyle(styles.primaryButton),
                   width: "100%",
                   minWidth: 0,
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
                   whiteSpace: "normal",
-                  lineHeight: 1.2,
+                  fontSize: isKeyboardCompactLayout ? 12 : undefined,
                   opacity: isSending ? 0.7 : 1,
                 }}
                 onClick={() => sendCaregiverMessage("text")}
@@ -738,6 +1308,295 @@ export default function CaregiverMessagesPage(props: CaregiverMessagesPageProps)
                 {isSending ? "Envoi..." : "Envoyer"}
               </button>
             </div>
+
+            {isVirtualKeyboardOpen ? (
+              <div
+                style={{
+                  marginTop: 12,
+                  marginBottom: isKeyboardCompactLayout ? 88 : undefined,
+                  padding: isKeyboardCompactLayout ? 10 : 14,
+                  borderRadius: 18,
+                  background: styles.input.background || "rgba(15,23,42,0.62)",
+                  border:
+                    styles.input.border || "1px solid rgba(148,163,184,0.28)",
+                  display: "grid",
+                  gap: isKeyboardCompactLayout ? 6 : 8,
+                }}
+              >
+                {VIRTUAL_KEYBOARD_ROWS.map((row, rowIndex) => (
+                  <div
+                    key={`caregiver-keyboard-row-${rowIndex}`}
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns:
+                        row.includes("Retour") && row.includes("Entree")
+                          ? "repeat(7, minmax(0, 1fr)) repeat(2, minmax(0, 1.5fr))"
+                          : "repeat(10, minmax(0, 1fr))",
+                      gap: isKeyboardCompactLayout ? 5 : 7,
+                      width: "100%",
+                    }}
+                  >
+                    {row.map((key, keyIndex) => {
+                      const displayedKey = getVirtualKeyboardKeyValue(key);
+                      const keyLabel = getVirtualKeyboardKeyLabel(
+                        key,
+                        displayedKey
+                      );
+                      const keyVariants = getVirtualKeyboardKeyVariants(key);
+                      const numberLabel =
+                        VIRTUAL_KEYBOARD_NUMBER_LABELS[key] || "";
+                      const hasVariants = keyVariants.length > 0;
+                      const isVariantMenuOpen =
+                        virtualKeyboardVariantMenu?.key === key;
+                      const isVariantMenuNearLeftEdge = keyIndex <= 1;
+                      const isVariantMenuNearRightEdge =
+                        keyIndex >= 8 || keyIndex >= row.length - 2;
+
+                      return (
+                        <div
+                          key={`${rowIndex}-${key}`}
+                          style={{
+                            gridColumn:
+                              key === "Espace"
+                                ? row.includes("Emoji")
+                                  ? "5 / span 3"
+                                  : "4 / span 4"
+                                : undefined,
+                            minWidth: 0,
+                            position: "relative",
+                          }}
+                        >
+                          <button
+                            type="button"
+                            aria-label={
+                              key === "Maj"
+                                ? isVirtualKeyboardShiftActive
+                                  ? "Désactiver les majuscules"
+                                  : "Activer les majuscules"
+                                : key === "Retour"
+                                  ? "Effacer une lettre"
+                                  : key === "Entree"
+                                    ? "Insérer un retour à la ligne"
+                                    : key === "Emoji"
+                                      ? "Choisir un emoji"
+                                      : key === "Espace"
+                                        ? "Insérer un espace"
+                                        : hasVariants
+                                          ? `Touche ${displayedKey}${
+                                              numberLabel
+                                                ? `, chiffre ${numberLabel}`
+                                                : ""
+                                            }, appui long pour variantes`
+                                          : `Touche ${displayedKey}`
+                          }
+                          title={
+                            key === "Maj"
+                              ? "Majuscules"
+                              : key === "Retour"
+                                ? "Effacer"
+                                : key === "Entree"
+                                  ? "Retour à la ligne"
+                                  : key === "Emoji"
+                                    ? "Emojis"
+                                    : key === "Espace"
+                                      ? "Espace"
+                                      : hasVariants
+                                        ? `${displayedKey} - appui long`
+                                        : displayedKey
+                          }
+                            style={{
+                              ...(key === "Maj" && isVirtualKeyboardShiftActive
+                                ? styles.primaryButton
+                                : styles.secondaryButton),
+                              width: "100%",
+                              minWidth: 0,
+                              minHeight: virtualKeyboardKeyMinHeight,
+                              padding: virtualKeyboardKeyPadding,
+                              borderRadius: 14,
+                              fontSize:
+                                key === "Maj" ||
+                                key === "Retour" ||
+                                key === "Entree" ||
+                                key === "Emoji" ||
+                                key === "Espace"
+                                  ? 13
+                                  : 16,
+                              fontWeight: 900,
+                              lineHeight: 1,
+                              whiteSpace: "nowrap",
+                              position: "relative",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              touchAction: "manipulation",
+                            }}
+                            onPointerDown={() => startVirtualKeyboardPress(key)}
+                            onPointerUp={() => cancelVirtualKeyboardPress(key)}
+                            onPointerLeave={() => cancelVirtualKeyboardPress(key)}
+                            onPointerCancel={() => cancelVirtualKeyboardPress(key)}
+                            onClick={() => handleVirtualKeyboardButtonClick(key)}
+                          >
+                            {numberLabel ? (
+                              <span
+                                aria-hidden="true"
+                                style={{
+                                  position: "absolute",
+                                  top: isKeyboardCompactLayout ? 4 : 5,
+                                  right: isKeyboardCompactLayout ? 6 : 8,
+                                  fontSize: isKeyboardCompactLayout ? 9 : 11,
+                                  fontWeight: 950,
+                                  lineHeight: 1,
+                                  opacity: 0.95,
+                                  pointerEvents: "none",
+                                }}
+                              >
+                                {numberLabel}
+                              </span>
+                            ) : null}
+                            <span style={{ pointerEvents: "none" }}>
+                              {keyLabel}
+                            </span>
+                          </button>
+
+                          {key === "Emoji" && isVirtualKeyboardEmojiMenuOpen ? (
+                            <div
+                              role="menu"
+                              aria-label="Choisir un emoji"
+                              style={{
+                                position: "absolute",
+                                left: "50%",
+                                bottom: "calc(100% + 8px)",
+                                transform: "translateX(-50%)",
+                                zIndex: 32,
+                                display: "grid",
+                                gridTemplateColumns: `repeat(5, ${virtualKeyboardEmojiSize}px)`,
+                                gap: 6,
+                                padding: 6,
+                                borderRadius: 14,
+                                background:
+                                  styles.card.background ||
+                                  styles.input.background ||
+                                  "rgba(15,23,42,0.96)",
+                                border:
+                                  styles.input.border ||
+                                  "1px solid rgba(148,163,184,0.38)",
+                                boxShadow: "0 14px 32px rgba(0,0,0,0.32)",
+                              }}
+                              onPointerDown={(event) => {
+                                event.stopPropagation();
+                              }}
+                            >
+                              {VIRTUAL_KEYBOARD_EMOJI_OPTIONS.map((emoji) => (
+                                <button
+                                  key={`emoji-${emoji}`}
+                                  type="button"
+                                  role="menuitem"
+                                  aria-label={`Insérer ${emoji}`}
+                                  title={emoji}
+                                  style={{
+                                    ...styles.secondaryButton,
+                                    width: virtualKeyboardEmojiSize,
+                                    minWidth: virtualKeyboardEmojiSize,
+                                    height: virtualKeyboardEmojiSize,
+                                    minHeight: virtualKeyboardEmojiSize,
+                                    padding: 0,
+                                    borderRadius: 12,
+                                    fontSize: isKeyboardCompactLayout ? 20 : 22,
+                                    fontWeight: 900,
+                                    lineHeight: 1,
+                                  }}
+                                  onClick={(event) => {
+                                    event.preventDefault();
+                                    event.stopPropagation();
+                                    insertVirtualKeyboardEmoji(emoji);
+                                  }}
+                                >
+                                  {emoji}
+                                </button>
+                              ))}
+                            </div>
+                          ) : null}
+
+                          {isVariantMenuOpen ? (
+                            <div
+                              role="menu"
+                              aria-label={`Variantes de ${displayedKey}`}
+                              style={{
+                                position: "absolute",
+                                left: isVariantMenuNearLeftEdge
+                                  ? 0
+                                  : isVariantMenuNearRightEdge
+                                    ? undefined
+                                    : "50%",
+                                right: isVariantMenuNearRightEdge ? 0 : undefined,
+                                bottom: "calc(100% + 8px)",
+                                transform:
+                                  isVariantMenuNearLeftEdge ||
+                                  isVariantMenuNearRightEdge
+                                    ? undefined
+                                    : "translateX(-50%)",
+                                zIndex: 30,
+                                display: "grid",
+                                gridTemplateColumns: `repeat(4, ${virtualKeyboardVariantSize}px)`,
+                                gap: 6,
+                                padding: 6,
+                                borderRadius: 14,
+                                background:
+                                  styles.card.background ||
+                                  styles.input.background ||
+                                  "rgba(15,23,42,0.96)",
+                                border:
+                                  styles.input.border ||
+                                  "1px solid rgba(148,163,184,0.38)",
+                                boxShadow: "0 14px 32px rgba(0,0,0,0.32)",
+                              }}
+                              onPointerDown={(event) => {
+                                event.stopPropagation();
+                              }}
+                            >
+                              {keyVariants.map((variant) => (
+                                <button
+                                  key={`${key}-${variant}`}
+                                  type="button"
+                                  role="menuitem"
+                                  data-caregiver-virtual-keyboard-variant={variant}
+                                  aria-label={`Insérer ${variant}`}
+                                  title={variant}
+                                  style={{
+                                    ...(virtualKeyboardHoveredVariant === variant
+                                      ? styles.primaryButton
+                                      : styles.secondaryButton),
+                                    width: virtualKeyboardVariantSize,
+                                    minWidth: virtualKeyboardVariantSize,
+                                    height: virtualKeyboardVariantSize,
+                                    minHeight: virtualKeyboardVariantSize,
+                                    padding: 0,
+                                    borderRadius: 12,
+                                    fontSize: 17,
+                                    fontWeight: 900,
+                                    lineHeight: 1,
+                                  }}
+                                  onPointerEnter={() =>
+                                    setVirtualKeyboardHoveredVariantValue(variant)
+                                  }
+                                  onClick={(event) => {
+                                    event.preventDefault();
+                                    event.stopPropagation();
+                                    insertVirtualKeyboardVariant(variant);
+                                  }}
+                                >
+                                  {variant}
+                                </button>
+                              ))}
+                            </div>
+                          ) : null}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
+            ) : null}
 
             {statusText ? (
               <div

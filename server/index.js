@@ -11,6 +11,7 @@ const {
   PUBLIC_DIR,
 } = require("./config");
 const { getCaregiverAlertPageHtml } = require("./aidant-alert-page");
+const { registerAssetLinksRoute } = require("./assetlinks");
 const { registerCaregiverRoutes } = require("./routes/caregiver.routes");
 const { createCorsOptions, securityHeaders } = require("./http");
 const {
@@ -27,6 +28,8 @@ app.disable("x-powered-by");
 app.use(cors(createCorsOptions()));
 app.use(securityHeaders);
 app.use(express.json({ limit: "32kb" }));
+
+registerAssetLinksRoute(app);
 
 app.get("/aidant-alerte", (_req, res) => {
   res.type("html").send(getCaregiverAlertPageHtml());

@@ -163,4 +163,38 @@ describe("caregiver persistent store", () => {
 
     expect(messages.map((message) => message.id)).toEqual(["memory-1", "memory-2"]);
   });
+
+  it("marks in-memory messages as delivered and read", async () => {
+    const store = createCaregiverStore({
+      messageRetentionMs: 0,
+      request: async () => ({ ok: false, notConfigured: true }),
+    });
+
+    await store.saveCaregiverMessage(
+      "room-a",
+      createMessage("message-1", "2026-01-01T10:00:00.000Z")
+    );
+
+    const delivered = await store.markCaregiverMessagesDelivered(
+      "room-a",
+      "caregiver",
+      ["message-1"]
+    );
+    expect(delivered.messageIds).toEqual(["message-1"]);
+
+    const read = await store.markCaregiverMessagesRead(
+      "room-a",
+      "caregiver",
+      ["message-1"]
+    );
+    expect(read.messageIds).toEqual(["message-1"]);
+
+    const messages = await store.getCaregiverMessages("room-a");
+    expect(messages[0]).toMatchObject({
+      id: "message-1",
+      deliveredTo: 1,
+    });
+    expect(messages[0].deliveredAt).not.toBe("");
+    expect(messages[0].readByCaregiverAt).not.toBe("");
+  });
 });

@@ -544,8 +544,25 @@ const FRENCH_NUMBER_WORDS = new Set([
   "milliards",
 ]);
 
+const EMAIL_TEXT_PATTERN =
+  "[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9-]+(?:\\.[a-zA-Z0-9-]+)+";
+const URL_TEXT_PATTERN = "https?:\\/\\/[^\\s<>\"',;]+";
+const WEB_ADDRESS_TEXT_PATTERN =
+  "(?:www\\.|[a-zA-Z0-9-]+\\.)(?:[a-zA-Z0-9-]+\\.)*[a-zA-Z]{2,}(?:\\/[^\\s<>\"',;]*)?";
+const PROTECTED_ADDRESS_TEXT_PATTERN = new RegExp(
+  `\\b(?:${EMAIL_TEXT_PATTERN}|${URL_TEXT_PATTERN}|${WEB_ADDRESS_TEXT_PATTERN})`,
+  "gi"
+);
+const TRAILING_ADDRESS_PUNCTUATION_PATTERN = /[)\].,;:!?]+$/;
+
 type FormatTextSmartOptions = {
   expandFinalAbbreviation?: boolean;
+};
+
+export type FormattedTextSelection = {
+  text: string;
+  selectionStart: number;
+  selectionEnd: number;
 };
 
 export type AbbreviationSource = "base" | "personnel" | "modifié";
@@ -1280,16 +1297,46 @@ function expandFrenchAbbreviations(
   });
 }
 
+function protectAddressTextSegments(value: string) {
+  const segments: string[] = [];
+  const text = value.replace(PROTECTED_ADDRESS_TEXT_PATTERN, (match) => {
+    const trailingPunctuation =
+      match.match(TRAILING_ADDRESS_PUNCTUATION_PATTERN)?.[0] || "";
+    const address = trailingPunctuation
+      ? match.slice(0, -trailingPunctuation.length)
+      : match;
+
+    if (!address) return match;
+
+    const placeholder = `\uE000${segments.length}\uE001`;
+    segments.push(address);
+
+    return `${placeholder}${trailingPunctuation}`;
+  });
+
+  return {
+    text,
+    restore(formattedValue: string) {
+      return segments.reduce(
+        (nextValue, segment, index) =>
+          nextValue.replace(`\uE000${index}\uE001`, segment),
+        formattedValue
+      );
+    },
+  };
+}
+
 export function formatTextSmart(value: string, options: FormatTextSmartOptions = {}) {
   if (!value) return value;
 
-  const normalizedSpacing = String(value)
+  const protectedAddresses = protectAddressTextSegments(String(value));
+  const normalizedSpacing = protectedAddresses.text
     .replace(/[ \t]+([,;:.!?])/g, "$1")
-    .replace(/([,;:.!?])(?!\s|$)/g, "$1 ")
+    .replace(/([,;:.!?])(?=[^\s,;:.!?])/g, "$1 ")
     .replace(/ {2,}/g, " ")
     .replace(/\n{3,}/g, "\n\n");
 
-  return resolveAmbiguousCAbbreviation(
+  const formattedText = resolveAmbiguousCAbbreviation(
     restoreMissingFrenchAccents(
       resolveQuelAgreement(
         resolveAmbiguousIlPhrases(
@@ -1299,8 +1346,208 @@ export function formatTextSmart(value: string, options: FormatTextSmartOptions =
     )
   )
     .replace(/(^\s*\w|[\.\!\?]\s*\w|\n\s*\w)/g, (c) => c.toUpperCase());
+
+  return protectedAddresses.restore(formattedText);
 }
 
 export function normalizeTextFormatting(value: string) {
   return formatTextSmart(value, { expandFinalAbbreviation: true });
+}
+
+function clampTextIndex(value: string, index: number) {
+  if (!Number.isFinite(index)) return value.length;
+  return Math.max(0, Math.min(value.length, index));
+}
+
+function countCommonPrefix(a: string, b: string) {
+  const maxLength = Math.min(a.length, b.length);
+  let index = 0;
+
+  while (index < maxLength && a[index] === b[index]) {
+    index += 1;
+  }
+
+  return index;
+}
+
+function countCommonSuffix(a: string, b: string, prefixLength: number) {
+  const maxLength = Math.min(a.length, b.length) - prefixLength;
+  let length = 0;
+
+  while (
+    length < maxLength &&
+    a[a.length - 1 - length] === b[b.length - 1 - length]
+  ) {
+    length += 1;
+  }
+
+  return length;
+}
+
+function mapEditedSegmentIndex(
+  source: string,
+  formatted: string,
+  sourceIndex: number
+) {
+  const boundedIndex = clampTextIndex(source, sourceIndex);
+
+  if (boundedIndex === 0) return 0;
+  if (boundedIndex === source.length) return formatted.length;
+
+  const sourceLength = source.length;
+  const formattedLength = formatted.length;
+  const distances = Array.from({ length: sourceLength + 1 }, () =>
+    Array(formattedLength + 1).fill(0) as number[]
+  );
+
+  for (let sourceOffset = 0; sourceOffset <= sourceLength; sourceOffset += 1) {
+    distances[sourceOffset][0] = sourceOffset;
+  }
+
+  for (
+    let formattedOffset = 0;
+    formattedOffset <= formattedLength;
+    formattedOffset += 1
+  ) {
+    distances[0][formattedOffset] = formattedOffset;
+  }
+
+  for (let sourceOffset = 1; sourceOffset <= sourceLength; sourceOffset += 1) {
+    for (
+      let formattedOffset = 1;
+      formattedOffset <= formattedLength;
+      formattedOffset += 1
+    ) {
+      const substitutionCost =
+        source[sourceOffset - 1] === formatted[formattedOffset - 1] ? 0 : 1;
+
+      distances[sourceOffset][formattedOffset] = Math.min(
+        distances[sourceOffset - 1][formattedOffset] + 1,
+        distances[sourceOffset][formattedOffset - 1] + 1,
+        distances[sourceOffset - 1][formattedOffset - 1] + substitutionCost
+      );
+    }
+  }
+
+  const operations: Array<"delete" | "insert" | "replace"> = [];
+  let sourceOffset = sourceLength;
+  let formattedOffset = formattedLength;
+
+  while (sourceOffset > 0 || formattedOffset > 0) {
+    const substitutionCost =
+      sourceOffset > 0 &&
+      formattedOffset > 0 &&
+      source[sourceOffset - 1] === formatted[formattedOffset - 1]
+        ? 0
+        : 1;
+
+    if (
+      sourceOffset > 0 &&
+      formattedOffset > 0 &&
+      distances[sourceOffset][formattedOffset] ===
+        distances[sourceOffset - 1][formattedOffset - 1] + substitutionCost
+    ) {
+      operations.push("replace");
+      sourceOffset -= 1;
+      formattedOffset -= 1;
+      continue;
+    }
+
+    if (
+      formattedOffset > 0 &&
+      distances[sourceOffset][formattedOffset] ===
+        distances[sourceOffset][formattedOffset - 1] + 1
+    ) {
+      operations.push("insert");
+      formattedOffset -= 1;
+      continue;
+    }
+
+    operations.push("delete");
+    sourceOffset -= 1;
+  }
+
+  operations.reverse();
+
+  const sourceToFormatted = Array(sourceLength + 1).fill(0) as number[];
+  let sourceCursor = 0;
+  let formattedCursor = 0;
+
+  sourceToFormatted[0] = 0;
+
+  operations.forEach((operation) => {
+    if (operation === "insert") {
+      formattedCursor += 1;
+      sourceToFormatted[sourceCursor] = formattedCursor;
+      return;
+    }
+
+    if (operation === "delete") {
+      sourceCursor += 1;
+      sourceToFormatted[sourceCursor] = formattedCursor;
+      return;
+    }
+
+    sourceCursor += 1;
+    formattedCursor += 1;
+    sourceToFormatted[sourceCursor] = formattedCursor;
+  });
+
+  return clampTextIndex(formatted, sourceToFormatted[boundedIndex]);
+}
+
+function mapTextIndexAfterFormatting(
+  source: string,
+  formatted: string,
+  sourceIndex: number
+) {
+  const boundedIndex = clampTextIndex(source, sourceIndex);
+
+  if (source === formatted) return boundedIndex;
+
+  const prefixLength = countCommonPrefix(source, formatted);
+  if (boundedIndex <= prefixLength) return boundedIndex;
+
+  const suffixLength = countCommonSuffix(source, formatted, prefixLength);
+  const sourceSuffixStart = source.length - suffixLength;
+  const formattedSuffixStart = formatted.length - suffixLength;
+
+  if (boundedIndex >= sourceSuffixStart) {
+    return clampTextIndex(
+      formatted,
+      formattedSuffixStart + (boundedIndex - sourceSuffixStart)
+    );
+  }
+
+  return clampTextIndex(
+    formatted,
+    prefixLength +
+      mapEditedSegmentIndex(
+        source.slice(prefixLength, sourceSuffixStart),
+        formatted.slice(prefixLength, formattedSuffixStart),
+        boundedIndex - prefixLength
+      )
+  );
+}
+
+export function formatTextSmartWithSelection(
+  value: string,
+  selectionStart: number,
+  selectionEnd = selectionStart,
+  options: FormatTextSmartOptions = {}
+): FormattedTextSelection {
+  const source = String(value || "");
+  const text = formatTextSmart(source, options);
+  const nextSelectionStart = mapTextIndexAfterFormatting(
+    source,
+    text,
+    selectionStart
+  );
+  const nextSelectionEnd = mapTextIndexAfterFormatting(source, text, selectionEnd);
+
+  return {
+    text,
+    selectionStart: Math.min(nextSelectionStart, nextSelectionEnd),
+    selectionEnd: Math.max(nextSelectionStart, nextSelectionEnd),
+  };
 }

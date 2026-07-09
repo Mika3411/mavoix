@@ -8,15 +8,39 @@ import type {
   StateSetter,
   StyleMap,
 } from "../../shared/types";
-import { formatTextSmart } from "../dictionary/textFormatting";
+import { formatTextSmartWithSelection } from "../dictionary/textFormatting";
 
 const VIRTUAL_KEYBOARD_ROWS = [
   ["A", "Z", "E", "R", "T", "Y", "U", "I", "O", "P"],
   ["Q", "S", "D", "F", "G", "H", "J", "K", "L", "M"],
-  ["Maj", "W", "X", "C", "V", "B", "N", "Retour", "Mot", "Entree"],
-  ["'", "-", ".", "Espace", ",", "?", "!"],
+  ["Maj", "W", "X", "C", "V", "B", "N", "Retour", "Entree"],
+  ["'", "-", ".", "Emoji", "Espace", ",", "?", "!"],
 ];
 const VIRTUAL_KEYBOARD_LONG_PRESS_DELAY_MS = 460;
+const VIRTUAL_KEYBOARD_DELETE_REPEAT_DELAY_MS = 420;
+const VIRTUAL_KEYBOARD_DELETE_REPEAT_INTERVAL_MS = 85;
+const VIRTUAL_KEYBOARD_EMOJI_OPTIONS = [
+  "😀",
+  "😊",
+  "😂",
+  "😍",
+  "🥰",
+  "😢",
+  "😡",
+  "😴",
+  "👍",
+  "👎",
+  "🙏",
+  "👏",
+  "💪",
+  "❤️",
+  "💙",
+  "⭐",
+  "🎉",
+  "🔥",
+  "✅",
+  "❌",
+];
 const VIRTUAL_KEYBOARD_NUMBER_LABELS: Record<string, string> = {
   A: "1",
   Z: "2",
@@ -260,7 +284,11 @@ export default function TalkPage({
   const viewportWidth = typeof window !== "undefined" ? window.innerWidth : 1024;
   const isCompactLayout = viewportWidth <= 640;
   const standardTextAreaRef = React.useRef<HTMLTextAreaElement | null>(null);
+  const currentTextRef = React.useRef(text);
   const virtualKeyboardLongPressTimerRef = React.useRef<number | null>(null);
+  const virtualKeyboardDeleteRepeatTimerRef = React.useRef<number | null>(null);
+  const virtualKeyboardDeleteRepeatIntervalRef = React.useRef<number | null>(null);
+  const virtualKeyboardDeleteRepeatStartedRef = React.useRef(false);
   const virtualKeyboardSuppressClickRef = React.useRef("");
   const virtualKeyboardHoveredVariantRef = React.useRef("");
   const virtualKeyboardActionSize = isCompactLayout ? 44 : 48;
@@ -269,6 +297,7 @@ export default function TalkPage({
   const virtualKeyboardKeyMinHeight = isCompactLayout ? 48 : 52;
   const virtualKeyboardKeyPadding = isCompactLayout ? "8px 4px" : "10px 6px";
   const virtualKeyboardVariantSize = isCompactLayout ? 44 : 48;
+  const virtualKeyboardEmojiSize = isCompactLayout ? 40 : 44;
 
   const [sendMode, setSendMode] = React.useState<SendMode>("sms");
   const [selectedSendContactId, setSelectedSendContactId] = React.useState(
@@ -279,6 +308,8 @@ export default function TalkPage({
     React.useState(false);
   const [virtualKeyboardVariantMenu, setVirtualKeyboardVariantMenu] =
     React.useState<{ key: string } | null>(null);
+  const [isVirtualKeyboardEmojiMenuOpen, setIsVirtualKeyboardEmojiMenuOpen] =
+    React.useState(false);
   const [virtualKeyboardHoveredVariant, setVirtualKeyboardHoveredVariant] =
     React.useState("");
 
@@ -301,6 +332,10 @@ export default function TalkPage({
   }, [currentProfileId, currentProfile?.id, currentProfile?.name]);
 
   const [, setSuggestionHistory] = React.useState<SuggestionHistory>({});
+
+  React.useEffect(() => {
+    currentTextRef.current = String(text || "");
+  }, [text]);
 
   React.useEffect(() => {
     try {
@@ -380,12 +415,45 @@ export default function TalkPage({
     nextCursorStart: number | null = null,
     nextCursorEnd: number | null = null
   ) {
-    setText(formatTextSmart(nextValue));
-    focusStandardTextArea(nextCursorStart, nextCursorEnd);
+    const fallbackCursorStart =
+      typeof nextCursorStart === "number" ? nextCursorStart : nextValue.length;
+    const fallbackCursorEnd =
+      typeof nextCursorEnd === "number" ? nextCursorEnd : fallbackCursorStart;
+    const formattedInput = formatTextSmartWithSelection(
+      nextValue,
+      fallbackCursorStart,
+      fallbackCursorEnd
+    );
+
+    setText(formattedInput.text);
+    currentTextRef.current = formattedInput.text;
+    focusStandardTextArea(
+      formattedInput.selectionStart,
+      formattedInput.selectionEnd
+    );
   }
 
-  function handleTextAreaChange(value: string) {
-    setText(formatTextSmart(value));
+  function handleTextAreaChange(event: React.ChangeEvent<HTMLTextAreaElement>) {
+    const { value, selectionStart, selectionEnd } = event.target;
+    const formattedInput = formatTextSmartWithSelection(
+      value,
+      selectionStart,
+      selectionEnd
+    );
+
+    setText(formattedInput.text);
+    currentTextRef.current = formattedInput.text;
+
+    if (
+      formattedInput.text !== value ||
+      formattedInput.selectionStart !== selectionStart ||
+      formattedInput.selectionEnd !== selectionEnd
+    ) {
+      focusStandardTextArea(
+        formattedInput.selectionStart,
+        formattedInput.selectionEnd
+      );
+    }
 
     if (/\s$/.test(value)) {
       rememberLastTypedWord(value);
@@ -394,7 +462,7 @@ export default function TalkPage({
 
   function insertVirtualKeyboardText(value: string) {
     const textarea = standardTextAreaRef.current;
-    const currentText = String(text || "");
+    const currentText = currentTextRef.current;
     const selectionStart = textarea?.selectionStart ?? currentText.length;
     const selectionEnd = textarea?.selectionEnd ?? selectionStart;
     const nextText = `${currentText.slice(0, selectionStart)}${value}${currentText.slice(selectionEnd)}`;
@@ -409,7 +477,7 @@ export default function TalkPage({
 
   function deleteVirtualKeyboardText() {
     const textarea = standardTextAreaRef.current;
-    const currentText = String(text || "");
+    const currentText = currentTextRef.current;
     const selectionStart = textarea?.selectionStart ?? currentText.length;
     const selectionEnd = textarea?.selectionEnd ?? selectionStart;
 
@@ -428,34 +496,6 @@ export default function TalkPage({
     applyTextInput(nextText, selectionStart - 1, selectionStart - 1);
   }
 
-  function deleteVirtualKeyboardWord() {
-    const textarea = standardTextAreaRef.current;
-    const currentText = String(text || "");
-    const selectionStart = textarea?.selectionStart ?? currentText.length;
-    const selectionEnd = textarea?.selectionEnd ?? selectionStart;
-
-    if (selectionStart !== selectionEnd) {
-      const nextText = `${currentText.slice(0, selectionStart)}${currentText.slice(selectionEnd)}`;
-      applyTextInput(nextText, selectionStart, selectionStart);
-      return;
-    }
-
-    if (selectionStart <= 0) {
-      focusStandardTextArea(0, 0);
-      return;
-    }
-
-    const beforeCursor = currentText.slice(0, selectionStart);
-    const trimmedEndLength = beforeCursor.replace(/\s+$/, "").length;
-    const wordMatch = beforeCursor.slice(0, trimmedEndLength).match(/\S+$/);
-    const deleteFrom = wordMatch
-      ? trimmedEndLength - wordMatch[0].length
-      : trimmedEndLength;
-    const nextText = `${currentText.slice(0, deleteFrom)}${currentText.slice(selectionStart)}`;
-
-    applyTextInput(nextText, deleteFrom, deleteFrom);
-  }
-
   function isVirtualKeyboardLetter(key: string) {
     return /^[A-Z]$/.test(key);
   }
@@ -471,7 +511,7 @@ export default function TalkPage({
   function getVirtualKeyboardKeyLabel(key: string, displayedKey: string) {
     if (key === "Retour") return "⌫";
     if (key === "Entree") return "↵";
-    if (key === "Mot") return "Mot";
+    if (key === "Emoji") return "😊";
     return displayedKey;
   }
 
@@ -515,6 +555,18 @@ export default function TalkPage({
     virtualKeyboardLongPressTimerRef.current = null;
   }
 
+  function clearVirtualKeyboardDeleteRepeatTimer() {
+    if (virtualKeyboardDeleteRepeatTimerRef.current !== null) {
+      window.clearTimeout(virtualKeyboardDeleteRepeatTimerRef.current);
+      virtualKeyboardDeleteRepeatTimerRef.current = null;
+    }
+
+    if (virtualKeyboardDeleteRepeatIntervalRef.current !== null) {
+      window.clearInterval(virtualKeyboardDeleteRepeatIntervalRef.current);
+      virtualKeyboardDeleteRepeatIntervalRef.current = null;
+    }
+  }
+
   function startVirtualKeyboardLongPress(key: string) {
     const variants = getVirtualKeyboardKeyVariants(key);
 
@@ -523,6 +575,7 @@ export default function TalkPage({
     }
 
     clearVirtualKeyboardLongPressTimer();
+    closeVirtualKeyboardEmojiMenu();
     virtualKeyboardSuppressClickRef.current = "";
     setVirtualKeyboardHoveredVariantValue("");
     virtualKeyboardLongPressTimerRef.current = window.setTimeout(() => {
@@ -533,13 +586,56 @@ export default function TalkPage({
     }, VIRTUAL_KEYBOARD_LONG_PRESS_DELAY_MS);
   }
 
+  function startVirtualKeyboardDeleteRepeat(key: string) {
+    if (key !== "Retour") {
+      return;
+    }
+
+    clearVirtualKeyboardDeleteRepeatTimer();
+    virtualKeyboardDeleteRepeatStartedRef.current = false;
+    virtualKeyboardSuppressClickRef.current = "";
+    virtualKeyboardDeleteRepeatTimerRef.current = window.setTimeout(() => {
+      virtualKeyboardDeleteRepeatTimerRef.current = null;
+      virtualKeyboardDeleteRepeatStartedRef.current = true;
+      virtualKeyboardSuppressClickRef.current = key;
+      deleteVirtualKeyboardText();
+      virtualKeyboardDeleteRepeatIntervalRef.current = window.setInterval(() => {
+        deleteVirtualKeyboardText();
+      }, VIRTUAL_KEYBOARD_DELETE_REPEAT_INTERVAL_MS);
+    }, VIRTUAL_KEYBOARD_DELETE_REPEAT_DELAY_MS);
+  }
+
+  function startVirtualKeyboardPress(key: string) {
+    startVirtualKeyboardLongPress(key);
+    startVirtualKeyboardDeleteRepeat(key);
+  }
+
   function cancelVirtualKeyboardLongPress() {
     clearVirtualKeyboardLongPressTimer();
+  }
+
+  function cancelVirtualKeyboardDeleteRepeat(key: string) {
+    clearVirtualKeyboardDeleteRepeatTimer();
+
+    if (virtualKeyboardDeleteRepeatStartedRef.current) {
+      virtualKeyboardSuppressClickRef.current = key;
+    }
+
+    virtualKeyboardDeleteRepeatStartedRef.current = false;
+  }
+
+  function cancelVirtualKeyboardPress(key: string) {
+    cancelVirtualKeyboardLongPress();
+    cancelVirtualKeyboardDeleteRepeat(key);
   }
 
   function closeVirtualKeyboardVariantMenu() {
     setVirtualKeyboardHoveredVariantValue("");
     setVirtualKeyboardVariantMenu(null);
+  }
+
+  function closeVirtualKeyboardEmojiMenu() {
+    setIsVirtualKeyboardEmojiMenuOpen(false);
   }
 
   function insertVirtualKeyboardVariant(variant: string) {
@@ -548,8 +644,18 @@ export default function TalkPage({
     insertVirtualKeyboardText(variant);
   }
 
+  function insertVirtualKeyboardEmoji(emoji: string) {
+    closeVirtualKeyboardEmojiMenu();
+    insertVirtualKeyboardText(emoji);
+  }
+
   function handleVirtualKeyboardKey(key: string) {
+    const isEmojiKey = key === "Emoji";
     closeVirtualKeyboardVariantMenu();
+
+    if (!isEmojiKey) {
+      closeVirtualKeyboardEmojiMenu();
+    }
 
     if (key === "Maj") {
       setIsVirtualKeyboardShiftActive((prev) => !prev);
@@ -562,13 +668,14 @@ export default function TalkPage({
       return;
     }
 
-    if (key === "Retour") {
-      deleteVirtualKeyboardText();
+    if (isEmojiKey) {
+      setIsVirtualKeyboardEmojiMenuOpen((prev) => !prev);
+      focusStandardTextArea();
       return;
     }
 
-    if (key === "Mot") {
-      deleteVirtualKeyboardWord();
+    if (key === "Retour") {
+      deleteVirtualKeyboardText();
       return;
     }
 
@@ -581,7 +688,7 @@ export default function TalkPage({
   }
 
   function handleVirtualKeyboardButtonClick(key: string) {
-    cancelVirtualKeyboardLongPress();
+    cancelVirtualKeyboardPress(key);
 
     if (virtualKeyboardSuppressClickRef.current === key) {
       virtualKeyboardSuppressClickRef.current = "";
@@ -642,6 +749,7 @@ export default function TalkPage({
   React.useEffect(
     () => () => {
       clearVirtualKeyboardLongPressTimer();
+      clearVirtualKeyboardDeleteRepeatTimer();
     },
     []
   );
@@ -740,7 +848,7 @@ export default function TalkPage({
               <textarea
                 ref={standardTextAreaRef}
                 value={text}
-                onChange={(e) => handleTextAreaChange(e.target.value)}
+                onChange={handleTextAreaChange}
                 style={styles.textarea}
                 placeholder="Écrire ici..."
               />
@@ -841,7 +949,10 @@ export default function TalkPage({
                       key={`keyboard-row-${rowIndex}`}
                       style={{
                         display: "grid",
-                        gridTemplateColumns: "repeat(10, minmax(0, 1fr))",
+                        gridTemplateColumns:
+                          row.includes("Retour") && row.includes("Entree")
+                            ? "repeat(7, minmax(0, 1fr)) repeat(2, minmax(0, 1.5fr))"
+                            : "repeat(10, minmax(0, 1fr))",
                         gap: isCompactLayout ? 5 : 7,
                         width: "100%",
                       }}
@@ -867,7 +978,11 @@ export default function TalkPage({
                             key={`${rowIndex}-${key}`}
                             style={{
                               gridColumn:
-                                key === "Espace" ? "4 / span 4" : undefined,
+                                key === "Espace"
+                                  ? row.includes("Emoji")
+                                    ? "5 / span 3"
+                                    : "4 / span 4"
+                                  : undefined,
                               minWidth: 0,
                               position: "relative",
                             }}
@@ -881,10 +996,10 @@ export default function TalkPage({
                                     : "Activer les majuscules"
                                   : key === "Retour"
                                     ? "Effacer une lettre"
-                                    : key === "Mot"
-                                      ? "Effacer le mot précédent"
-                                      : key === "Entree"
-                                        ? "Insérer un retour à la ligne"
+                                    : key === "Entree"
+                                      ? "Insérer un retour à la ligne"
+                                      : key === "Emoji"
+                                        ? "Choisir un emoji"
                                         : key === "Espace"
                                           ? "Insérer un espace"
                                           : hasVariants
@@ -900,10 +1015,10 @@ export default function TalkPage({
                                   ? "Majuscules"
                                   : key === "Retour"
                                     ? "Effacer"
-                                    : key === "Mot"
-                                      ? "Effacer le mot précédent"
-                                      : key === "Entree"
-                                        ? "Retour à la ligne"
+                                    : key === "Entree"
+                                      ? "Retour à la ligne"
+                                      : key === "Emoji"
+                                        ? "Emojis"
                                         : key === "Espace"
                                           ? "Espace"
                                           : hasVariants
@@ -922,8 +1037,8 @@ export default function TalkPage({
                                 fontSize:
                                   key === "Maj" ||
                                   key === "Retour" ||
-                                  key === "Mot" ||
                                   key === "Entree" ||
+                                  key === "Emoji" ||
                                   key === "Espace"
                                     ? 13
                                     : 16,
@@ -937,11 +1052,11 @@ export default function TalkPage({
                                 touchAction: "manipulation",
                               }}
                               onPointerDown={() =>
-                                startVirtualKeyboardLongPress(key)
+                                startVirtualKeyboardPress(key)
                               }
-                              onPointerUp={cancelVirtualKeyboardLongPress}
-                              onPointerLeave={cancelVirtualKeyboardLongPress}
-                              onPointerCancel={cancelVirtualKeyboardLongPress}
+                              onPointerUp={() => cancelVirtualKeyboardPress(key)}
+                              onPointerLeave={() => cancelVirtualKeyboardPress(key)}
+                              onPointerCancel={() => cancelVirtualKeyboardPress(key)}
                               onClick={() => handleVirtualKeyboardButtonClick(key)}
                             >
                               {numberLabel ? (
@@ -965,6 +1080,65 @@ export default function TalkPage({
                                 {keyLabel}
                               </span>
                             </button>
+
+                            {key === "Emoji" && isVirtualKeyboardEmojiMenuOpen ? (
+                              <div
+                                role="menu"
+                                aria-label="Choisir un emoji"
+                                style={{
+                                  position: "absolute",
+                                  left: "50%",
+                                  bottom: "calc(100% + 8px)",
+                                  transform: "translateX(-50%)",
+                                  zIndex: 32,
+                                  display: "grid",
+                                  gridTemplateColumns: `repeat(5, ${virtualKeyboardEmojiSize}px)`,
+                                  gap: 6,
+                                  padding: 6,
+                                  borderRadius: 14,
+                                  background:
+                                    styles.card.background ||
+                                    styles.input.background ||
+                                    "rgba(15,23,42,0.96)",
+                                  border:
+                                    styles.input.border ||
+                                    "1px solid rgba(148,163,184,0.38)",
+                                  boxShadow: "0 14px 32px rgba(0,0,0,0.32)",
+                                }}
+                                onPointerDown={(event) => {
+                                  event.stopPropagation();
+                                }}
+                              >
+                                {VIRTUAL_KEYBOARD_EMOJI_OPTIONS.map((emoji) => (
+                                  <button
+                                    key={`emoji-${emoji}`}
+                                    type="button"
+                                    role="menuitem"
+                                    aria-label={`Insérer ${emoji}`}
+                                    title={emoji}
+                                    style={{
+                                      ...styles.secondaryButton,
+                                      width: virtualKeyboardEmojiSize,
+                                      minWidth: virtualKeyboardEmojiSize,
+                                      height: virtualKeyboardEmojiSize,
+                                      minHeight: virtualKeyboardEmojiSize,
+                                      padding: 0,
+                                      borderRadius: 12,
+                                      fontSize: isCompactLayout ? 20 : 22,
+                                      fontWeight: 900,
+                                      lineHeight: 1,
+                                    }}
+                                    onClick={(event) => {
+                                      event.preventDefault();
+                                      event.stopPropagation();
+                                      insertVirtualKeyboardEmoji(emoji);
+                                    }}
+                                  >
+                                    {emoji}
+                                  </button>
+                                ))}
+                              </div>
+                            ) : null}
 
                             {isVariantMenuOpen ? (
                               <div

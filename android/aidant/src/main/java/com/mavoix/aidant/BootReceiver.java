@@ -18,6 +18,10 @@ public class BootReceiver extends BroadcastReceiver {
     }
 
     SharedPreferences prefs = context.getSharedPreferences(AlertContract.PREFS, Context.MODE_PRIVATE);
+    if (AlertContract.ROLE_PATIENT.equals(prefs.getString(AlertContract.KEY_APP_ROLE, AlertContract.ROLE_AIDANT))) {
+      return;
+    }
+
     ArrayList<PatientLinkStore.Link> links = PatientLinkStore.read(prefs);
     if (links.isEmpty()) {
       return;

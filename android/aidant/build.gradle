@@ -1,7 +1,7 @@
 apply plugin: 'com.android.application'
 
-def aidantVersionCode = 111
-def aidantVersionName = "1.1.1-s24"
+def aidantVersionCode = 200
+def aidantVersionName = "2.0.0"
 
 def releaseSigningProperties = new Properties()
 def releaseSigningPropertiesFile = rootProject.file('keystore.properties')

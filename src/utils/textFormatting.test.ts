@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   deleteAbbreviation,
   formatTextSmart,
+  formatTextSmartWithSelection,
   normalizeAbbreviationKey,
   normalizeTextFormatting,
   readAbbreviationEntries,
@@ -45,6 +46,68 @@ describe("text formatting", () => {
 
   it("fixes spacing around punctuation without requiring final expansion", () => {
     expect(formatTextSmart("bonjour,ca va?oui")).toBe("Bonjour, ça va? Oui");
+  });
+
+  it("does not add spaces between consecutive punctuation marks", () => {
+    expect(formatTextSmart("attends...quoi")).toBe("Attends... Quoi");
+    expect(formatTextSmart("non!!!stop")).toBe("Non!!! Stop");
+    expect(formatTextSmart("vrai!?oui")).toBe("Vrai!? Oui");
+  });
+
+  it("does not add spaces inside email or web addresses", () => {
+    expect(formatTextSmart("thorez.m@hotmail.fr")).toBe("thorez.m@hotmail.fr");
+    expect(formatTextSmart("https://www.blablabla.com")).toBe(
+      "https://www.blablabla.com"
+    );
+    expect(formatTextSmart("mon mail:thorez.m@hotmail.fr,merci")).toBe(
+      "Mon mail: thorez.m@hotmail.fr, merci"
+    );
+    expect(formatTextSmart("va sur https://www.blablabla.com,merci")).toBe(
+      "Va sur https://www.blablabla.com, merci"
+    );
+    expect(formatTextSmart("site www.blablabla.com!ok")).toBe(
+      "Site www.blablabla.com! Ok"
+    );
+  });
+
+  it("keeps the cursor near a middle edit when auto-spacing punctuation", () => {
+    const result = formatTextSmartWithSelection("bonjour,ca va", 10);
+
+    expect(result).toEqual({
+      text: "Bonjour, ça va",
+      selectionStart: 11,
+      selectionEnd: 11,
+    });
+  });
+
+  it("keeps the cursor after a full punctuation group", () => {
+    const result = formatTextSmartWithSelection("salut!?ca", 7);
+
+    expect(result).toEqual({
+      text: "Salut!? Ca",
+      selectionStart: 8,
+      selectionEnd: 8,
+    });
+  });
+
+  it("keeps the cursor in the middle after deleting words", () => {
+    const result = formatTextSmartWithSelection("je veux merci", 8);
+
+    expect(result).toEqual({
+      text: "Je veux merci",
+      selectionStart: 8,
+      selectionEnd: 8,
+    });
+  });
+
+  it("moves the cursor back when formatting removes a space before punctuation", () => {
+    const result = formatTextSmartWithSelection("salut , ça", 6);
+
+    expect(result).toEqual({
+      text: "Salut, ça",
+      selectionStart: 5,
+      selectionEnd: 5,
+    });
   });
 
   it("uses a custom plural after plural context words and numbers", () => {

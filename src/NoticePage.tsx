@@ -338,7 +338,7 @@ export default function NoticePage({
                   "La dictée vocale peut remplir le texte quand le navigateur ou l'appareil la prend en charge.",
                   "Sur Windows/Web, le bouton ⌨ ouvre le clavier virtuel pour écrire sans clavier physique.",
                   "Sur le clavier virtuel Windows/Web, gardez une lettre appuyée, glissez vers une variante, puis relâchez pour l'insérer.",
-                  "Sur ce clavier, Mot efface le mot précédent et ↵ ajoute un retour à la ligne.",
+                  "Sur ce clavier, ⌫ efface une lettre et ↵ ajoute un retour à la ligne.",
                 ]}
               />
             </NoticeBlock>

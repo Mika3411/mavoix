@@ -122,10 +122,12 @@ function NavButtonContent({
   icon,
   label,
   compact,
+  iconSize,
 }: {
   icon: NavGlyphName;
   label?: string;
   compact?: boolean;
+  iconSize?: number;
 }) {
   return (
     <span
@@ -137,7 +139,7 @@ function NavButtonContent({
         minWidth: 0,
       }}
     >
-      <NavGlyph name={icon} size={compact ? 15 : 17} />
+      <NavGlyph name={icon} size={iconSize ?? (compact ? 15 : 17)} />
       {label ? <span style={{ minWidth: 0 }}>{label}</span> : null}
     </span>
   );
@@ -228,6 +230,9 @@ function CaregiverAlertButton({
     caregiverAlertSending,
     selectedCaregiverAlertTargetName
   );
+  const buttonRadius = Math.max(16, Math.round(size * 0.31));
+  const highlightRadius = Math.max(12, buttonRadius - 5);
+  const bellSize = Math.max(22, Math.round(size * 0.46));
 
   return (
     <button
@@ -239,25 +244,65 @@ function CaregiverAlertButton({
         width: size,
         height: size,
         padding: 0,
-        borderRadius: 14,
+        borderRadius: buttonRadius,
         background: caregiverAlertSending
-          ? "linear-gradient(135deg, #92400e, #b45309)"
-          : "linear-gradient(135deg, #ffba3b, #f59e0b)",
-        color: "#111827",
-        border: "1px solid rgba(255,255,255,0.2)",
+          ? "linear-gradient(145deg, #9a3412 0%, #c2410c 45%, #7c2d12 100%)"
+          : "linear-gradient(145deg, #ffe08a 0%, #ffbf35 42%, #f59e0b 76%, #d97706 100%)",
+        color: "#101827",
+        border: "1px solid rgba(255, 237, 179, 0.78)",
         fontSize,
         fontWeight: 850,
         cursor: caregiverAlertSending ? "wait" : "pointer",
         boxShadow:
-          "0 16px 32px rgba(245, 158, 11, 0.24), inset 0 1px 0 rgba(255,255,255,0.35)",
+          "0 22px 44px rgba(245, 158, 11, 0.32), 0 12px 24px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255,255,255,0.66), inset 0 -12px 22px rgba(146, 64, 14, 0.16)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
         lineHeight: 1,
+        position: "relative",
+        overflow: "hidden",
+        transform: "translateZ(0)",
+        transition:
+          "transform 160ms ease, box-shadow 160ms ease, filter 160ms ease",
         ...style,
       }}
     >
-      <NavGlyph name="bell" size={Math.max(20, Math.round(size * 0.42))} />
+      <span
+        aria-hidden="true"
+        style={{
+          position: "absolute",
+          inset: 4,
+          borderRadius: highlightRadius,
+          background:
+            "linear-gradient(180deg, rgba(255,255,255,0.42), rgba(255,255,255,0.08) 38%, rgba(255,255,255,0) 68%)",
+          pointerEvents: "none",
+        }}
+      />
+      <span
+        aria-hidden="true"
+        style={{
+          position: "absolute",
+          width: "62%",
+          height: "62%",
+          borderRadius: 999,
+          background:
+            "radial-gradient(circle, rgba(255,255,255,0.26) 0%, rgba(255,255,255,0) 66%)",
+          pointerEvents: "none",
+        }}
+      />
+      <span
+        aria-hidden="true"
+        style={{
+          position: "relative",
+          zIndex: 1,
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          filter: "drop-shadow(0 1px 0 rgba(255,255,255,0.32))",
+        }}
+      >
+        <NavGlyph name="bell" size={bellSize} />
+      </span>
     </button>
   );
 }
@@ -412,6 +457,11 @@ export function AppHeader({
     : isLandscapeMobileLayout
       ? 13
       : 15;
+  const topNavIconOnlySize = isCompactLayout
+    ? 22
+    : isLandscapeMobileLayout
+      ? 20
+      : 22;
   const topNavBorderRadius = isLandscapeMobileLayout ? 12 : 12;
   const nativeHeaderAlertSize = isLandscapeMobileLayout ? 56 : 62;
   const profileFullName =
@@ -617,7 +667,11 @@ export function AppHeader({
                 position: "relative",
               }}
             >
-              <NavButtonContent icon="messages" compact />
+              <NavButtonContent
+                icon="messages"
+                compact
+                iconSize={topNavIconOnlySize}
+              />
               <CaregiverUnreadBadge
                 activeTheme={activeTheme}
                 unreadCaregiverMessageCount={unreadCaregiverMessageCount}
@@ -657,7 +711,11 @@ export function AppHeader({
                 lineHeight: isCompactLayout ? 1.1 : undefined,
               }}
             >
-              <NavButtonContent icon="menu" compact />
+              <NavButtonContent
+                icon="menu"
+                compact
+                iconSize={topNavIconOnlySize}
+              />
             </button>
 
             {isMoreMenuOpen && (
@@ -702,6 +760,7 @@ export function AppFooterNavigation({
   const footerNavPadding = isLandscapeMobileLayout ? "6px 10px" : "6px 3px";
   const footerNavFontSize = isLandscapeMobileLayout ? 13 : 11;
   const footerNavIconFontSize = isLandscapeMobileLayout ? 16 : 18;
+  const footerNavIconOnlySize = isLandscapeMobileLayout ? 20 : 22;
   const footerAlertSize = 50;
   const shouldShowFooterAlertButton = !isNativeApp;
   const footerNavGridColumns = isLandscapeMobileLayout
@@ -821,7 +880,11 @@ export function AppFooterNavigation({
               position: "relative",
             }}
           >
-            <NavButtonContent icon="messages" compact />
+            <NavButtonContent
+              icon="messages"
+              compact
+              iconSize={footerNavIconOnlySize}
+            />
             <CaregiverUnreadBadge
               activeTheme={activeTheme}
               unreadCaregiverMessageCount={unreadCaregiverMessageCount}
@@ -854,7 +917,11 @@ export function AppFooterNavigation({
               justifyContent: "center",
             }}
           >
-            <NavButtonContent icon="menu" compact />
+            <NavButtonContent
+              icon="menu"
+              compact
+              iconSize={footerNavIconOnlySize}
+            />
           </button>
 
           {isMoreMenuOpen && (
@@ -908,7 +975,8 @@ export function FloatingCaregiverAlertButton({
         right: 20,
         bottom: 96,
         zIndex: 9999,
-        boxShadow: "0 8px 25px rgba(0,0,0,0.3)",
+        boxShadow:
+          "0 24px 46px rgba(245, 158, 11, 0.34), 0 12px 28px rgba(0,0,0,0.34), inset 0 1px 0 rgba(255,255,255,0.68), inset 0 -12px 22px rgba(146,64,14,0.16)",
       }}
     />
   );

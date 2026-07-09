@@ -42,6 +42,7 @@ function normalizeStoredAlertRow(row) {
 function normalizeStoredMessageRow(row) {
   const messageType = row?.message_type === "audio" ? "audio" : "text";
   const senderRole = row?.sender_role === "caregiver" ? "caregiver" : "user";
+  const deliveredTo = Math.max(0, Number(row?.delivered_to || 0) || 0);
 
   return {
     id: String(row?.id || ""),
@@ -51,6 +52,56 @@ function normalizeStoredMessageRow(row) {
     senderName: String(row?.sender_name || ""),
     message: String(row?.message || ""),
     messageType,
+    deliveredTo,
+    deliveredAt: String(row?.delivered_at || ""),
+    readByUserAt: String(row?.read_by_user_at || ""),
+    readByCaregiverAt: String(row?.read_by_caregiver_at || ""),
+  };
+}
+
+function readFieldForRole(role) {
+  return role === "caregiver" ? "readByCaregiverAt" : "readByUserAt";
+}
+
+function readColumnForRole(role) {
+  return role === "caregiver" ? "read_by_caregiver_at" : "read_by_user_at";
+}
+
+function senderRoleForRecipient(role) {
+  return role === "caregiver" ? "user" : "caregiver";
+}
+
+function normalizeMessageIds(messageIds) {
+  if (!Array.isArray(messageIds)) return [];
+
+  const seen = new Set();
+  const normalized = [];
+  for (const value of messageIds) {
+    const id = String(value || "").trim();
+    if (!id || id.length > 120 || seen.has(id)) continue;
+    seen.add(id);
+    normalized.push(id);
+    if (normalized.length >= 80) break;
+  }
+
+  return normalized;
+}
+
+function mergeMessagePayload(existing, payload) {
+  if (!existing) return payload;
+  const deliveredTo = Math.max(
+    Number(existing.deliveredTo || 0) || 0,
+    Number(payload.deliveredTo || 0) || 0
+  );
+
+  return {
+    ...existing,
+    ...payload,
+    deliveredTo,
+    deliveredAt: payload.deliveredAt || existing.deliveredAt || "",
+    readByUserAt: payload.readByUserAt || existing.readByUserAt || "",
+    readByCaregiverAt:
+      payload.readByCaregiverAt || existing.readByCaregiverAt || "",
   };
 }
 
@@ -117,8 +168,52 @@ function createCaregiverStore({
 
   function saveMessageInMemory(roomKey, payload) {
     const history = getMessageHistoryInMemory(roomKey);
-    history.push(payload);
+    const index = history.findIndex((item) => item?.id === payload?.id);
+    if (index >= 0) {
+      history[index] = mergeMessagePayload(history[index], payload);
+    } else {
+      history.push(payload);
+    }
     pruneMessageHistory(history);
+  }
+
+  function markMessagesDeliveredInMemory(
+    roomKey,
+    recipientRole,
+    messageIds,
+    deliveredAt
+  ) {
+    const ids = new Set(messageIds);
+    const history = getMessageHistoryInMemory(roomKey);
+
+    for (let index = 0; index < history.length; index += 1) {
+      const item = history[index];
+      if (!item?.id || !ids.has(item.id)) continue;
+      if (item.senderRole === recipientRole) continue;
+
+      history[index] = mergeMessagePayload(item, {
+        deliveredTo: Math.max(1, Number(item.deliveredTo || 0) || 0),
+        deliveredAt: item.deliveredAt || deliveredAt,
+      });
+    }
+  }
+
+  function markMessagesReadInMemory(roomKey, readerRole, messageIds, readAt) {
+    const ids = new Set(messageIds);
+    const history = getMessageHistoryInMemory(roomKey);
+    const readField = readFieldForRole(readerRole);
+
+    for (let index = 0; index < history.length; index += 1) {
+      const item = history[index];
+      if (!item?.id || !ids.has(item.id)) continue;
+      if (item.senderRole === readerRole) continue;
+
+      history[index] = mergeMessagePayload(item, {
+        deliveredTo: Math.max(1, Number(item.deliveredTo || 0) || 0),
+        deliveredAt: item.deliveredAt || readAt,
+        [readField]: item[readField] || readAt,
+      });
+    }
   }
 
   async function fetchStoredAlerts(roomKey, afterTimestamp, limit = 10) {
@@ -174,19 +269,38 @@ function createCaregiverStore({
   }
 
   async function fetchStoredMessages(roomKey) {
-    const filters = [
+    const baseFilters = [
       `room_key=eq.${encodeURIComponent(roomKey)}`,
-      "select=id,channel,sender_role,sender_name,message,message_type,created_at",
       "order=created_at.desc",
       `limit=${messageHistoryLimit}`,
     ];
 
     if (messageRetentionMs > 0) {
       const cutoffIso = new Date(Date.now() - messageRetentionMs).toISOString();
-      filters.splice(1, 0, `created_at=gte.${encodeURIComponent(cutoffIso)}`);
+      baseFilters.splice(1, 0, `created_at=gte.${encodeURIComponent(cutoffIso)}`);
     }
 
-    const response = await request("GET", `caregiver_messages?${filters.join("&")}`);
+    const filters = [
+      ...baseFilters.slice(0, 1),
+      "select=id,channel,sender_role,sender_name,message,message_type,delivered_to,delivered_at,read_by_user_at,read_by_caregiver_at,created_at",
+      ...baseFilters.slice(1),
+    ];
+    let response = await request("GET", `caregiver_messages?${filters.join("&")}`);
+
+    if (!response.notConfigured && !response.ok) {
+      const legacyFilters = [
+        ...baseFilters.slice(0, 1),
+        "select=id,channel,sender_role,sender_name,message,message_type,created_at",
+        ...baseFilters.slice(1),
+      ];
+      const legacyResponse = await request(
+        "GET",
+        `caregiver_messages?${legacyFilters.join("&")}`
+      );
+      if (legacyResponse.ok || legacyResponse.notConfigured) {
+        response = legacyResponse;
+      }
+    }
 
     if (response.notConfigured) return null;
     if (!response.ok) {
@@ -203,23 +317,45 @@ function createCaregiverStore({
   }
 
   async function saveStoredMessage(roomKey, payload) {
-    const response = await request(
+    const row = {
+      id: payload.id,
+      room_key: roomKey,
+      channel: payload.channel,
+      sender_role: payload.senderRole,
+      sender_name: payload.senderName || null,
+      message: payload.message || "",
+      message_type: payload.messageType || "text",
+      delivered_to: Math.max(0, Number(payload.deliveredTo || 0) || 0),
+      delivered_at: payload.deliveredAt || null,
+      read_by_user_at: payload.readByUserAt || null,
+      read_by_caregiver_at: payload.readByCaregiverAt || null,
+      created_at: payload.createdAt || new Date().toISOString(),
+    };
+    let response = await request(
       "POST",
       "caregiver_messages?on_conflict=id",
-      [
-        {
-          id: payload.id,
-          room_key: roomKey,
-          channel: payload.channel,
-          sender_role: payload.senderRole,
-          sender_name: payload.senderName || null,
-          message: payload.message || "",
-          message_type: payload.messageType || "text",
-          created_at: payload.createdAt || new Date().toISOString(),
-        },
-      ],
+      [row],
       { Prefer: "resolution=merge-duplicates,return=minimal" }
     );
+
+    if (!response.notConfigured && !response.ok) {
+      const {
+        delivered_to,
+        delivered_at,
+        read_by_user_at,
+        read_by_caregiver_at,
+        ...legacyRow
+      } = row;
+      const legacyResponse = await request(
+        "POST",
+        "caregiver_messages?on_conflict=id",
+        [legacyRow],
+        { Prefer: "resolution=merge-duplicates,return=minimal" }
+      );
+      if (legacyResponse.ok || legacyResponse.notConfigured) {
+        response = legacyResponse;
+      }
+    }
 
     if (response.notConfigured) return false;
     if (!response.ok) {
@@ -228,6 +364,38 @@ function createCaregiverStore({
     }
 
     return true;
+  }
+
+  async function patchStoredMessageReceipts(roomKey, recipientRole, messageIds, patch) {
+    const ids = normalizeMessageIds(messageIds);
+    if (ids.length === 0) return null;
+
+    const senderRole = senderRoleForRecipient(recipientRole);
+    const idFilter = ids.map((id) => encodeURIComponent(id)).join(",");
+    const filters = [
+      `room_key=eq.${encodeURIComponent(roomKey)}`,
+      `sender_role=eq.${encodeURIComponent(senderRole)}`,
+      `id=in.(${idFilter})`,
+    ];
+
+    const response = await request(
+      "PATCH",
+      `caregiver_messages?${filters.join("&")}`,
+      patch,
+      { Prefer: "return=representation" }
+    );
+
+    if (response.notConfigured) return null;
+    if (!response.ok) {
+      logSupabaseStoreWarning("message receipt update", response);
+      return null;
+    }
+
+    return Array.isArray(response.data)
+      ? response.data
+          .map(normalizeStoredMessageRow)
+          .filter((message) => message.id)
+      : [];
   }
 
   async function getCaregiverAlertHistory(roomKey, afterTimestamp, limit = 10) {
@@ -269,9 +437,62 @@ function createCaregiverStore({
     await saveStoredMessage(roomKey, payload);
   }
 
+  async function markCaregiverMessagesDelivered(roomKey, recipientRole, messageIds) {
+    const ids = normalizeMessageIds(messageIds);
+    const deliveredAt = new Date().toISOString();
+    if (ids.length === 0) {
+      return { messageIds: [], deliveredAt };
+    }
+
+    markMessagesDeliveredInMemory(roomKey, recipientRole, ids, deliveredAt);
+    const storedMessages = await patchStoredMessageReceipts(
+      roomKey,
+      recipientRole,
+      ids,
+      { delivered_at: deliveredAt }
+    );
+
+    if (storedMessages) {
+      for (const message of storedMessages) {
+        saveMessageInMemory(roomKey, message);
+      }
+    }
+
+    return { messageIds: ids, deliveredAt };
+  }
+
+  async function markCaregiverMessagesRead(roomKey, readerRole, messageIds) {
+    const ids = normalizeMessageIds(messageIds);
+    const readAt = new Date().toISOString();
+    if (ids.length === 0) {
+      return { messageIds: [], readAt };
+    }
+
+    markMessagesReadInMemory(roomKey, readerRole, ids, readAt);
+    const storedMessages = await patchStoredMessageReceipts(
+      roomKey,
+      readerRole,
+      ids,
+      {
+        delivered_at: readAt,
+        [readColumnForRole(readerRole)]: readAt,
+      }
+    );
+
+    if (storedMessages) {
+      for (const message of storedMessages) {
+        saveMessageInMemory(roomKey, message);
+      }
+    }
+
+    return { messageIds: ids, readAt };
+  }
+
   return {
     getCaregiverAlertHistory,
     getCaregiverMessages,
+    markCaregiverMessagesDelivered,
+    markCaregiverMessagesRead,
     saveCaregiverAlert,
     saveCaregiverMessage,
   };

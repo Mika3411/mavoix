@@ -74,6 +74,11 @@ public class AlarmListenerService extends Service {
     String channel = intent != null ? intent.getStringExtra(AlertContract.EXTRA_CHANNEL) : null;
     String accessKey = intent != null ? intent.getStringExtra(AlertContract.EXTRA_ACCESS_KEY) : null;
 
+    if (AlertContract.ROLE_PATIENT.equals(prefs.getString(AlertContract.KEY_APP_ROLE, AlertContract.ROLE_AIDANT))) {
+      stopSelf();
+      return START_NOT_STICKY;
+    }
+
     if (channel != null && !channel.trim().isEmpty()) {
       PatientLinkStore.addOrSelect(prefs, apiBase, channel, accessKey);
     }

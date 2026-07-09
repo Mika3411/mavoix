@@ -96,6 +96,67 @@ describe("caregiver Express routes", () => {
     });
   });
 
+  it("accepts delivered and read receipts for caregiver messages", async () => {
+    await withTestServer(createApp(), async (baseUrl) => {
+      const channel = uniqueChannel();
+      const accessKey = "caregiverAccessKey123456";
+      const messageResponse = await fetch(`${baseUrl}/api/caregiver-messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          channel,
+          accessKey,
+          senderRole: "user",
+          senderName: "Alice",
+          message: "Bonjour",
+        }),
+      });
+      const messageResult = await readJson(messageResponse);
+      expect(messageResult.status).toBe(200);
+      const messageId = messageResult.body.message.id;
+
+      const delivered = await readJson(
+        await fetch(`${baseUrl}/api/caregiver-messages/delivered`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            channel,
+            accessKey,
+            recipientRole: "caregiver",
+            messageIds: [messageId],
+          }),
+        })
+      );
+      expect(delivered.status).toBe(200);
+      expect(delivered.body).toMatchObject({
+        success: true,
+        recipientRole: "caregiver",
+        messageIds: [messageId],
+      });
+      expect(delivered.body.deliveredAt).toBeTruthy();
+
+      const read = await readJson(
+        await fetch(`${baseUrl}/api/caregiver-messages/read`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            channel,
+            accessKey,
+            readerRole: "caregiver",
+            messageIds: [messageId],
+          }),
+        })
+      );
+      expect(read.status).toBe(200);
+      expect(read.body).toMatchObject({
+        success: true,
+        readerRole: "caregiver",
+        messageIds: [messageId],
+      });
+      expect(read.body.readAt).toBeTruthy();
+    });
+  });
+
   it("keeps alert history isolated by caregiver access key", async () => {
     await withTestServer(createApp(), async (baseUrl) => {
       const channel = uniqueChannel();

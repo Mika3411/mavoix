@@ -46,6 +46,10 @@ create table if not exists public.caregiver_messages (
   sender_name text,
   message text not null,
   message_type text not null default 'text' check (message_type in ('text', 'audio')),
+  delivered_to integer not null default 0,
+  delivered_at timestamptz,
+  read_by_user_at timestamptz,
+  read_by_caregiver_at timestamptz,
   created_at timestamptz not null default now()
 );
 

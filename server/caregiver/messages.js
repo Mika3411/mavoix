@@ -1,6 +1,8 @@
 const { randomUUID } = require("crypto");
 const {
   getCaregiverMessages,
+  markCaregiverMessagesDelivered,
+  markCaregiverMessagesRead,
   saveCaregiverMessage,
 } = require("../caregiver-store");
 const { requireCaregiverAccess, sanitizeText } = require("./access");
@@ -8,6 +10,7 @@ const { enforceRateLimit } = require("./rateLimit");
 const {
   CAREGIVER_MESSAGE_STREAM_CLIENT_LIMIT,
   broadcastCaregiverMessage,
+  broadcastCaregiverMessageReceipt,
   broadcastCaregiverPresence,
   closeSseClient,
   countCaregiverMessageClients,
@@ -24,6 +27,21 @@ function sanitizeMessageRole(value) {
 
 function sanitizeMessageType(value) {
   return value === "audio" ? "audio" : "text";
+}
+
+function sanitizeMessageIds(value) {
+  if (!Array.isArray(value)) return [];
+
+  const seen = new Set();
+  const ids = [];
+  for (const item of value) {
+    const id = sanitizeText(item, 120);
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    ids.push(id);
+    if (ids.length >= 80) break;
+  }
+  return ids;
 }
 
 async function getLatestUserCaregiverMessage(channel) {
@@ -156,12 +174,15 @@ function registerCaregiverMessageRoutes(app) {
     };
     const recipientRole = senderRole === "caregiver" ? "user" : "caregiver";
 
-    await saveCaregiverMessage(access.roomKey, payload);
     const deliveredTo = broadcastCaregiverMessage(
       access.roomKey,
       payload,
       recipientRole
     );
+    payload.deliveredTo = deliveredTo;
+    payload.deliveredAt = deliveredTo > 0 ? new Date().toISOString() : "";
+
+    await saveCaregiverMessage(access.roomKey, payload);
 
     res.json({
       success: true,
@@ -173,12 +194,113 @@ function registerCaregiverMessageRoutes(app) {
       message: payload,
     });
   });
+
+  app.post("/api/caregiver-messages/delivered", async (req, res) => {
+    const access = requireCaregiverAccess(
+      req,
+      res,
+      "Aucune conversation aidant n'est associee a cet accuse de reception."
+    );
+    if (!access) return;
+
+    const recipientRole = sanitizeMessageRole(
+      req.body?.recipientRole || req.body?.readerRole || req.body?.role
+    );
+
+    if (
+      !enforceRateLimit(req, res, "caregiver-message-delivered", 80, 60 * 1000, [
+        access.roomKey,
+        recipientRole,
+      ])
+    ) {
+      return;
+    }
+
+    const messageIds = sanitizeMessageIds(req.body?.messageIds);
+    if (messageIds.length === 0) {
+      res.status(400).json({
+        error: "Message introuvable",
+        details: "Aucun message a marquer comme recu.",
+      });
+      return;
+    }
+
+    const receipt = await markCaregiverMessagesDelivered(
+      access.roomKey,
+      recipientRole,
+      messageIds
+    );
+    const payload = {
+      channel: access.channel,
+      recipientRole,
+      messageIds: receipt.messageIds,
+      deliveredAt: receipt.deliveredAt,
+    };
+    broadcastCaregiverMessageReceipt(access.roomKey, payload);
+
+    res.json({
+      success: true,
+      ...payload,
+    });
+  });
+
+  app.post("/api/caregiver-messages/read", async (req, res) => {
+    const access = requireCaregiverAccess(
+      req,
+      res,
+      "Aucune conversation aidant n'est associee a cet accuse de lecture."
+    );
+    if (!access) return;
+
+    const readerRole = sanitizeMessageRole(
+      req.body?.readerRole || req.body?.recipientRole || req.body?.role
+    );
+
+    if (
+      !enforceRateLimit(req, res, "caregiver-message-read", 80, 60 * 1000, [
+        access.roomKey,
+        readerRole,
+      ])
+    ) {
+      return;
+    }
+
+    const messageIds = sanitizeMessageIds(req.body?.messageIds);
+    if (messageIds.length === 0) {
+      res.status(400).json({
+        error: "Message introuvable",
+        details: "Aucun message a marquer comme lu.",
+      });
+      return;
+    }
+
+    const receipt = await markCaregiverMessagesRead(
+      access.roomKey,
+      readerRole,
+      messageIds
+    );
+    const payload = {
+      channel: access.channel,
+      readerRole,
+      recipientRole: readerRole,
+      messageIds: receipt.messageIds,
+      readAt: receipt.readAt,
+      deliveredAt: receipt.readAt,
+    };
+    broadcastCaregiverMessageReceipt(access.roomKey, payload);
+
+    res.json({
+      success: true,
+      ...payload,
+    });
+  });
 }
 
 module.exports = {
   formatLastUnreadCaregiverMessage,
   getLatestUserCaregiverMessage,
   registerCaregiverMessageRoutes,
+  sanitizeMessageIds,
   sanitizeMessageRole,
   sanitizeMessageType,
 };

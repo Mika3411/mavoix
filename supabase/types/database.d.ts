@@ -27,5 +27,9 @@ export type CaregiverMessageRow = {
   sender_name: string | null;
   message: string;
   message_type: "text" | "audio";
+  delivered_to: number;
+  delivered_at: string | null;
+  read_by_user_at: string | null;
+  read_by_caregiver_at: string | null;
   created_at: string;
 };
