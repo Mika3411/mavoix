@@ -7,6 +7,7 @@ import {
   readCaregiverMessages,
   writeCaregiverMessages,
 } from "./caregiverMessages";
+import { deletePreviousGrapheme } from "../../utils/textEditing";
 import { formatTextSmartWithSelection } from "../dictionary/textFormatting";
 import type {
   CaregiverAlertTarget as ProfileCaregiverAlertTarget,
@@ -660,8 +661,12 @@ export default function CaregiverMessagesPage(props: CaregiverMessagesPageProps)
       return;
     }
 
-    const nextText = `${currentText.slice(0, selectionStart - 1)}${currentText.slice(selectionStart)}`;
-    applyMessageTextInput(nextText, selectionStart - 1, selectionStart - 1);
+    const deletion = deletePreviousGrapheme(currentText, selectionStart);
+    applyMessageTextInput(
+      deletion.text,
+      deletion.selectionStart,
+      deletion.selectionEnd
+    );
   }
 
   function isVirtualKeyboardLetter(key: string) {

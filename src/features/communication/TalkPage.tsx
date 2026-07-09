@@ -8,6 +8,7 @@ import type {
   StateSetter,
   StyleMap,
 } from "../../shared/types";
+import { deletePreviousGrapheme } from "../../utils/textEditing";
 import { formatTextSmartWithSelection } from "../dictionary/textFormatting";
 
 const VIRTUAL_KEYBOARD_ROWS = [
@@ -492,8 +493,12 @@ export default function TalkPage({
       return;
     }
 
-    const nextText = `${currentText.slice(0, selectionStart - 1)}${currentText.slice(selectionStart)}`;
-    applyTextInput(nextText, selectionStart - 1, selectionStart - 1);
+    const deletion = deletePreviousGrapheme(currentText, selectionStart);
+    applyTextInput(
+      deletion.text,
+      deletion.selectionStart,
+      deletion.selectionEnd
+    );
   }
 
   function isVirtualKeyboardLetter(key: string) {
