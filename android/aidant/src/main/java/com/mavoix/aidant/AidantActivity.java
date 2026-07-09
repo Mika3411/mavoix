@@ -15,7 +15,9 @@ import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.graphics.Rect;
+import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.LayerDrawable;
 import android.media.AudioAttributes;
 import android.media.MediaPlayer;
 import android.net.Uri;
@@ -67,18 +69,29 @@ import java.util.concurrent.Executors;
 public class AidantActivity extends Activity {
   private static final int REQUEST_NOTIFICATIONS = 42;
   private static final String MESSAGE_NOTIFICATION_CHANNEL_ID = "ma_voix_aidant_messages";
-  private static final int COLOR_PAGE = Color.rgb(15, 23, 42);
-  private static final int COLOR_CARD = Color.rgb(17, 24, 39);
-  private static final int COLOR_FIELD = Color.rgb(15, 23, 42);
-  private static final int COLOR_BORDER = Color.rgb(51, 65, 85);
+  private static final int COLOR_PAGE = Color.rgb(7, 12, 22);
+  private static final int COLOR_PAGE_TOP = Color.rgb(13, 21, 38);
+  private static final int COLOR_PAGE_BOTTOM = Color.rgb(5, 10, 18);
+  private static final int COLOR_CARD = Color.rgb(15, 23, 42);
+  private static final int COLOR_CARD_TOP = Color.rgb(24, 36, 56);
+  private static final int COLOR_CARD_BOTTOM = Color.rgb(10, 16, 28);
+  private static final int COLOR_FIELD = Color.rgb(9, 14, 25);
+  private static final int COLOR_FIELD_TOP = Color.rgb(18, 29, 48);
+  private static final int COLOR_FIELD_BOTTOM = Color.rgb(8, 13, 24);
+  private static final int COLOR_BORDER = Color.rgb(68, 85, 112);
   private static final int COLOR_TEXT = Color.rgb(248, 250, 252);
-  private static final int COLOR_MUTED = Color.rgb(203, 213, 225);
-  private static final int COLOR_PRIMARY = Color.rgb(37, 99, 235);
+  private static final int COLOR_MUTED = Color.rgb(214, 222, 235);
+  private static final int COLOR_PRIMARY = Color.rgb(47, 116, 255);
+  private static final int COLOR_PRIMARY_LIGHT = Color.rgb(96, 165, 250);
   private static final int COLOR_SECONDARY = Color.rgb(30, 41, 59);
   private static final int COLOR_SUCCESS = Color.rgb(22, 163, 74);
   private static final int COLOR_DANGER = Color.rgb(220, 38, 38);
-  private static final int COLOR_INFO_BG = Color.rgb(30, 58, 138);
+  private static final int COLOR_INFO_BG = Color.rgb(23, 52, 112);
   private static final int COLOR_WARNING_BG = Color.rgb(69, 51, 25);
+  private static final int COLOR_ALARM_TEXT = Color.rgb(11, 18, 32);
+  private static final int COLOR_GOLD_TOP = Color.rgb(255, 224, 138);
+  private static final int COLOR_GOLD_MID = Color.rgb(255, 191, 53);
+  private static final int COLOR_GOLD_BOTTOM = Color.rgb(217, 119, 6);
   private static final int COLOR_USER_BUBBLE = Color.rgb(22, 78, 99);
   private static final int COLOR_CAREGIVER_BUBBLE = Color.rgb(30, 64, 175);
   private final ExecutorService messageExecutor = Executors.newCachedThreadPool();
@@ -260,13 +273,18 @@ public class AidantActivity extends Activity {
   }
 
   private void buildLayout() {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+      getWindow().setStatusBarColor(COLOR_PAGE_BOTTOM);
+      getWindow().setNavigationBarColor(COLOR_PAGE_BOTTOM);
+    }
+
     LinearLayout screen = new LinearLayout(this);
     screen.setOrientation(LinearLayout.VERTICAL);
-    screen.setBackgroundColor(COLOR_PAGE);
+    screen.setBackground(pageBackground());
 
     contentScrollView = new ScrollView(this);
     contentScrollView.setFillViewport(true);
-    contentScrollView.setBackgroundColor(COLOR_PAGE);
+    contentScrollView.setBackground(pageBackground());
 
     LinearLayout root = new LinearLayout(this);
     root.setOrientation(LinearLayout.VERTICAL);
@@ -411,7 +429,7 @@ public class AidantActivity extends Activity {
     button.setTextSize(14);
     button.setMinHeight(dp(42));
     button.setPadding(dp(12), 0, dp(12), 0);
-    button.setBackground(roundedStroke(COLOR_SECONDARY, COLOR_BORDER, 16, 1));
+    button.setBackground(premiumButtonBackground(16));
     button.setContentDescription("Choisir Patient ou Aidant");
     button.setOnClickListener(v -> showRoleChoiceFromModeButton());
     LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
@@ -430,13 +448,14 @@ public class AidantActivity extends Activity {
     });
     connectionButton.setTextSize(30);
     connectionButton.setMinHeight(dp(126));
+    elevate(connectionButton, 8);
     panel.addView(connectionButton, matchWrap());
 
     statusText = new TextView(this);
     statusText.setTextSize(17);
     statusText.setTextColor(COLOR_TEXT);
     statusText.setPadding(dp(14), dp(12), dp(14), dp(12));
-    statusText.setBackground(roundedStroke(COLOR_INFO_BG, Color.rgb(96, 165, 250), 16, 1));
+    statusText.setBackground(premiumInfoBackground(16));
     panel.addView(statusText, spacedParams(0, dp(12), 0, 0));
 
     panel.addView(button("Arreter l'alarme", v -> stopAlarm()), matchWrap());
@@ -456,19 +475,19 @@ public class AidantActivity extends Activity {
     patientCallButton.setTextSize(28);
     patientCallButton.setGravity(Gravity.CENTER);
     patientCallButton.setMinHeight(dp(156));
-    patientCallButton.setPadding(dp(18), dp(18), dp(18), dp(18));
+    patientCallButton.setPadding(dp(18), dp(20), dp(18), dp(20));
     patientCallButton.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-      patientCallButton.setElevation(dp(8));
-    }
+    patientCallButton.setLineSpacing(dp(3), 1.0f);
+    elevate(patientCallButton, 10);
     applyPatientAlarmButtonStyle(false);
+    applyPremiumBellInteraction(patientCallButton);
     panel.addView(patientCallButton, matchWrap());
 
     patientStatusText = new TextView(this);
     patientStatusText.setTextSize(17);
     patientStatusText.setTextColor(COLOR_TEXT);
     patientStatusText.setPadding(dp(14), dp(12), dp(14), dp(12));
-    patientStatusText.setBackground(roundedStroke(COLOR_INFO_BG, Color.rgb(96, 165, 250), 16, 1));
+    patientStatusText.setBackground(premiumInfoBackground(16));
     panel.addView(patientStatusText, spacedParams(0, dp(12), 0, 0));
 
     patientConnectionStatusText = infoText();
@@ -612,7 +631,7 @@ public class AidantActivity extends Activity {
     panel.addView(actions, spacedParams(0, dp(8), 0, 0));
 
     Button regenerateButton = rowButton("Regenerer le lien patient", v -> confirmRegeneratePatientLink());
-    regenerateButton.setBackground(roundedStroke(COLOR_WARNING_BG, Color.rgb(245, 158, 11), 18, 1));
+    regenerateButton.setBackground(premiumWarningButtonBackground(18));
     panel.addView(regenerateButton, matchWrap());
   }
 
@@ -644,7 +663,7 @@ public class AidantActivity extends Activity {
     messageListContainer = new LinearLayout(this);
     messageListContainer.setOrientation(LinearLayout.VERTICAL);
     messageListContainer.setPadding(dp(12), dp(12), dp(12), dp(12));
-    messageListContainer.setBackground(roundedStroke(COLOR_FIELD, COLOR_BORDER, 18, 1));
+    messageListContainer.setBackground(premiumFieldBackground(18));
     messageListContainer.setMinimumHeight(dp(180));
     panel.addView(messageListContainer, matchWrap());
 
@@ -692,7 +711,7 @@ public class AidantActivity extends Activity {
     patientMessageListContainer = new LinearLayout(this);
     patientMessageListContainer.setOrientation(LinearLayout.VERTICAL);
     patientMessageListContainer.setPadding(dp(12), dp(12), dp(12), dp(12));
-    patientMessageListContainer.setBackground(roundedStroke(COLOR_FIELD, COLOR_BORDER, 18, 1));
+    patientMessageListContainer.setBackground(premiumFieldBackground(18));
     patientMessageListContainer.setMinimumHeight(dp(220));
     panel.addView(patientMessageListContainer, matchWrap());
 
@@ -797,7 +816,8 @@ public class AidantActivity extends Activity {
     LinearLayout block = new LinearLayout(this);
     block.setOrientation(LinearLayout.VERTICAL);
     block.setPadding(dp(12), dp(12), dp(12), dp(12));
-    block.setBackground(roundedStroke(COLOR_SECONDARY, COLOR_BORDER, 16, 1));
+    block.setBackground(premiumFieldBackground(16));
+    elevate(block, 2);
 
     block.addView(messageTextView(title, COLOR_TEXT, 17, true), matchWrap());
     block.addView(messageTextView(body, COLOR_MUTED, 15, false), spacedParams(0, dp(6), 0, 0));
@@ -807,8 +827,9 @@ public class AidantActivity extends Activity {
   private LinearLayout panel() {
     LinearLayout panel = new LinearLayout(this);
     panel.setOrientation(LinearLayout.VERTICAL);
-    panel.setPadding(dp(16), dp(16), dp(16), dp(16));
-    panel.setBackground(roundedStroke(COLOR_CARD, COLOR_BORDER, 22, 1));
+    panel.setPadding(dp(18), dp(18), dp(18), dp(18));
+    panel.setBackground(premiumPanelBackground(24));
+    elevate(panel, 5);
     return panel;
   }
 
@@ -826,7 +847,7 @@ public class AidantActivity extends Activity {
     textView.setTextColor(COLOR_MUTED);
     textView.setTextSize(15);
     textView.setPadding(dp(12), dp(12), dp(12), dp(12));
-    textView.setBackground(roundedStroke(COLOR_SECONDARY, COLOR_BORDER, 16, 1));
+    textView.setBackground(premiumInfoBackground(16));
     return textView;
   }
 
@@ -957,7 +978,14 @@ public class AidantActivity extends Activity {
     nav.setOrientation(LinearLayout.HORIZONTAL);
     nav.setGravity(Gravity.CENTER);
     nav.setPadding(dp(8), dp(6), dp(8), dp(8));
-    nav.setBackground(roundedStroke(COLOR_CARD, COLOR_BORDER, 0, 1));
+    nav.setBackground(roundedGradientStroke(
+        new int[] { Color.rgb(15, 23, 42), Color.rgb(8, 13, 24) },
+        GradientDrawable.Orientation.TOP_BOTTOM,
+        Color.rgb(53, 68, 92),
+        0,
+        1
+    ));
+    elevate(nav, 12);
 
     connectionTab = bottomNavItem("⌁", "Connexion", "connexion");
     configTab = bottomNavItem("☷", "Configurer", "configurer");
@@ -1043,11 +1071,17 @@ public class AidantActivity extends Activity {
   private void styleBottomNavItem(LinearLayout item, boolean selected) {
     if (item == null) return;
 
-    int color = selected ? COLOR_PRIMARY : COLOR_MUTED;
+    int color = selected ? COLOR_PRIMARY_LIGHT : COLOR_MUTED;
     item.setSelected(selected);
     item.setBackground(
         selected
-            ? roundedStroke(Color.rgb(15, 23, 42), Color.rgb(30, 64, 175), 18, 1)
+            ? roundedGradientStroke(
+                new int[] { Color.rgb(18, 35, 69), Color.rgb(8, 16, 33) },
+                GradientDrawable.Orientation.TL_BR,
+                COLOR_PRIMARY,
+                18,
+                1
+            )
             : rounded(Color.TRANSPARENT, 18)
     );
 
@@ -1068,7 +1102,8 @@ public class AidantActivity extends Activity {
   private Button primaryButton(String label, View.OnClickListener listener) {
     Button button = button(label, listener);
     button.setTextColor(COLOR_TEXT);
-    button.setBackground(rounded(COLOR_PRIMARY, 18));
+    button.setBackground(premiumPrimaryButtonBackground(18));
+    elevate(button, 6);
     return button;
   }
 
@@ -1082,10 +1117,14 @@ public class AidantActivity extends Activity {
     button.setTextSize(18);
     button.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
     button.setMinHeight(dp(64));
-    button.setBackground(roundedStroke(fillColor, strokeColor, 20, 2));
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-      button.setElevation(dp(4));
-    }
+    button.setBackground(roundedGradientStroke(
+        new int[] { strokeColor, fillColor },
+        GradientDrawable.Orientation.TL_BR,
+        strokeColor,
+        20,
+        1
+    ));
+    elevate(button, 5);
     return button;
   }
 
@@ -1096,7 +1135,9 @@ public class AidantActivity extends Activity {
     button.setTextColor(COLOR_TEXT);
     button.setTextSize(18);
     button.setMinHeight(dp(54));
-    button.setBackground(roundedStroke(COLOR_SECONDARY, COLOR_BORDER, 18, 1));
+    button.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+    button.setBackground(premiumButtonBackground(18));
+    elevate(button, 2);
     button.setOnClickListener(listener);
     LinearLayout.LayoutParams params = matchWrap();
     params.setMargins(0, dp(8), 0, 0);
@@ -1122,12 +1163,7 @@ public class AidantActivity extends Activity {
     button.setMinHeight(dp(44));
     button.setTextSize(15);
     button.setTextColor(warning ? Color.rgb(251, 191, 36) : COLOR_TEXT);
-    button.setBackground(roundedStroke(
-        COLOR_SECONDARY,
-        warning ? Color.rgb(245, 158, 11) : COLOR_BORDER,
-        14,
-        1
-    ));
+    button.setBackground(warning ? premiumWarningButtonBackground(14) : premiumButtonBackground(14));
     return button;
   }
 
@@ -1135,7 +1171,7 @@ public class AidantActivity extends Activity {
     Button button = button(label, listener);
     button.setMinHeight(dp(48));
     button.setTextSize(16);
-    button.setBackground(roundedStroke(COLOR_CARD, COLOR_BORDER, 14, 1));
+    button.setBackground(premiumButtonBackground(14));
     return button;
   }
 
@@ -1154,13 +1190,13 @@ public class AidantActivity extends Activity {
   private void styleInput(EditText input) {
     input.setTextColor(COLOR_TEXT);
     input.setHintTextColor(Color.rgb(148, 163, 184));
-    input.setBackground(roundedStroke(COLOR_FIELD, COLOR_BORDER, 18, 1));
+    input.setBackground(premiumFieldBackground(18));
   }
 
   private FrameLayout spinnerBox(Spinner spinner) {
     FrameLayout box = new FrameLayout(this);
     box.setMinimumHeight(dp(54));
-    box.setBackground(roundedStroke(COLOR_CARD, COLOR_BORDER, 18, 1));
+    box.setBackground(premiumFieldBackground(18));
     box.setOnClickListener(v -> spinner.performClick());
 
     spinner.setBackgroundColor(Color.TRANSPARENT);
@@ -1229,6 +1265,204 @@ public class AidantActivity extends Activity {
     return drawable;
   }
 
+  private GradientDrawable roundedGradient(int[] colors, GradientDrawable.Orientation orientation, int radiusDp) {
+    GradientDrawable drawable = new GradientDrawable(orientation, colors);
+    drawable.setCornerRadius(dp(radiusDp));
+    return drawable;
+  }
+
+  private GradientDrawable roundedGradientStroke(
+      int[] colors,
+      GradientDrawable.Orientation orientation,
+      int strokeColor,
+      int radiusDp,
+      int strokeDp
+  ) {
+    GradientDrawable drawable = roundedGradient(colors, orientation, radiusDp);
+    drawable.setStroke(dp(strokeDp), strokeColor);
+    return drawable;
+  }
+
+  private Drawable pageBackground() {
+    return roundedGradient(
+        new int[] { COLOR_PAGE_TOP, COLOR_PAGE_BOTTOM },
+        GradientDrawable.Orientation.TOP_BOTTOM,
+        0
+    );
+  }
+
+  private Drawable premiumPanelBackground(int radiusDp) {
+    GradientDrawable base = roundedGradientStroke(
+        new int[] { COLOR_CARD_TOP, COLOR_CARD_BOTTOM },
+        GradientDrawable.Orientation.TOP_BOTTOM,
+        COLOR_BORDER,
+        radiusDp,
+        1
+    );
+    GradientDrawable highlight = roundedStroke(Color.TRANSPARENT, Color.argb(44, 255, 255, 255), radiusDp, 1);
+    LayerDrawable layer = new LayerDrawable(new Drawable[] { base, highlight });
+    layer.setLayerInset(1, dp(1), dp(1), dp(1), dp(1));
+    return layer;
+  }
+
+  private Drawable premiumFieldBackground(int radiusDp) {
+    return roundedGradientStroke(
+        new int[] { COLOR_FIELD_TOP, COLOR_FIELD_BOTTOM },
+        GradientDrawable.Orientation.TOP_BOTTOM,
+        Color.rgb(57, 73, 99),
+        radiusDp,
+        1
+    );
+  }
+
+  private Drawable premiumInfoBackground(int radiusDp) {
+    return roundedGradientStroke(
+        new int[] { Color.rgb(26, 42, 68), Color.rgb(14, 23, 39) },
+        GradientDrawable.Orientation.TOP_BOTTOM,
+        Color.rgb(70, 91, 123),
+        radiusDp,
+        1
+    );
+  }
+
+  private Drawable premiumButtonBackground(int radiusDp) {
+    return roundedGradientStroke(
+        new int[] { Color.rgb(38, 52, 74), Color.rgb(20, 30, 48) },
+        GradientDrawable.Orientation.TOP_BOTTOM,
+        Color.rgb(73, 91, 122),
+        radiusDp,
+        1
+    );
+  }
+
+  private Drawable premiumPrimaryButtonBackground(int radiusDp) {
+    return roundedGradientStroke(
+        new int[] { Color.rgb(56, 189, 248), COLOR_PRIMARY, Color.rgb(29, 78, 216) },
+        GradientDrawable.Orientation.TL_BR,
+        Color.rgb(147, 197, 253),
+        radiusDp,
+        1
+    );
+  }
+
+  private Drawable premiumWarningButtonBackground(int radiusDp) {
+    return roundedGradientStroke(
+        new int[] { Color.rgb(105, 73, 22), Color.rgb(67, 43, 13) },
+        GradientDrawable.Orientation.TL_BR,
+        Color.rgb(245, 158, 11),
+        radiusDp,
+        1
+    );
+  }
+
+  private Drawable premiumSuccessButtonBackground(int radiusDp) {
+    return roundedGradientStroke(
+        new int[] { Color.rgb(74, 222, 128), COLOR_SUCCESS, Color.rgb(21, 128, 61) },
+        GradientDrawable.Orientation.TL_BR,
+        Color.rgb(134, 239, 172),
+        radiusDp,
+        1
+    );
+  }
+
+  private Drawable premiumDangerButtonBackground(int radiusDp) {
+    return roundedGradientStroke(
+        new int[] { Color.rgb(248, 113, 113), COLOR_DANGER, Color.rgb(127, 29, 29) },
+        GradientDrawable.Orientation.TL_BR,
+        Color.rgb(254, 202, 202),
+        radiusDp,
+        1
+    );
+  }
+
+  private Drawable premiumAlarmButtonBackground(boolean sending) {
+    return roundedGradientStroke(
+        sending
+            ? new int[] { Color.rgb(154, 52, 18), Color.rgb(194, 65, 12), Color.rgb(124, 45, 18) }
+            : new int[] { COLOR_GOLD_TOP, COLOR_GOLD_MID, COLOR_GOLD_BOTTOM },
+        GradientDrawable.Orientation.TL_BR,
+        sending ? Color.rgb(253, 186, 116) : Color.rgb(255, 237, 173),
+        30,
+        2
+    );
+  }
+
+  private Drawable premiumStatusPillBackground(boolean positive) {
+    return roundedGradientStroke(
+        positive
+            ? new int[] { Color.rgb(22, 101, 52), Color.rgb(14, 61, 42) }
+            : new int[] { Color.rgb(92, 62, 18), Color.rgb(49, 34, 14) },
+        GradientDrawable.Orientation.TL_BR,
+        positive ? Color.rgb(74, 222, 128) : Color.rgb(245, 158, 11),
+        16,
+        1
+    );
+  }
+
+  private Drawable premiumMessageBubbleBackground(boolean caregiver) {
+    return roundedGradientStroke(
+        caregiver
+            ? new int[] { Color.rgb(37, 99, 235), Color.rgb(24, 63, 160) }
+            : new int[] { Color.rgb(14, 116, 144), Color.rgb(21, 83, 111) },
+        GradientDrawable.Orientation.TL_BR,
+        caregiver ? Color.rgb(147, 197, 253) : Color.rgb(103, 232, 249),
+        16,
+        1
+    );
+  }
+
+  private void applyPremiumBellInteraction(View view) {
+    if (view == null) return;
+
+    view.setOnHoverListener((target, event) -> {
+      if (!target.isEnabled()) return false;
+
+      int action = event.getActionMasked();
+      if (action == MotionEvent.ACTION_HOVER_ENTER) {
+        animatePremiumBell(target, 1.055f, -3, 14, 170);
+      } else if (action == MotionEvent.ACTION_HOVER_EXIT) {
+        animatePremiumBell(target, 1f, 0, 10, 170);
+      }
+      return false;
+    });
+
+    view.setOnTouchListener((target, event) -> {
+      if (!target.isEnabled()) return false;
+
+      int action = event.getActionMasked();
+      if (action == MotionEvent.ACTION_DOWN) {
+        animatePremiumBell(target, 0.955f, 1, 6, 100);
+      } else if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
+        animatePremiumBell(target, 1f, 0, 10, 180);
+      }
+      return false;
+    });
+  }
+
+  private void animatePremiumBell(
+      View view,
+      float scale,
+      int translationYDp,
+      int elevationDp,
+      int durationMs
+  ) {
+    if (view == null) return;
+
+    view.animate()
+        .scaleX(scale)
+        .scaleY(scale)
+        .translationY(dp(translationYDp))
+        .setDuration(durationMs)
+        .start();
+    elevate(view, elevationDp);
+  }
+
+  private void elevate(View view, int elevationDp) {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP && view != null) {
+      view.setElevation(dp(elevationDp));
+    }
+  }
+
   private String readSavedRole() {
     String savedRole = prefs.getString(AlertContract.KEY_APP_ROLE, AlertContract.ROLE_AIDANT);
     if (AlertContract.ROLE_PATIENT.equals(savedRole)) {
@@ -1280,9 +1514,16 @@ public class AidantActivity extends Activity {
 
     card.setBackground(
         selected
-            ? roundedStroke(Color.rgb(30, 58, 138), Color.rgb(147, 197, 253), 22, 2)
-            : roundedStroke(COLOR_SECONDARY, COLOR_BORDER, 22, 1)
+            ? roundedGradientStroke(
+                new int[] { Color.rgb(45, 97, 208), Color.rgb(23, 52, 112) },
+                GradientDrawable.Orientation.TL_BR,
+                Color.rgb(147, 197, 253),
+                22,
+                2
+            )
+            : premiumPanelBackground(22)
     );
+    elevate(card, selected ? 7 : 3);
   }
 
   private void reloadPatientLinks() {
@@ -1526,13 +1767,14 @@ public class AidantActivity extends Activity {
   private void applyPatientAlarmButtonStyle(boolean sending) {
     if (patientCallButton == null) return;
 
-    patientCallButton.setTextColor(COLOR_TEXT);
-    patientCallButton.setBackground(roundedStroke(
-        sending ? COLOR_WARNING_BG : Color.rgb(185, 28, 28),
-        sending ? Color.rgb(245, 158, 11) : Color.rgb(254, 202, 202),
-        30,
-        3
-    ));
+    patientCallButton.setTextColor(sending ? COLOR_TEXT : COLOR_ALARM_TEXT);
+    patientCallButton.setBackground(premiumAlarmButtonBackground(sending));
+    patientCallButton.setCompoundDrawablePadding(dp(14));
+    Drawable bell = getResources().getDrawable(R.drawable.ic_alarm_bell_modern, getTheme()).mutate();
+    bell.setBounds(0, 0, dp(44), dp(44));
+    patientCallButton.setCompoundDrawables(bell, null, null, null);
+    patientCallButton.setContentDescription(sending ? "Envoi de l'alerte aidant" : "Appeler l'aidant");
+    elevate(patientCallButton, sending ? 6 : 10);
   }
 
   private void updatePatientConnectionStatus() {
@@ -1581,24 +1823,14 @@ public class AidantActivity extends Activity {
       patientMessageStatusText.setText(selectedProfile.aidantDisplayName() + " : Déconnecté");
     }
 
-    patientMessageStatusText.setBackground(roundedStroke(
-        aidantConnected ? Color.rgb(20, 83, 45) : COLOR_WARNING_BG,
-        aidantConnected ? Color.rgb(74, 222, 128) : Color.rgb(245, 158, 11),
-        16,
-        1
-    ));
+    patientMessageStatusText.setBackground(premiumStatusPillBackground(aidantConnected));
   }
 
   private void updatePatientStatusPill(boolean aidantConnected) {
     if (patientStatusText == null) return;
 
     patientStatusText.setText(aidantConnected ? "Connecté" : "Déconnecté");
-    patientStatusText.setBackground(roundedStroke(
-        aidantConnected ? Color.rgb(20, 83, 45) : COLOR_WARNING_BG,
-        aidantConnected ? Color.rgb(74, 222, 128) : Color.rgb(245, 158, 11),
-        16,
-        1
-    ));
+    patientStatusText.setBackground(premiumStatusPillBackground(aidantConnected));
   }
 
   private boolean isAidantConnected(String aidantId) {
@@ -1647,9 +1879,18 @@ public class AidantActivity extends Activity {
       LinearLayout card = new LinearLayout(this);
       card.setOrientation(LinearLayout.VERTICAL);
       card.setPadding(dp(12), dp(12), dp(12), dp(12));
-      card.setBackground(roundedStroke(COLOR_SECONDARY, COLOR_BORDER, 16, 1));
 
       boolean selected = link.id.equals(selectedConnectionId);
+      card.setBackground(selected
+          ? roundedGradientStroke(
+              new int[] { Color.rgb(30, 58, 95), Color.rgb(17, 29, 49) },
+              GradientDrawable.Orientation.TL_BR,
+              COLOR_PRIMARY_LIGHT,
+              16,
+              1
+          )
+          : premiumFieldBackground(16));
+      elevate(card, selected ? 4 : 2);
       TextView title = messageTextView(
           (selected ? "✓ " : "") + link.name,
           COLOR_TEXT,
@@ -2079,8 +2320,8 @@ public class AidantActivity extends Activity {
 
     testSoundButton.setText(isTestingAlarmSound ? "Stopper" : "Tester le son");
     testSoundButton.setBackground(isTestingAlarmSound
-        ? rounded(COLOR_DANGER, 18)
-        : roundedStroke(COLOR_SECONDARY, COLOR_BORDER, 18, 1));
+        ? premiumDangerButtonBackground(18)
+        : premiumButtonBackground(18));
   }
 
   private void selectAlarmSound(int position) {
@@ -2857,12 +3098,8 @@ public class AidantActivity extends Activity {
       LinearLayout bubble = new LinearLayout(this);
       bubble.setOrientation(LinearLayout.VERTICAL);
       bubble.setPadding(dp(10), dp(10), dp(10), dp(10));
-      bubble.setBackground(roundedStroke(
-          caregiver ? COLOR_CAREGIVER_BUBBLE : COLOR_USER_BUBBLE,
-          caregiver ? Color.rgb(96, 165, 250) : Color.rgb(74, 222, 128),
-          16,
-          1
-      ));
+      bubble.setBackground(premiumMessageBubbleBackground(caregiver));
+      elevate(bubble, 2);
 
       String sender = caregiver ? "Moi" : "Utilisateur";
       String metaText = sender + " - " + AidantMessageUtils.formatMessageTime(item.createdAt);
@@ -2922,12 +3159,8 @@ public class AidantActivity extends Activity {
       LinearLayout bubble = new LinearLayout(this);
       bubble.setOrientation(LinearLayout.VERTICAL);
       bubble.setPadding(dp(10), dp(10), dp(10), dp(10));
-      bubble.setBackground(roundedStroke(
-          caregiver ? COLOR_CAREGIVER_BUBBLE : COLOR_USER_BUBBLE,
-          caregiver ? Color.rgb(96, 165, 250) : Color.rgb(74, 222, 128),
-          16,
-          1
-      ));
+      bubble.setBackground(premiumMessageBubbleBackground(caregiver));
+      elevate(bubble, 2);
 
       String sender = caregiver ? "Aidant" : "Moi";
       String metaText = sender + " - " + AidantMessageUtils.formatMessageTime(item.createdAt);
@@ -3060,7 +3293,10 @@ public class AidantActivity extends Activity {
 
     connectionButton.setText(hasPatients ? "Connecte a " + patientCountLabel(patientLinks.size()) : "Non connecte");
     connectionButton.setTextColor(COLOR_TEXT);
-    connectionButton.setBackground(rounded(hasPatients ? COLOR_SUCCESS : COLOR_DANGER, 26));
+    connectionButton.setBackground(hasPatients
+        ? premiumSuccessButtonBackground(26)
+        : premiumDangerButtonBackground(26));
+    elevate(connectionButton, hasPatients ? 8 : 6);
   }
 
   private void refreshUi() {
@@ -3195,11 +3431,9 @@ public class AidantActivity extends Activity {
     view.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
     view.setGravity(Gravity.CENTER);
     view.setPadding(dp(22), dp(16), dp(22), dp(16));
-    view.setBackground(roundedStroke(Color.rgb(15, 23, 42), Color.rgb(96, 165, 250), 18, 1));
+    view.setBackground(premiumInfoBackground(18));
     view.setAlpha(0f);
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-      view.setElevation(dp(10));
-    }
+    elevate(view, 10);
 
     FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(
         FrameLayout.LayoutParams.WRAP_CONTENT,

@@ -236,6 +236,7 @@ function CaregiverAlertButton({
 
   return (
     <button
+      className="ma-voix-premium-bell-button"
       onClick={sendCaregiverAlert}
       disabled={caregiverAlertSending}
       aria-label={label}
@@ -268,6 +269,7 @@ function CaregiverAlertButton({
       }}
     >
       <span
+        className="ma-voix-premium-bell-shine"
         aria-hidden="true"
         style={{
           position: "absolute",
@@ -275,10 +277,13 @@ function CaregiverAlertButton({
           borderRadius: highlightRadius,
           background:
             "linear-gradient(180deg, rgba(255,255,255,0.42), rgba(255,255,255,0.08) 38%, rgba(255,255,255,0) 68%)",
+          opacity: 1,
+          transform: "translateY(0)",
           pointerEvents: "none",
         }}
       />
       <span
+        className="ma-voix-premium-bell-glow"
         aria-hidden="true"
         style={{
           position: "absolute",
@@ -291,6 +296,7 @@ function CaregiverAlertButton({
         }}
       />
       <span
+        className="ma-voix-premium-bell-glyph"
         aria-hidden="true"
         style={{
           position: "relative",

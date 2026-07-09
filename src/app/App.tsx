@@ -399,6 +399,111 @@ export default function App() {
         border-color: rgba(25, 194, 255, 0.7) !important;
         box-shadow: 0 0 0 3px rgba(25, 194, 255, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.06) !important;
       }
+
+      @keyframes ma-voix-premium-bell-ring {
+        0% {
+          transform: rotate(0deg) scale(1);
+        }
+        18% {
+          transform: rotate(-9deg) scale(1.06);
+        }
+        36% {
+          transform: rotate(8deg) scale(1.07);
+        }
+        54% {
+          transform: rotate(-5deg) scale(1.04);
+        }
+        72% {
+          transform: rotate(3deg) scale(1.02);
+        }
+        100% {
+          transform: rotate(0deg) scale(1);
+        }
+      }
+
+      @keyframes ma-voix-premium-bell-glow {
+        0% {
+          opacity: 0.9;
+          transform: scale(0.92);
+        }
+        50% {
+          opacity: 1;
+          transform: scale(1.12);
+        }
+        100% {
+          opacity: 0.9;
+          transform: scale(0.98);
+        }
+      }
+
+      .ma-voix-premium-bell-button {
+        -webkit-tap-highlight-color: transparent;
+        touch-action: manipulation;
+        will-change: transform, box-shadow, filter;
+      }
+
+      .ma-voix-premium-bell-shine,
+      .ma-voix-premium-bell-glow,
+      .ma-voix-premium-bell-glyph {
+        transition:
+          opacity 180ms ease,
+          transform 180ms ease,
+          filter 180ms ease;
+        transform-origin: center;
+        will-change: transform, opacity, filter;
+      }
+
+      @media (hover: hover) and (pointer: fine) {
+        .ma-voix-premium-bell-button:hover:not(:disabled) {
+          filter: brightness(1.08) saturate(1.14) !important;
+          transform: translate3d(0, -4px, 0) scale(1.055) !important;
+          box-shadow:
+            0 30px 62px rgba(245, 158, 11, 0.44),
+            0 18px 34px rgba(0, 0, 0, 0.36),
+            inset 0 1px 0 rgba(255,255,255,0.78),
+            inset 0 -14px 24px rgba(146, 64, 14, 0.14) !important;
+        }
+
+        .ma-voix-premium-bell-button:hover:not(:disabled) .ma-voix-premium-bell-glyph {
+          animation: ma-voix-premium-bell-ring 680ms cubic-bezier(0.2, 0.82, 0.2, 1) both;
+          filter:
+            drop-shadow(0 1px 0 rgba(255,255,255,0.42))
+            drop-shadow(0 8px 12px rgba(120, 53, 15, 0.22));
+        }
+
+        .ma-voix-premium-bell-button:hover:not(:disabled) .ma-voix-premium-bell-shine {
+          opacity: 1 !important;
+          transform: translateY(-2px) scale(1.02) !important;
+        }
+
+        .ma-voix-premium-bell-button:hover:not(:disabled) .ma-voix-premium-bell-glow {
+          animation: ma-voix-premium-bell-glow 720ms ease both;
+        }
+      }
+
+      .ma-voix-premium-bell-button:active:not(:disabled) {
+        filter: brightness(0.98) saturate(1.2) !important;
+        transform: translate3d(0, 1px, 0) scale(0.955) !important;
+        box-shadow:
+          0 14px 28px rgba(245, 158, 11, 0.28),
+          0 8px 18px rgba(0, 0, 0, 0.34),
+          inset 0 1px 0 rgba(255,255,255,0.52),
+          inset 0 -8px 18px rgba(146, 64, 14, 0.2) !important;
+      }
+
+      .ma-voix-premium-bell-button:active:not(:disabled) .ma-voix-premium-bell-glyph {
+        animation: ma-voix-premium-bell-ring 520ms cubic-bezier(0.2, 0.82, 0.2, 1) both;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .ma-voix-premium-bell-button,
+        .ma-voix-premium-bell-shine,
+        .ma-voix-premium-bell-glow,
+        .ma-voix-premium-bell-glyph {
+          animation: none !important;
+          transition-duration: 0.01ms !important;
+        }
+      }
     `;
 
     return () => {
@@ -625,6 +730,7 @@ export default function App() {
           <CaregiverMessagesPage
             styles={styles}
             caregiverAlertLinks={caregiverAlertTargets}
+            selectedCaregiverAlertLinkId={selectedCaregiverAlertTargetId}
             currentProfile={currentProfile}
             currentProfileId={currentProfileId}
             text={text}

@@ -294,6 +294,7 @@ function VirtualKeyboardIcon({ size = 26 }: { size?: number }) {
 type CaregiverMessagesPageProps = {
   styles: StyleMap;
   caregiverAlertLinks?: ProfileCaregiverAlertTarget[];
+  selectedCaregiverAlertLinkId?: string;
   currentProfile: Profile;
   currentProfileId: string;
   text: string;
@@ -310,6 +311,7 @@ export default function CaregiverMessagesPage(props: CaregiverMessagesPageProps)
   const {
     styles,
     caregiverAlertLinks = [],
+    selectedCaregiverAlertLinkId = "",
     currentProfile,
     currentProfileId,
     text,
@@ -428,13 +430,12 @@ export default function CaregiverMessagesPage(props: CaregiverMessagesPageProps)
       return;
     }
 
-    const selectedExists = caregiverTargets.some(
-      (target) => target.id === selectedCaregiverId
-    );
-    if (!selectedExists) {
-      setSelectedCaregiverId(caregiverTargets[0].id);
-    }
-  }, [caregiverTargets, selectedCaregiverId]);
+    const preferredTarget =
+      caregiverTargets.find(
+        (target) => target.id === selectedCaregiverAlertLinkId
+      ) || caregiverTargets[0];
+    setSelectedCaregiverId(preferredTarget.id);
+  }, [caregiverTargets, selectedCaregiverAlertLinkId]);
 
   const updateChannelMessages = React.useCallback(
     (channel: string, incomingMessages: CaregiverMessage[]) => {
