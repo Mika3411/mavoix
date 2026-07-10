@@ -1,3 +1,4 @@
 TestFlight build trigger
 Date: 2026-07-10
 Reason: manual Codex iOS build request
+Retry: bump iOS marketing version to 1.0.1 for App Store Connect
