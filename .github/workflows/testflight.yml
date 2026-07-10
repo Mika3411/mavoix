@@ -2,6 +2,11 @@ name: Build and Upload TestFlight
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/testflight-trigger/**"
 
 env:
   APP_IDENTIFIER: fr.thorez.mavoix
