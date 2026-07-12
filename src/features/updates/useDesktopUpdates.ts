@@ -1,7 +1,5 @@
 import { useEffect, useState } from "react";
-import { Capacitor } from "@capacitor/core";
 import {
-  ANDROID_APP_URL,
   APP_VERSION,
   UPDATE_MANIFEST_URL,
 } from "../../services/config";
@@ -36,25 +34,7 @@ export default function useDesktopUpdates({
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    const detectedDevice = detectDownloadDevice();
-    setDownloadDevice(detectedDevice);
-
-    if (Capacitor.isNativePlatform()) {
-      return;
-    }
-
-    if (detectedDevice !== "desktop") {
-      const targetUrl = new URL(ANDROID_APP_URL, window.location.href);
-      const currentUrl = new URL(window.location.href);
-      const isCurrentAndroidTarget =
-        targetUrl.origin === currentUrl.origin &&
-        targetUrl.pathname.replace(/\/+$/, "") ===
-          currentUrl.pathname.replace(/\/+$/, "");
-
-      if (!isCurrentAndroidTarget) {
-        window.location.replace(targetUrl.href);
-      }
-    }
+    setDownloadDevice(detectDownloadDevice());
   }, []);
 
   useEffect(() => {

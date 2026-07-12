@@ -1,4 +1,4 @@
-const CACHE_NAME = "ma-voix-v15";
+const CACHE_NAME = "ma-voix-v16";
 const PRECACHE_URLS = [
   "/",
   "/index.html",
