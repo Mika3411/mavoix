@@ -19,6 +19,25 @@ function getClientBuildDir(req, desktopBuildDir, androidBuildDir) {
   return desktopBuildDir;
 }
 
+function requestAcceptsHtml(req) {
+  const acceptHeader = req.get("accept") || "";
+  return acceptHeader
+    .split(",")
+    .some((entry) => entry.split(";")[0].trim().toLowerCase() === "text/html");
+}
+
+function shouldServeClientIndex(req) {
+  if (req.path.startsWith("/assets/")) {
+    return false;
+  }
+
+  if (path.extname(req.path)) {
+    return false;
+  }
+
+  return requestAcceptsHtml(req);
+}
+
 function registerDownloadRoutes(app, { apkFileAliases, defaultAlarmAudioFile, publicDir }) {
   app.get(
     Object.keys(apkFileAliases).map((fileName) => "/" + fileName),
@@ -76,7 +95,7 @@ function registerClientBuildFallback(app, { androidBuildDir, desktopBuildDir }) 
       }
 
       const indexPath = path.join(buildDir, "index.html");
-      if (fs.existsSync(indexPath) && req.accepts("html")) {
+      if (fs.existsSync(indexPath) && shouldServeClientIndex(req)) {
         res.sendFile(indexPath);
         return;
       }
@@ -89,4 +108,5 @@ function registerClientBuildFallback(app, { androidBuildDir, desktopBuildDir }) 
 module.exports = {
   registerClientBuildFallback,
   registerDownloadRoutes,
+  shouldServeClientIndex,
 };
