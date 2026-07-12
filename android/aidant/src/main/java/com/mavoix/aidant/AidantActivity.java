@@ -550,6 +550,12 @@ public class AidantActivity extends Activity {
         COLOR_PRIMARY,
         Color.rgb(147, 197, 253)
     ), matchWrap());
+    panel.addView(permissionButton(
+        "Tester STOP plein ecran",
+        v -> testFullScreenStopButton(),
+        COLOR_DANGER,
+        Color.rgb(252, 165, 165)
+    ), matchWrap());
 
     TextView soundTitle = sectionTitle("Son de l'aidant");
     panel.addView(soundTitle, spacedParams(0, dp(24), 0, dp(8)));
@@ -2257,6 +2263,39 @@ public class AidantActivity extends Activity {
     Intent intent = new Intent(this, AlarmListenerService.class);
     intent.setAction(AlertContract.ACTION_STOP_ALARM);
     startService(intent);
+  }
+
+  private void testFullScreenStopButton() {
+    if (Build.VERSION.SDK_INT >= 33
+        && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+      requestNotificationsIfNeeded();
+      toast("Autorise les notifications, puis relance le test STOP.");
+      return;
+    }
+
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+      NotificationManager notificationManager = getSystemService(NotificationManager.class);
+      if (notificationManager != null && !notificationManager.canUseFullScreenIntent()) {
+        requestFullScreenIntentPermission(true);
+        return;
+      }
+    }
+
+    stopAlarm();
+    Intent intent = new Intent(this, AlarmListenerService.class);
+    intent.setAction(AlertContract.ACTION_TEST_FULL_SCREEN_ALARM);
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+      startForegroundService(intent);
+    } else {
+      startService(intent);
+    }
+    getWindow().getDecorView().postDelayed(() -> {
+      Intent alarmIntent = new Intent(this, FullScreenAlarmActivity.class);
+      alarmIntent.putExtra(AlertContract.EXTRA_PATIENT_NAME, "test");
+      alarmIntent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+      startActivity(alarmIntent);
+    }, 250);
+    toast("Test STOP plein ecran lance.");
   }
 
   private void toggleTestAlarm() {
