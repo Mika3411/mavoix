@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0b1220" />
+    <title>Reparation du cache - Ma Voix</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: Arial, Helvetica, sans-serif;
+      }
+
+      body {
+        min-height: 100vh;
+        margin: 0;
+        display: grid;
+        place-items: center;
+        background: #f8fafc;
+        color: #111827;
+      }
+
+      main {
+        width: min(90vw, 420px);
+        padding: 24px;
+        border: 1px solid #d1d5db;
+        border-radius: 12px;
+        background: #ffffff;
+        box-shadow: 0 14px 36px rgba(15, 23, 42, 0.12);
+      }
+
+      h1 {
+        margin: 0 0 12px;
+        font-size: 1.35rem;
+      }
+
+      p {
+        margin: 0 0 16px;
+        line-height: 1.5;
+      }
+
+      button,
+      a {
+        display: inline-flex;
+        min-height: 44px;
+        align-items: center;
+        justify-content: center;
+        padding: 0 16px;
+        border-radius: 10px;
+        font-weight: 700;
+      }
+
+      button {
+        border: 0;
+        background: #2563eb;
+        color: #ffffff;
+      }
+
+      a {
+        color: #2563eb;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Reparation du cache</h1>
+      <p id="status">Nettoyage du cache de Ma Voix en cours...</p>
+      <button id="retry" type="button" hidden>Reessayer</button>
+      <p>
+        <a id="home" href="/?reset=manual">Ouvrir Ma Voix</a>
+      </p>
+    </main>
+    <script>
+      (function () {
+        var statusElement = document.getElementById("status");
+        var retryButton = document.getElementById("retry");
+
+        function setStatus(message) {
+          statusElement.textContent = message;
+        }
+
+        function openApp() {
+          window.location.replace("/?reset=" + Date.now());
+        }
+
+        async function resetMaVoixCache() {
+          setStatus("Nettoyage du cache de Ma Voix en cours...");
+
+          if ("serviceWorker" in navigator) {
+            var registrations = await navigator.serviceWorker.getRegistrations();
+            await Promise.all(
+              registrations.map(function (registration) {
+                return registration.unregister();
+              })
+            );
+          }
+
+          if ("caches" in window) {
+            var cacheNames = await window.caches.keys();
+            await Promise.all(
+              cacheNames.map(function (cacheName) {
+                return window.caches.delete(cacheName);
+              })
+            );
+          }
+
+          setStatus("Cache nettoye. Ouverture de Ma Voix...");
+          window.setTimeout(openApp, 400);
+        }
+
+        retryButton.addEventListener("click", function () {
+          retryButton.hidden = true;
+          resetMaVoixCache().catch(showError);
+        });
+
+        function showError(error) {
+          console.error(error);
+          setStatus(
+            "Le nettoyage automatique n'a pas abouti. Appuie sur Reessayer."
+          );
+          retryButton.hidden = false;
+        }
+
+        resetMaVoixCache().catch(showError);
+      })();
+    </script>
+  </body>
+</html>

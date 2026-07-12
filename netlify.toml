@@ -30,6 +30,16 @@
   force = true
 
 [[redirects]]
+  from = "/reset"
+  to = "/reset.html"
+  status = 200
+
+[[redirects]]
+  from = "/reparer"
+  to = "/reset.html"
+  status = 200
+
+[[redirects]]
   from = "/assets/index-B_8JwamZ.js"
   to = "/assets/index-B7UyqFx1.js"
   status = 200
