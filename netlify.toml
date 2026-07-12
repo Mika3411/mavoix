@@ -62,25 +62,31 @@
 
 [[redirects]]
   from = "/android/assets/index-B_8JwamZ.js"
-  to = "/assets/index-CO87HikS.js"
+  to = "/assets/index-psqAshOL.js"
   status = 200
   force = true
 
 [[redirects]]
   from = "/android/assets/index-B7UyqFx1.js"
-  to = "/assets/index-CO87HikS.js"
+  to = "/assets/index-psqAshOL.js"
   status = 200
   force = true
 
 [[redirects]]
   from = "/android/assets/index-B86PEdrz.js"
-  to = "/assets/index-CO87HikS.js"
+  to = "/assets/index-psqAshOL.js"
   status = 200
   force = true
 
 [[redirects]]
   from = "/android/assets/index-CO87HikS.js"
-  to = "/assets/index-CO87HikS.js"
+  to = "/assets/index-psqAshOL.js"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/android/assets/index-psqAshOL.js"
+  to = "/assets/index-psqAshOL.js"
   status = 200
   force = true
 
@@ -96,19 +102,25 @@
 
 [[redirects]]
   from = "/assets/index-B_8JwamZ.js"
-  to = "/assets/index-CO87HikS.js"
+  to = "/assets/index-psqAshOL.js"
   status = 200
   force = true
 
 [[redirects]]
   from = "/assets/index-B7UyqFx1.js"
-  to = "/assets/index-CO87HikS.js"
+  to = "/assets/index-psqAshOL.js"
   status = 200
   force = true
 
 [[redirects]]
   from = "/assets/index-B86PEdrz.js"
-  to = "/assets/index-CO87HikS.js"
+  to = "/assets/index-psqAshOL.js"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/assets/index-CO87HikS.js"
+  to = "/assets/index-psqAshOL.js"
   status = 200
   force = true
 

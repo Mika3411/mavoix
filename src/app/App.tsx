@@ -588,6 +588,7 @@ export default function App() {
     isLandscapeMobileLayout,
     isFooterNavLayout,
     isNativeApp,
+    canShowDownloadPage,
     isMoreMenuOpen,
     setIsMoreMenuOpen,
     moreMenuRef,
