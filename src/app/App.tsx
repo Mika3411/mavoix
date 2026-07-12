@@ -626,6 +626,8 @@ export default function App() {
       >
         <AppHeader {...navigationProps} />
 
+        {isFooterNavLayout && <AppFooterNavigation {...navigationProps} />}
+
         {availableUpdate && (
           <DesktopUpdateBanner
             styles={styles}
@@ -812,7 +814,6 @@ export default function App() {
           </div>
         </div>
 
-        {isFooterNavLayout && <AppFooterNavigation {...navigationProps} />}
       </div>
 
       {!isFooterNavLayout && !isNativeApp && (
