@@ -626,8 +626,6 @@ export default function App() {
       >
         <AppHeader {...navigationProps} />
 
-        {isFooterNavLayout && <AppFooterNavigation {...navigationProps} />}
-
         {availableUpdate && (
           <DesktopUpdateBanner
             styles={styles}
@@ -655,7 +653,11 @@ export default function App() {
               minHeight: 0,
               WebkitOverflowScrolling: "touch",
               overscrollBehavior: "contain",
-              paddingBottom: isFooterNavLayout ? 24 : 140,
+              paddingBottom: isFooterNavLayout
+                ? isLandscapeMobileLayout
+                  ? 78
+                  : 96
+                : 140,
             }}
           >
         {page === "communication" ? (
@@ -814,6 +816,7 @@ export default function App() {
           </div>
         </div>
 
+        {isFooterNavLayout && <AppFooterNavigation {...navigationProps} />}
       </div>
 
       {!isFooterNavLayout && !isNativeApp && (

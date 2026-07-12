@@ -790,10 +790,14 @@ export function AppFooterNavigation({
         borderRadius: 8,
         background: activeTheme?.cardBackground || "#0b1220",
         boxShadow:
-          "0 14px 34px rgba(0,0,0,0.26), inset 0 1px 0 rgba(255,255,255,0.06)",
+          "0 -16px 34px rgba(0,0,0,0.34), inset 0 1px 0 rgba(255,255,255,0.06)",
         backdropFilter: "blur(16px)",
-        position: "relative",
-        zIndex: 40,
+        position: "fixed",
+        left: "calc(8px + env(safe-area-inset-left, 0px))",
+        right: "calc(8px + env(safe-area-inset-right, 0px))",
+        bottom: "calc(8px + env(safe-area-inset-bottom, 0px))",
+        boxSizing: "border-box",
+        zIndex: 80,
       }}
     >
       <div
