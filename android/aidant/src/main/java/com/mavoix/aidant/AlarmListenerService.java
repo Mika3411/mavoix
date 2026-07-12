@@ -30,9 +30,9 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class AlarmListenerService extends Service {
-  private static final String NOTIFICATION_CHANNEL_ID = "ma_voix_aidant_urgent_alerts_v3";
+  private static final String NOTIFICATION_CHANNEL_ID = "ma_voix_aidant_urgent_alerts_v2";
   private static final int NOTIFICATION_ID = 4108;
-  private static final long[] FULL_SCREEN_FALLBACK_DELAYS_MS = new long[] { 250L, 1100L, 2600L };
+  private static final long FULL_SCREEN_FALLBACK_DELAY_MS = 350L;
 
   private final ExecutorService executor = Executors.newCachedThreadPool();
   private final Map<String, HttpURLConnection> connections = new ConcurrentHashMap<>();
@@ -40,7 +40,6 @@ public class AlarmListenerService extends Service {
   private SharedPreferences prefs;
   private volatile boolean shouldListen;
   private volatile int listenVersion;
-  private volatile boolean fullScreenAlarmActive;
   private AlarmSoundPlayer.Session alarmSoundSession;
   private PowerManager.WakeLock wakeLock;
 
@@ -174,7 +173,6 @@ public class AlarmListenerService extends Service {
         ? "un patient"
         : patientName.trim();
     if (showCallNotification) {
-      fullScreenAlarmActive = true;
       ensureForeground("Appel aidant", "Ma Voix demande de l'aide pour " + label + ".", true, label);
       scheduleFullScreenAlarmLaunch(label);
     }
@@ -197,8 +195,6 @@ public class AlarmListenerService extends Service {
   }
 
   private void stopAlarm() {
-    fullScreenAlarmActive = false;
-    mainHandler.removeCallbacksAndMessages(null);
     stopAlarmPlaybackOnly();
     stopVibration();
     releaseWakeLock();
@@ -328,16 +324,10 @@ public class AlarmListenerService extends Service {
   }
 
   private void scheduleFullScreenAlarmLaunch(String patientName) {
-    for (long delay : FULL_SCREEN_FALLBACK_DELAYS_MS) {
-      mainHandler.postDelayed(() -> launchFullScreenAlarm(patientName), delay);
-    }
+    mainHandler.postDelayed(() -> launchFullScreenAlarm(patientName), FULL_SCREEN_FALLBACK_DELAY_MS);
   }
 
   private void launchFullScreenAlarm(String patientName) {
-    if (!fullScreenAlarmActive) {
-      return;
-    }
-
     try {
       startActivity(fullScreenAlarmIntent(patientName));
     } catch (Exception ignored) {
