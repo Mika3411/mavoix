@@ -90,6 +90,7 @@ export default function CommunicationPage(props: CommunicationPageProps) {
       : viewportWidth <= 920
         ? "repeat(3, minmax(0, 1fr))"
         : "repeat(4, minmax(0, 1fr))";
+  const isMobilePhraseLayout = viewportWidth <= 640;
 
   const editToggleStyle = isEditMode
     ? styles.primaryButton
@@ -240,6 +241,71 @@ export default function CommunicationPage(props: CommunicationPageProps) {
               const phraseText = item.text;
               const isIconOnlyPhrase = isIconOnlyPhraseText(phraseText);
 
+              const actionRow = (
+                <div
+                  style={{
+                    ...styles.quickPhraseActions,
+                    display: "grid",
+                    gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+                    gap: 6,
+                    width: "100%",
+                    alignItems: "center",
+                  }}
+                >
+                  <button
+                    onClick={() => movePhrase(item.id, "up")}
+                    style={quickPhraseActionIconStyle}
+                    title="Monter"
+                    aria-label={`Monter ${item.label || item.text}`}
+                  >
+                    ↑
+                  </button>
+
+                  <button
+                    onClick={() => movePhrase(item.id, "down")}
+                    style={quickPhraseActionIconStyle}
+                    title="Descendre"
+                    aria-label={`Descendre ${item.label || item.text}`}
+                  >
+                    ↓
+                  </button>
+
+                  <button
+                    onClick={() =>
+                      updatePhrase(item.id, "favorite", !item.favorite)
+                    }
+                    style={{
+                      ...quickPhraseFavoriteStyle,
+                      background: item.favorite
+                        ? "rgba(250, 204, 21, 0.22)"
+                        : "rgba(250, 204, 21, 0.10)",
+                      borderColor: item.favorite ? "#facc15" : undefined,
+                    }}
+                    title={
+                      item.favorite
+                        ? "Retirer des favoris"
+                        : "Ajouter aux favoris"
+                    }
+                    aria-label={
+                      item.favorite
+                        ? `Retirer ${item.label || item.text} des favoris`
+                        : `Ajouter ${item.label || item.text} aux favoris`
+                    }
+                  >
+                    {item.favorite ? "★" : "☆"}
+                  </button>
+
+                  <button
+                    onClick={() => deletePhrase(item.id)}
+                    style={quickPhraseDeleteStyle}
+                    title="Supprimer"
+                    aria-label={`Supprimer ${item.label || item.text}`}
+                  >
+                    ×
+                  </button>
+                </div>
+              );
+
               return (
                 <div
                   key={item.id}
@@ -250,11 +316,13 @@ export default function CommunicationPage(props: CommunicationPageProps) {
                     borderRadius: 8,
                   }}
                 >
+                  {isEditMode && isMobilePhraseLayout ? actionRow : null}
+
                   <button
                     style={{
                       ...styles.quickPhraseButton,
                       background: getCategoryBackground(item.category),
-                      minHeight: 82,
+                      minHeight: isEditMode && isMobilePhraseLayout ? 72 : 82,
                       fontSize: isIconOnlyPhrase ? 34 : 18,
                       lineHeight: isIconOnlyPhrase ? 1 : 1.15,
                       padding: isIconOnlyPhrase ? "10px" : "14px 16px",
@@ -292,70 +360,7 @@ export default function CommunicationPage(props: CommunicationPageProps) {
                     <span style={{ overflowWrap: "anywhere" }}>{phraseText}</span>
                   </button>
 
-                {isEditMode && (
-                  <div
-                    style={{
-                      ...styles.quickPhraseActions,
-                      display: "grid",
-                      gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
-                      gap: 6,
-                      width: "100%",
-                      alignItems: "center",
-                    }}
-                  >
-                      <button
-                        onClick={() => movePhrase(item.id, "up")}
-                        style={quickPhraseActionIconStyle}
-                        title="Monter"
-                        aria-label={`Monter ${item.label || item.text}`}
-                      >
-                        ↑
-                      </button>
-
-                      <button
-                        onClick={() => movePhrase(item.id, "down")}
-                        style={quickPhraseActionIconStyle}
-                        title="Descendre"
-                        aria-label={`Descendre ${item.label || item.text}`}
-                      >
-                        ↓
-                      </button>
-
-                    <button
-                      onClick={() =>
-                        updatePhrase(item.id, "favorite", !item.favorite)
-                      }
-                      style={{
-                        ...quickPhraseFavoriteStyle,
-                        background: item.favorite
-                          ? "rgba(250, 204, 21, 0.22)"
-                          : "rgba(250, 204, 21, 0.10)",
-                        borderColor: item.favorite ? "#facc15" : undefined,
-                      }}
-                      title={
-                        item.favorite
-                          ? "Retirer des favoris"
-                          : "Ajouter aux favoris"
-                      }
-                      aria-label={
-                        item.favorite
-                          ? `Retirer ${item.label || item.text} des favoris`
-                          : `Ajouter ${item.label || item.text} aux favoris`
-                      }
-                    >
-                      {item.favorite ? "★" : "☆"}
-                    </button>
-
-                    <button
-                      onClick={() => deletePhrase(item.id)}
-                      style={quickPhraseDeleteStyle}
-                      title="Supprimer"
-                      aria-label={`Supprimer ${item.label || item.text}`}
-                    >
-                      ×
-                    </button>
-                  </div>
-                )}
+                  {isEditMode && !isMobilePhraseLayout ? actionRow : null}
               </div>
               );
             })}
