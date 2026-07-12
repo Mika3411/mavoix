@@ -762,6 +762,7 @@ export function AppFooterNavigation({
   markCaregiverMessagesRead,
   openNoticeSection,
 }: AppNavigationProps) {
+  const isPortraitFooterLayout = !isLandscapeMobileLayout;
   const footerNavMinHeight = isLandscapeMobileLayout ? 40 : 44;
   const footerNavPadding = isLandscapeMobileLayout ? "6px 10px" : "6px 3px";
   const footerNavFontSize = isLandscapeMobileLayout ? 13 : 11;
@@ -771,7 +772,7 @@ export function AppFooterNavigation({
   const shouldShowFooterAlertButton = !isNativeApp;
   const footerNavGridColumns = isLandscapeMobileLayout
     ? "minmax(104px, 1fr) minmax(58px, 0.7fr) minmax(54px, 0.62fr) minmax(42px, 0.45fr) minmax(42px, 0.45fr)"
-    : "minmax(96px, 1.35fr) minmax(54px, 0.68fr) minmax(48px, 0.58fr) minmax(38px, 0.42fr) minmax(38px, 0.42fr)";
+    : "minmax(58px, 0.82fr) minmax(54px, 0.76fr) minmax(38px, 0.52fr) minmax(38px, 0.52fr) minmax(38px, 0.52fr)";
   const footerNavBackground =
     activeTheme?.inputBackground && !activeTheme.inputBackground.includes("rgba")
       ? activeTheme.inputBackground
@@ -832,7 +833,7 @@ export function AppFooterNavigation({
           }}
           onClick={() => setPage("communication")}
         >
-          Communication
+          {isPortraitFooterLayout ? "Com" : "Communication"}
         </button>
 
         <button
@@ -852,19 +853,34 @@ export function AppFooterNavigation({
         </button>
 
         <button
+          aria-label="Infos"
+          title="Infos"
           style={{
             ...(page === "infos" ? styles.primaryButton : styles.secondaryButton),
-            padding: footerNavPadding,
-            fontSize: footerNavFontSize,
+            padding: isPortraitFooterLayout ? 0 : footerNavPadding,
+            fontSize: isPortraitFooterLayout
+              ? footerNavIconFontSize
+              : footerNavFontSize,
             width: "100%",
             minWidth: 0,
             minHeight: footerNavMinHeight,
             borderRadius: 14,
-            lineHeight: 1.1,
+            lineHeight: isPortraitFooterLayout ? 1 : 1.1,
+            display: isPortraitFooterLayout ? "inline-flex" : undefined,
+            alignItems: isPortraitFooterLayout ? "center" : undefined,
+            justifyContent: isPortraitFooterLayout ? "center" : undefined,
           }}
           onClick={() => setPage("infos")}
         >
-          Infos
+          {isPortraitFooterLayout ? (
+            <NavButtonContent
+              icon="info"
+              compact
+              iconSize={footerNavIconOnlySize}
+            />
+          ) : (
+            "Infos"
+          )}
         </button>
 
         <div style={{ position: "relative", minWidth: 0 }}>
