@@ -110,6 +110,7 @@ export default function App() {
     viewportWidth > viewportHeight && viewportHeight <= 520 && viewportWidth <= 960;
   const isFooterNavLayout = isCompactLayout || isLandscapeMobileLayout;
   const isNativeApp = Capacitor.isNativePlatform();
+  const footerNavReservedSpace = isFooterNavLayout ? 104 : 0;
   const pageSafeAreaPadding = {
     paddingTop: "calc(12px + env(safe-area-inset-top, 0px))",
     paddingRight: "calc(12px + env(safe-area-inset-right, 0px))",
@@ -643,6 +644,7 @@ export default function App() {
             flexDirection: "column",
             minHeight: 0,
             overflow: "hidden",
+            marginBottom: footerNavReservedSpace || undefined,
           }}
         >
           <div
@@ -653,11 +655,7 @@ export default function App() {
               minHeight: 0,
               WebkitOverflowScrolling: "touch",
               overscrollBehavior: "contain",
-              paddingBottom: isFooterNavLayout
-                ? isLandscapeMobileLayout
-                  ? 78
-                  : 96
-                : 140,
+              paddingBottom: isFooterNavLayout ? 24 : 140,
             }}
           >
         {page === "communication" ? (

@@ -772,6 +772,12 @@ export function AppFooterNavigation({
   const footerNavGridColumns = isLandscapeMobileLayout
     ? "minmax(104px, 1fr) minmax(58px, 0.7fr) minmax(54px, 0.62fr) minmax(42px, 0.45fr) minmax(42px, 0.45fr)"
     : "minmax(96px, 1.35fr) minmax(54px, 0.68fr) minmax(48px, 0.58fr) minmax(38px, 0.42fr) minmax(38px, 0.42fr)";
+  const footerNavBackground =
+    activeTheme?.inputBackground && !activeTheme.inputBackground.includes("rgba")
+      ? activeTheme.inputBackground
+      : activeTheme?.textColor === "#101722"
+        ? "#ffffff"
+        : "#0b1220";
   const caregiverButtonLabel =
     caregiverMessagesButtonLabel(unreadCaregiverMessageCount);
 
@@ -788,7 +794,7 @@ export function AppFooterNavigation({
         padding: isLandscapeMobileLayout ? "8px 8px" : "10px 8px",
         border: `1px solid ${activeTheme?.inputBorder || "#334155"}`,
         borderRadius: 8,
-        background: activeTheme?.cardBackground || "#0b1220",
+        background: footerNavBackground,
         boxShadow:
           "0 -16px 34px rgba(0,0,0,0.34), inset 0 1px 0 rgba(255,255,255,0.06)",
         backdropFilter: "blur(16px)",

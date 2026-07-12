@@ -62,85 +62,109 @@
 
 [[redirects]]
   from = "/android/assets/index-B_8JwamZ.js"
-  to = "/assets/index-8MfD9iMv.js"
+  to = "/assets/index-uYisKOX0.js"
   status = 200
   force = true
 
 [[redirects]]
   from = "/android/assets/index-B7UyqFx1.js"
-  to = "/assets/index-8MfD9iMv.js"
+  to = "/assets/index-uYisKOX0.js"
   status = 200
   force = true
 
 [[redirects]]
   from = "/android/assets/index-B86PEdrz.js"
-  to = "/assets/index-8MfD9iMv.js"
+  to = "/assets/index-uYisKOX0.js"
   status = 200
   force = true
 
 [[redirects]]
   from = "/android/assets/index-CO87HikS.js"
-  to = "/assets/index-8MfD9iMv.js"
+  to = "/assets/index-uYisKOX0.js"
   status = 200
   force = true
 
 [[redirects]]
   from = "/android/assets/index-psqAshOL.js"
-  to = "/assets/index-8MfD9iMv.js"
+  to = "/assets/index-uYisKOX0.js"
   status = 200
   force = true
 
 [[redirects]]
   from = "/android/assets/index-CuMl5KEx.js"
-  to = "/assets/index-8MfD9iMv.js"
+  to = "/assets/index-uYisKOX0.js"
   status = 200
   force = true
 
 [[redirects]]
   from = "/android/assets/index-Bb0ke3ad.js"
-  to = "/assets/index-8MfD9iMv.js"
+  to = "/assets/index-uYisKOX0.js"
   status = 200
   force = true
 
 [[redirects]]
   from = "/android/assets/index-C2gqBU73.js"
-  to = "/assets/index-8MfD9iMv.js"
+  to = "/assets/index-uYisKOX0.js"
   status = 200
   force = true
 
 [[redirects]]
   from = "/android/assets/index-8MfD9iMv.js"
-  to = "/assets/index-8MfD9iMv.js"
+  to = "/assets/index-uYisKOX0.js"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/android/assets/index-DA7kaWn9.js"
+  to = "/assets/index-uYisKOX0.js"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/android/assets/index-uYisKOX0.js"
+  to = "/assets/index-uYisKOX0.js"
   status = 200
   force = true
 
 [[redirects]]
   from = "/android/assets/web-CDF3zN6y.js"
-  to = "/assets/web-CIT7WH82.js"
+  to = "/assets/web-BYh4IBW4.js"
   status = 200
   force = true
 
 [[redirects]]
   from = "/android/assets/web-K8cXOwWE.js"
-  to = "/assets/web-CIT7WH82.js"
+  to = "/assets/web-BYh4IBW4.js"
   status = 200
   force = true
 
 [[redirects]]
   from = "/android/assets/web-DyHQWiLe.js"
-  to = "/assets/web-CIT7WH82.js"
+  to = "/assets/web-BYh4IBW4.js"
   status = 200
   force = true
 
 [[redirects]]
   from = "/android/assets/web-CihEyFUR.js"
-  to = "/assets/web-CIT7WH82.js"
+  to = "/assets/web-BYh4IBW4.js"
   status = 200
   force = true
 
 [[redirects]]
   from = "/android/assets/web-CIT7WH82.js"
-  to = "/assets/web-CIT7WH82.js"
+  to = "/assets/web-BYh4IBW4.js"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/android/assets/web-CiKLvUby.js"
+  to = "/assets/web-BYh4IBW4.js"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/android/assets/web-BYh4IBW4.js"
+  to = "/assets/web-BYh4IBW4.js"
   status = 200
   force = true
 
@@ -156,73 +180,97 @@
 
 [[redirects]]
   from = "/assets/index-B_8JwamZ.js"
-  to = "/assets/index-8MfD9iMv.js"
+  to = "/assets/index-uYisKOX0.js"
   status = 200
   force = true
 
 [[redirects]]
   from = "/assets/index-B7UyqFx1.js"
-  to = "/assets/index-8MfD9iMv.js"
+  to = "/assets/index-uYisKOX0.js"
   status = 200
   force = true
 
 [[redirects]]
   from = "/assets/index-B86PEdrz.js"
-  to = "/assets/index-8MfD9iMv.js"
+  to = "/assets/index-uYisKOX0.js"
   status = 200
   force = true
 
 [[redirects]]
   from = "/assets/index-CO87HikS.js"
-  to = "/assets/index-8MfD9iMv.js"
+  to = "/assets/index-uYisKOX0.js"
   status = 200
   force = true
 
 [[redirects]]
   from = "/assets/index-psqAshOL.js"
-  to = "/assets/index-8MfD9iMv.js"
+  to = "/assets/index-uYisKOX0.js"
   status = 200
   force = true
 
 [[redirects]]
   from = "/assets/index-CuMl5KEx.js"
-  to = "/assets/index-8MfD9iMv.js"
+  to = "/assets/index-uYisKOX0.js"
   status = 200
   force = true
 
 [[redirects]]
   from = "/assets/index-Bb0ke3ad.js"
-  to = "/assets/index-8MfD9iMv.js"
+  to = "/assets/index-uYisKOX0.js"
   status = 200
   force = true
 
 [[redirects]]
   from = "/assets/index-C2gqBU73.js"
-  to = "/assets/index-8MfD9iMv.js"
+  to = "/assets/index-uYisKOX0.js"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/assets/index-8MfD9iMv.js"
+  to = "/assets/index-uYisKOX0.js"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/assets/index-DA7kaWn9.js"
+  to = "/assets/index-uYisKOX0.js"
   status = 200
   force = true
 
 [[redirects]]
   from = "/assets/web-CDF3zN6y.js"
-  to = "/assets/web-CIT7WH82.js"
+  to = "/assets/web-BYh4IBW4.js"
   status = 200
   force = true
 
 [[redirects]]
   from = "/assets/web-K8cXOwWE.js"
-  to = "/assets/web-CIT7WH82.js"
+  to = "/assets/web-BYh4IBW4.js"
   status = 200
   force = true
 
 [[redirects]]
   from = "/assets/web-DyHQWiLe.js"
-  to = "/assets/web-CIT7WH82.js"
+  to = "/assets/web-BYh4IBW4.js"
   status = 200
   force = true
 
 [[redirects]]
   from = "/assets/web-CihEyFUR.js"
-  to = "/assets/web-CIT7WH82.js"
+  to = "/assets/web-BYh4IBW4.js"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/assets/web-CIT7WH82.js"
+  to = "/assets/web-BYh4IBW4.js"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/assets/web-CiKLvUby.js"
+  to = "/assets/web-BYh4IBW4.js"
   status = 200
   force = true
 
