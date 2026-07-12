@@ -11,7 +11,6 @@ type AppNavigationProps = {
   isLandscapeMobileLayout: boolean;
   isFooterNavLayout: boolean;
   isNativeApp: boolean;
-  canShowDownloadPage: boolean;
   isMoreMenuOpen: boolean;
   setIsMoreMenuOpen: StateSetter<boolean>;
   moreMenuRef: React.RefObject<HTMLDivElement>;
@@ -321,7 +320,6 @@ function MoreMenu({
   setPage,
   isCompactLayout,
   isLandscapeMobileLayout,
-  canShowDownloadPage,
   setIsMoreMenuOpen,
   openNoticeSection,
   placement,
@@ -332,7 +330,6 @@ function MoreMenu({
   setPage: (page: string) => void;
   isCompactLayout: boolean;
   isLandscapeMobileLayout: boolean;
-  canShowDownloadPage: boolean;
   setIsMoreMenuOpen: StateSetter<boolean>;
   openNoticeSection: () => void;
   placement: "top" | "bottom";
@@ -366,32 +363,6 @@ function MoreMenu({
         zIndex: placement === "top" ? 50 : 60,
       }}
     >
-      <button
-        style={page === "infos" ? styles.primaryButton : styles.secondaryButton}
-        onClick={() => {
-          setPage("infos");
-          setIsMoreMenuOpen(false);
-        }}
-      >
-        Infos
-      </button>
-
-      {canShowDownloadPage && (
-        <button
-          style={
-            page === "telechargement"
-              ? styles.primaryButton
-              : styles.secondaryButton
-          }
-          onClick={() => {
-            setPage("telechargement");
-            setIsMoreMenuOpen(false);
-          }}
-        >
-          Télécharger APK
-        </button>
-      )}
-
       <button
         style={page === "voix" ? styles.primaryButton : styles.secondaryButton}
         onClick={() => {
@@ -458,7 +429,6 @@ export function AppHeader({
   isLandscapeMobileLayout,
   isFooterNavLayout,
   isNativeApp,
-  canShowDownloadPage,
   isMoreMenuOpen,
   setIsMoreMenuOpen,
   moreMenuRef,
@@ -762,7 +732,6 @@ export function AppHeader({
                 setPage={setPage}
                 isCompactLayout={isCompactLayout}
                 isLandscapeMobileLayout={isLandscapeMobileLayout}
-                canShowDownloadPage={canShowDownloadPage}
                 setIsMoreMenuOpen={setIsMoreMenuOpen}
                 openNoticeSection={openNoticeSection}
                 placement="top"
@@ -783,7 +752,6 @@ export function AppFooterNavigation({
   isCompactLayout,
   isLandscapeMobileLayout,
   isNativeApp,
-  canShowDownloadPage,
   isMoreMenuOpen,
   setIsMoreMenuOpen,
   moreMenuRef,
@@ -804,8 +772,6 @@ export function AppFooterNavigation({
   const footerNavGridColumns = isLandscapeMobileLayout
     ? "minmax(104px, 1fr) minmax(58px, 0.7fr) minmax(54px, 0.62fr) minmax(42px, 0.45fr) minmax(42px, 0.45fr)"
     : "minmax(96px, 1.35fr) minmax(54px, 0.68fr) minmax(48px, 0.58fr) minmax(38px, 0.42fr) minmax(38px, 0.42fr)";
-  const thirdFooterPage = canShowDownloadPage ? "telechargement" : "infos";
-  const thirdFooterLabel = canShowDownloadPage ? "APK" : "Infos";
   const caregiverButtonLabel =
     caregiverMessagesButtonLabel(unreadCaregiverMessageCount);
 
@@ -879,9 +845,7 @@ export function AppFooterNavigation({
 
         <button
           style={{
-            ...(page === thirdFooterPage
-              ? styles.primaryButton
-              : styles.secondaryButton),
+            ...(page === "infos" ? styles.primaryButton : styles.secondaryButton),
             padding: footerNavPadding,
             fontSize: footerNavFontSize,
             width: "100%",
@@ -890,9 +854,9 @@ export function AppFooterNavigation({
             borderRadius: 14,
             lineHeight: 1.1,
           }}
-          onClick={() => setPage(thirdFooterPage)}
+          onClick={() => setPage("infos")}
         >
-          {thirdFooterLabel}
+          Infos
         </button>
 
         <div style={{ position: "relative", minWidth: 0 }}>
@@ -974,7 +938,6 @@ export function AppFooterNavigation({
               setPage={setPage}
               isCompactLayout={isCompactLayout}
               isLandscapeMobileLayout={isLandscapeMobileLayout}
-              canShowDownloadPage={canShowDownloadPage}
               setIsMoreMenuOpen={setIsMoreMenuOpen}
               openNoticeSection={openNoticeSection}
               placement="bottom"

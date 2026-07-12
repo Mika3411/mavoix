@@ -27,6 +27,64 @@ export default function DownloadPage({
     >
       <div
         style={{
+          background: activeTheme?.cardBackground || "#0f172a",
+          border: "1px solid rgba(34,197,94,0.42)",
+          borderRadius: 20,
+          padding: 18,
+          display: "grid",
+          gap: 12,
+          boxShadow: "0 14px 32px rgba(0,0,0,0.18)",
+        }}
+      >
+        <div style={{ fontSize: 22, fontWeight: 850, lineHeight: 1.2 }}>
+          Téléchargements Android
+        </div>
+        <div style={{ opacity: 0.82, lineHeight: 1.45 }}>
+          Les deux fichiers APK sont accessibles ici directement, sans descendre
+          dans la page.
+        </div>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))",
+            gap: 10,
+          }}
+        >
+          <a
+            href={APK_DOWNLOAD_URL}
+            download
+            style={{
+              ...styles.primaryButton,
+              textDecoration: "none",
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              minHeight: 48,
+              textAlign: "center",
+            }}
+          >
+            Ma Voix
+          </a>
+          <a
+            href={AIDANT_APK_DOWNLOAD_URL}
+            download
+            style={{
+              ...styles.secondaryButton,
+              textDecoration: "none",
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              minHeight: 48,
+              textAlign: "center",
+            }}
+          >
+            Ma Voix Aidant
+          </a>
+        </div>
+      </div>
+
+      <div
+        style={{
           background:
             "linear-gradient(135deg, rgba(37,99,235,0.22), rgba(15,23,42,0.88))",
           border: "1px solid rgba(255,255,255,0.1)",

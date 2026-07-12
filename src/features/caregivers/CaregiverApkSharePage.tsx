@@ -335,6 +335,45 @@ export default function CaregiverApkSharePage({
 
         <div
           style={{
+            ...styles.infoBox,
+            marginBottom: 16,
+            display: "grid",
+            gap: 10,
+          }}
+        >
+          <div style={{ fontWeight: 800 }}>Lien APK aidant</div>
+          <div
+            style={{
+              overflowWrap: "anywhere",
+              color: mutedTextColor,
+              lineHeight: 1.45,
+            }}
+          >
+            {apkUrl}
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+            <a
+              href={apkUrl}
+              download
+              style={{
+                ...styles.secondaryButton,
+                textDecoration: "none",
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                minHeight: 44,
+              }}
+            >
+              Ouvrir le lien APK
+            </a>
+            <button type="button" style={styles.secondaryButton} onClick={copyApkLink}>
+              Copier le lien APK
+            </button>
+          </div>
+        </div>
+
+        <div
+          style={{
             display: "grid",
             gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
             gap: 14,
@@ -491,44 +530,6 @@ export default function CaregiverApkSharePage({
               lien patient. Il doit garder les notifications et l'alarme
               autorisées pour recevoir les appels.
             </div>
-          </div>
-        </div>
-
-        <div
-          style={{
-            ...styles.infoBox,
-            marginTop: 16,
-            display: "grid",
-            gap: 10,
-          }}
-        >
-          <div style={{ fontWeight: 800 }}>Lien APK aidant</div>
-          <div
-            style={{
-              overflowWrap: "anywhere",
-              color: mutedTextColor,
-              lineHeight: 1.45,
-            }}
-          >
-            {apkUrl}
-          </div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
-            <a
-              href={apkUrl}
-              download
-              style={{
-                ...styles.secondaryButton,
-                textDecoration: "none",
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              Ouvrir le lien APK
-            </a>
-            <button type="button" style={styles.secondaryButton} onClick={copyApkLink}>
-              Copier le lien APK
-            </button>
           </div>
         </div>
       </div>
