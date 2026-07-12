@@ -28,10 +28,19 @@ type CaregiverApkSharePageProps = {
 };
 
 function resolvePublicUrl(path: string) {
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+
   try {
-    return new URL(path, API_BASE).href;
+    if (
+      typeof window !== "undefined" &&
+      /^https?:\/\//.test(window.location.origin)
+    ) {
+      return new URL(normalizedPath, window.location.origin).href;
+    }
+
+    return new URL(normalizedPath, API_BASE).href;
   } catch {
-    return `${API_BASE}${path.startsWith("/") ? "" : "/"}${path}`;
+    return `${API_BASE}${normalizedPath}`;
   }
 }
 

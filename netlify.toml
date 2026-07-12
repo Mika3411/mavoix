@@ -5,6 +5,27 @@
 [build.environment]
   NODE_VERSION = "22"
 
+[[headers]]
+  for = "/ma-voix.apk"
+  [headers.values]
+    Content-Type = "application/vnd.android.package-archive"
+    Content-Disposition = "attachment; filename=\"ma-voix.apk\""
+    Cache-Control = "no-store"
+
+[[headers]]
+  for = "/ma-voix-aidant.apk"
+  [headers.values]
+    Content-Type = "application/vnd.android.package-archive"
+    Content-Disposition = "attachment; filename=\"ma-voix-aidant.apk\""
+    Cache-Control = "no-store"
+
+[[headers]]
+  for = "/ma-voix-aidant-s24-v1.1.1.apk"
+  [headers.values]
+    Content-Type = "application/vnd.android.package-archive"
+    Content-Disposition = "attachment; filename=\"ma-voix-aidant-s24-v1.1.1.apk\""
+    Cache-Control = "no-store"
+
 [[redirects]]
   from = "/api/*"
   to = "https://mavoix.onrender.com/api/:splat"
@@ -41,19 +62,25 @@
 
 [[redirects]]
   from = "/android/assets/index-B_8JwamZ.js"
-  to = "/assets/index-B86PEdrz.js"
+  to = "/assets/index-CO87HikS.js"
   status = 200
   force = true
 
 [[redirects]]
   from = "/android/assets/index-B7UyqFx1.js"
-  to = "/assets/index-B86PEdrz.js"
+  to = "/assets/index-CO87HikS.js"
   status = 200
   force = true
 
 [[redirects]]
   from = "/android/assets/index-B86PEdrz.js"
-  to = "/assets/index-B86PEdrz.js"
+  to = "/assets/index-CO87HikS.js"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/android/assets/index-CO87HikS.js"
+  to = "/assets/index-CO87HikS.js"
   status = 200
   force = true
 
@@ -69,13 +96,19 @@
 
 [[redirects]]
   from = "/assets/index-B_8JwamZ.js"
-  to = "/assets/index-B86PEdrz.js"
+  to = "/assets/index-CO87HikS.js"
   status = 200
   force = true
 
 [[redirects]]
   from = "/assets/index-B7UyqFx1.js"
-  to = "/assets/index-B86PEdrz.js"
+  to = "/assets/index-CO87HikS.js"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/assets/index-B86PEdrz.js"
+  to = "/assets/index-CO87HikS.js"
   status = 200
   force = true
 
