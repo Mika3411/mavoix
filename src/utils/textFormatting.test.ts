@@ -44,6 +44,30 @@ describe("text formatting", () => {
     expect(normalizeTextFormatting("jtm")).toBe("Je t'aime");
   });
 
+  it("expands an abbreviation only when its separator has just been added", () => {
+    expect(
+      formatTextSmartWithSelection("bjr ", 4, 4, { previousValue: "Bjr" }).text
+    ).toBe("Bonjour ");
+    expect(
+      formatTextSmartWithSelection("bjr\n", 4, 4, { previousValue: "Bjr" }).text
+    ).toBe("Bonjour\n");
+    expect(
+      formatTextSmartWithSelection("bjr,", 4, 4, { previousValue: "Bjr" }).text
+    ).toBe("Bonjour,");
+  });
+
+  it("does not expand before an existing space, line break, or punctuation", () => {
+    expect(
+      formatTextSmartWithSelection("bjr ", 3, 3, { previousValue: " " }).text
+    ).toBe("Bjr ");
+    expect(
+      formatTextSmartWithSelection("bjr\n", 3, 3, { previousValue: "\n" }).text
+    ).toBe("Bjr\n");
+    expect(
+      formatTextSmartWithSelection("bjr,", 3, 3, { previousValue: "," }).text
+    ).toBe("Bjr,");
+  });
+
   it("fixes spacing around punctuation without requiring final expansion", () => {
     expect(formatTextSmart("bonjour,ca va?oui")).toBe("Bonjour, ça va? Oui");
   });
