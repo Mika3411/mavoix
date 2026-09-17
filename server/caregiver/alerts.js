@@ -1,6 +1,7 @@
 const { randomUUID } = require("crypto");
 const {
   getCaregiverAlertHistory,
+  getCaregiverAlertRange,
   saveCaregiverAlert,
 } = require("../caregiver-store");
 const { sendCaregiverAlertFcmPushes } = require("../caregiver-push");
@@ -19,6 +20,28 @@ const {
 } = require("./sse");
 
 function registerCaregiverAlertRoutes(app) {
+  app.post("/api/caregiver-alert/history", async (req, res) => {
+    res.set("Cache-Control", "no-store");
+    const access = requireCaregiverAccess(req, res, "Le lien aidant est invalide.");
+    if (!access) return;
+    if (!enforceRateLimit(req, res, "caregiver-history", 120, 60 * 1000, [access.roomKey])) return;
+    const { start, end, offset = 0 } = req.body || {};
+    const iso = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
+    if (typeof start !== "string" || typeof end !== "string" ||
+        !iso.test(start) || !iso.test(end) || !Number.isFinite(Date.parse(start)) ||
+        !Number.isFinite(Date.parse(end)) || Date.parse(start) >= Date.parse(end) ||
+        !Number.isSafeInteger(offset) || offset < 0) {
+      return res.status(400).json({ error: "La période ou la pagination est invalide." });
+    }
+    try {
+      const alerts = await getCaregiverAlertRange(access.roomKey, start, end, offset);
+      // An extra empty page also handles servers configured with a lower row limit.
+      res.json({ alerts, nextOffset: alerts.length ? offset + alerts.length : null });
+    } catch (error) {
+      res.status(503).json({ error: error.message });
+    }
+  });
+
   app.get("/api/caregiver-alert/stream", (req, res) => {
     const access = requireCaregiverAccess(
       req,

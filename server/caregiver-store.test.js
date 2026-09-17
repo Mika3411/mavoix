@@ -198,3 +198,21 @@ describe("caregiver persistent store", () => {
     expect(messages[0].readByCaregiverAt).not.toBe("");
   });
 });
+
+ describe('alert archive date range', () => {
+  it('filters by private room and both date bounds with deterministic pagination', async () => {
+    let requested;
+    const store = createCaregiverStore({request:async(method,path)=>{requested=path;return {ok:true,data:[{id:'one',created_at:'2026-01-01T10:00:00Z',profile_name:'Alice'}]};}});
+    const rows=await store.getCaregiverAlertRange('room:key:secret','2026-01-01T00:00:00.000Z','2026-02-01T00:00:00.000Z',500);
+    const params=new URLSearchParams(requested.split('?')[1]);
+    expect(params.get('room_key')).toBe('eq.room:key:secret');
+    expect(params.getAll('created_at')).toEqual(['gte.2026-01-01T00:00:00.000Z','lt.2026-02-01T00:00:00.000Z']);
+    expect(params.get('order')).toBe('created_at.asc,id.asc');expect(params.get('offset')).toBe('500');expect(rows).toHaveLength(1);
+  });
+  it('does not substitute the delivery cache when the archive is unavailable',async()=>{
+    for(const response of [{notConfigured:true},{ok:false,statusCode:500}]){
+      const store=createCaregiverStore({request:async()=>response});
+      await expect(store.getCaregiverAlertRange('room','2026-01-01T00:00:00.000Z','2026-02-01T00:00:00.000Z')).rejects.toThrow();
+    }
+  });
+ });

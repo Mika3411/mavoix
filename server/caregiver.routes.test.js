@@ -197,3 +197,12 @@ describe("caregiver Express routes", () => {
     });
   });
 });
+
+it('rejects invalid history access and invalid date ranges', async () => {
+ await withTestServer(createApp(), async(baseUrl)=>{
+  const post=body=>fetch(`${baseUrl}/api/caregiver-alert/history`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  expect((await post({channel:'bad'})).status).toBe(400);
+  expect((await post({channel:uniqueChannel(),start:'2026-02-02',end:'2026-01-01'})).status).toBe(400);
+  expect((await post({channel:uniqueChannel(),start:'2026-01-01T00:00:00.000Z',end:'2026-02-01T00:00:00.000Z',offset:-1})).status).toBe(400);
+ });
+});

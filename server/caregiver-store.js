@@ -413,6 +413,30 @@ function createCaregiverStore({
     return memoryAlerts.slice(-limit);
   }
 
+  async function getCaregiverAlertRange(roomKey, start, end, offset = 0) {
+    const filters = new URLSearchParams({
+      room_key: `eq.${roomKey}`,
+      select: "id,profile_name,created_at",
+      order: "created_at.asc,id.asc",
+      limit: "500",
+      offset: String(offset),
+    });
+    filters.append("created_at", `gte.${start}`);
+    filters.append("created_at", `lt.${end}`);
+    const response = await request("GET", `caregiver_alerts?${filters}`);
+    if (response.notConfigured) {
+      // Never present the short-lived delivery cache as a complete archive.
+      throw new Error("Le stockage permanent des appels n’est pas configuré sur le serveur.");
+    }
+    if (!response.ok || !Array.isArray(response.data)) {
+      throw new Error("L’historique est indisponible. Réessayez plus tard.");
+    }
+    return response.data.map((row) => ({
+      id: String(row.id), profileName: String(row.profile_name || ""),
+      createdAt: String(row.created_at),
+    }));
+  }
+
   async function saveCaregiverAlert(roomKey, channel, payload) {
     saveAlertInMemory(roomKey, payload);
     await saveStoredAlert(roomKey, channel, payload);
@@ -489,6 +513,7 @@ function createCaregiverStore({
   }
 
   return {
+    getCaregiverAlertRange,
     getCaregiverAlertHistory,
     getCaregiverMessages,
     markCaregiverMessagesDelivered,
