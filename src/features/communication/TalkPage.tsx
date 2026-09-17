@@ -423,7 +423,8 @@ export default function TalkPage({
     const formattedInput = formatTextSmartWithSelection(
       nextValue,
       fallbackCursorStart,
-      fallbackCursorEnd
+      fallbackCursorEnd,
+      { previousValue: currentTextRef.current }
     );
 
     setText(formattedInput.text);
@@ -439,7 +440,8 @@ export default function TalkPage({
     const formattedInput = formatTextSmartWithSelection(
       value,
       selectionStart,
-      selectionEnd
+      selectionEnd,
+      { previousValue: currentTextRef.current }
     );
 
     setText(formattedInput.text);

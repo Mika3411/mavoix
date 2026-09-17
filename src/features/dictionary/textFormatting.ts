@@ -557,6 +557,8 @@ const TRAILING_ADDRESS_PUNCTUATION_PATTERN = /[)\].,;:!?]+$/;
 
 type FormatTextSmartOptions = {
   expandFinalAbbreviation?: boolean;
+  previousValue?: string;
+  abbreviationBoundaryIndexes?: ReadonlySet<number>;
 };
 
 export type FormattedTextSelection = {
@@ -1262,6 +1264,16 @@ function expandFrenchAbbreviations(
   const activeDictionary = readActiveAbbreviationEntries();
 
   return value.replace(abbreviationPattern, (match, prefix, word, _suffix, offset, source) => {
+    const wordEndIndex =
+      Number(offset) + String(prefix).length + String(word).length;
+
+    if (
+      options.abbreviationBoundaryIndexes &&
+      !options.abbreviationBoundaryIndexes.has(wordEndIndex)
+    ) {
+      return match;
+    }
+
     const key = normalizeAbbreviationKey(String(word));
     const activeEntry = activeDictionary[key];
     const expanded = activeEntry?.expansion;
@@ -1277,8 +1289,6 @@ function expandFrenchAbbreviations(
       (key === "kl" || key === "kls") &&
       expanded === BUILT_IN_FRENCH_ABBREVIATIONS[key]
     ) {
-      const wordEndIndex =
-        Number(offset) + String(prefix).length + String(word).length;
       return `${prefix}${resolveAmbiguousKlAbbreviation(
         String(source),
         wordEndIndex,
@@ -1326,21 +1336,57 @@ function protectAddressTextSegments(value: string) {
   };
 }
 
-export function formatTextSmart(value: string, options: FormatTextSmartOptions = {}) {
-  if (!value) return value;
-
-  const protectedAddresses = protectAddressTextSegments(String(value));
-  const normalizedSpacing = protectedAddresses.text
+function normalizeSmartSpacing(value: string) {
+  return value
     .replace(/[ \t]+([,;:.!?])/g, "$1")
     .replace(/([,;:.!?])(?=[^\s,;:.!?])/g, "$1 ")
     .replace(/ {2,}/g, " ")
     .replace(/\n{3,}/g, "\n\n");
+}
+
+function findNewAbbreviationBoundaryIndexes(
+  previousValue: string,
+  nextValue: string
+) {
+  const previousProtected = protectAddressTextSegments(previousValue).text;
+  const previous = normalizeSmartSpacing(previousProtected);
+  const prefixLength = countCommonPrefix(previous, nextValue);
+  const suffixLength = countCommonSuffix(previous, nextValue, prefixLength);
+  const insertedEnd = nextValue.length - suffixLength;
+  const boundaryIndexes = new Set<number>();
+
+  for (let index = prefixLength; index < insertedEnd; index += 1) {
+    if (/[\s,;:.!?)]|\]|\}/.test(nextValue[index])) {
+      boundaryIndexes.add(index);
+    }
+  }
+
+  return boundaryIndexes;
+}
+
+export function formatTextSmart(value: string, options: FormatTextSmartOptions = {}) {
+  if (!value) return value;
+
+  const protectedAddresses = protectAddressTextSegments(String(value));
+  const normalizedSpacing = normalizeSmartSpacing(protectedAddresses.text);
+  const abbreviationOptions =
+    options.previousValue === undefined
+      ? options
+      : {
+          ...options,
+          abbreviationBoundaryIndexes: findNewAbbreviationBoundaryIndexes(
+            String(options.previousValue || ""),
+            normalizedSpacing
+          ),
+        };
 
   const formattedText = resolveAmbiguousCAbbreviation(
     restoreMissingFrenchAccents(
       resolveQuelAgreement(
         resolveAmbiguousIlPhrases(
-          resolveAmbiguousKlPhrases(expandFrenchAbbreviations(normalizedSpacing, options))
+          resolveAmbiguousKlPhrases(
+            expandFrenchAbbreviations(normalizedSpacing, abbreviationOptions)
+          )
         )
       )
     )
