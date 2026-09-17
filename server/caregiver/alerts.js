@@ -158,6 +158,7 @@ function registerCaregiverAlertRoutes(app) {
     res.json({
       success: true,
       deliveredTo,
+      alert: { id: payload.id, createdAt: payload.createdAt },
       alertDeliveredTo,
       messageDeliveredTo,
       pushDeliveredTo: fcmPushResult.deliveredTo,
