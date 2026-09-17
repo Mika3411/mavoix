@@ -413,15 +413,16 @@ function createCaregiverStore({
     return memoryAlerts.slice(-limit);
   }
 
-  async function getCaregiverAlertRange(roomKey, start, end, offset = 0) {
+  async function getCaregiverAlertRange(roomKey, start, end, offset = 0, includeOverlaps = false) {
     const filters = new URLSearchParams({
       room_key: `eq.${roomKey}`,
-      select: "id,profile_name,created_at",
+      select: "id,profile_name,created_at,ended_at",
       order: "created_at.asc,id.asc",
       limit: "500",
       offset: String(offset),
     });
-    filters.append("created_at", `gte.${start}`);
+    if(includeOverlaps) filters.append('or', `(created_at.gte.${start},ended_at.gt.${start},ended_at.is.null)`);
+    else filters.append("created_at", `gte.${start}`);
     filters.append("created_at", `lt.${end}`);
     const response = await request("GET", `caregiver_alerts?${filters}`);
     if (response.notConfigured) {
@@ -433,7 +434,7 @@ function createCaregiverStore({
     }
     return response.data.map((row) => ({
       id: String(row.id), profileName: String(row.profile_name || ""),
-      createdAt: String(row.created_at),
+      createdAt: String(row.created_at), endedAt: row.ended_at || null,
     }));
   }
 

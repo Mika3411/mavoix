@@ -34,7 +34,7 @@ function registerCaregiverAlertRoutes(app) {
       return res.status(400).json({ error: "La période ou la pagination est invalide." });
     }
     try {
-      const alerts = await getCaregiverAlertRange(access.roomKey, start, end, offset);
+      const alerts = await getCaregiverAlertRange(access.roomKey, start, end, offset, req.body?.includeOverlaps === true);
       // An extra empty page also handles servers configured with a lower row limit.
       res.json({ alerts, nextOffset: alerts.length ? offset + alerts.length : null });
     } catch (error) {
